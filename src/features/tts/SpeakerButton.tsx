@@ -11,6 +11,8 @@ interface SpeakerButtonProps {
   size?: number;
   /** Override the global rate. */
   rate?: number;
+  /** Use dark-on-light colors (for white surfaces like the review card). */
+  onLight?: boolean;
   className?: string;
 }
 
@@ -20,6 +22,7 @@ export function SpeakerButton({
   lang,
   size = 15,
   rate,
+  onLight,
   className,
 }: SpeakerButtonProps) {
   const settings = useSettings();
@@ -54,7 +57,11 @@ export function SpeakerButton({
       aria-label="Ouvir pronúncia"
       className={cn(
         'transition-colors',
-        speaking ? 'text-accent' : 'text-muted hover:text-fg',
+        speaking
+          ? 'text-accent'
+          : onLight
+            ? 'text-black/45 hover:text-black'
+            : 'text-muted hover:text-fg',
         className,
       )}
     >

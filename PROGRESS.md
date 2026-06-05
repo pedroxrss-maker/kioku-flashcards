@@ -152,3 +152,33 @@ URLs while editing, serialized back to `kioku-media://` on save.
 
 **Stubbed** — ReviewSession/Stats/Settings still placeholders. Step 7 will wire
 TTS auto-pronounce into review + voice/rate pickers in Settings.
+
+---
+
+## 2026-06-05 — Step 6: Review mode + King of Buttons + keyboard
+
+**Built**
+
+- `features/review/queue.ts`: `buildInitialQueue` (learning-due first, reviews
+  capped by reviewsPerDay−done, new capped by newPerDay−done, shuffled within
+  groups) + `reinsertLearning` (in-session recurrence of lapses, no real-time
+  waiting). **5 vitest tests** for queue/cap/ordering (12 total now green).
+- `features/review/buttons.ts`: King of Buttons mapping (2→Errei/Acertei,
+  3→Errei/Difícil/Acertei, 4→Errei/Difícil/Bom/Fácil) onto the 4 ratings.
+- `useReviewSession` hook: loads deck+cards+dailyProgress, builds queue, manages
+  flip/rate, applies scheduler synchronously + persists async (`saveReview`),
+  re-queues learning cards, tracks counters/position/total/done. Side effects
+  kept out of state-updaters (queueRef) to stay StrictMode-safe.
+- `AnswerButtons` (interval preview per button, `--btn-color` role colors).
+- Real **ReviewSession** page: full-screen, top bar (Sair / deck / Card X de Y /
+  green-amber-red counters), 3D `rotateY` flip card (white face + offset shadow,
+  accent on hover), reveal hint, Mostrar resposta CTA, answer buttons, keyboard
+  (space/enter flip; 1..N rate; space=Bom when revealed; Esc exit), completion
+  summary (accuracy + per-rating counts + duration). Auto-pronounce-on-reveal
+  honored from settings.
+
+**Decisions** — flip card is a click `<div>` (not `<button>`) so the per-face
+SpeakerButtons aren't invalidly nested; keyboard handled by a global listener.
+In-session learning steps recur via re-queue rather than wall-clock waits.
+
+**Stubbed** — Stats/Settings still placeholders (steps 8/9).

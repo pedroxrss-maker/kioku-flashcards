@@ -411,6 +411,81 @@ button.pill.pill-active:hover {
   max-height: 120px;
 }
 
+/* --------------------------------------------------------- review card --- */
+.review-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: clamp(20px, 4vw, 44px);
+  background: #ffffff;
+  color: #0f0f0f;
+  box-shadow: 10px 10px 0 var(--fg);
+  overflow-y: auto;
+}
+.flip-scene:hover .review-face {
+  box-shadow: 10px 10px 0 var(--accent);
+}
+.review-face .card-content {
+  color: #0f0f0f;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flip-scene:hover .review-face {
+    box-shadow: 10px 10px 0 var(--fg);
+  }
+}
+
+/* ----------------------------------------------------- review answer btns - */
+.answer-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 10px;
+  min-height: 76px;
+  flex: 1 1 0;
+  border: 2px solid var(--btn-color, var(--line));
+  background: transparent;
+  color: var(--btn-color, var(--fg));
+  border-radius: 0;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.answer-btn:hover {
+  background: var(--btn-color, var(--fg));
+  color: var(--bg);
+  transform: translateY(-2px);
+}
+.answer-btn:active {
+  transform: translateY(0);
+}
+.answer-label {
+  font-family: var(--body);
+  font-weight: 800;
+  font-size: 15px;
+}
+.answer-key,
+.answer-int {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.answer-btn:hover .answer-key,
+.answer-btn:hover .answer-int {
+  color: var(--bg);
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .answer-btn:hover {
+    transform: none;
+  }
+}
+
 /* --------------------------------------------------------------- a11y ----- */
 :focus-visible {
   outline: 2px solid var(--accent);
