@@ -78,6 +78,25 @@ export function Sidebar() {
         </div>
       )}
 
+      {/* NeuroFluency lockup — brain + wordmark, on the dark canvas. */}
+      <div className="mt-auto px-4 pt-5 pb-1" title="NeuroFluency">
+        <div className="flex items-center gap-1.5">
+          <img src={brandLogo} alt="" draggable={false} style={{ height: 18, width: 'auto' }} />
+          <span
+            style={{
+              fontFamily: 'var(--body)',
+              fontWeight: 800,
+              fontSize: 14,
+              letterSpacing: '-0.01em',
+              lineHeight: 1,
+            }}
+          >
+            <span style={{ color: 'var(--fg)' }}>neuro</span>
+            <span style={{ color: 'var(--accent)' }}>fluency</span>
+          </span>
+        </div>
+      </div>
+
       <div className="px-4 py-4 mono text-[10px] text-muted border-t" style={{ borderColor: 'var(--line)' }}>
         Kioku {APP_VERSION}
       </div>
