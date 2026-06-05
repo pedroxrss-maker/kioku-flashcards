@@ -28,3 +28,32 @@ Append-only log of the autonomous build.
 Vite 8 / TS 6 / React-18-types version resolutions).
 
 **Stubbed** — none.
+
+---
+
+## 2026-06-05 — Step 2: Data layer (Dexie + repositories + seed)
+
+**Built**
+
+- `db/types.ts`: full model (Deck, Card with sm2+fsrs sub-state, ReviewLog,
+  MediaBlob) + `AppSettings` singleton + creation inputs + `DailyProgress`.
+  Extension: per-deck `ttsLang`.
+- `db/factories.ts`: `makeDeck`/`makeCard` (new cards start `new`, due now,
+  fresh sm2/fsrs fields), `defaultSettings`, `DECK_COLORS` palette.
+- `db/db.ts`: `KiokuDB` Dexie schema v1 — tables decks/cards/reviewLogs/media/
+  settings with compound indexes `[deckId+state]`, `[deckId+due]`,
+  `[deckId+reviewedAt]`.
+- `db/repositories.ts`: `KiokuRepository` interface + `DexieRepository` impl
+  (singleton `repo`). Persistence is behind the interface so a sync backend can
+  swap in later. Includes cascade `deleteDeck`, transactional `saveReview`,
+  `dailyProgress` (derives new/review counts from logs for the local day),
+  stats queries, media, settings, `resetAll`.
+- `db/seed.ts`: idempotent first-run seed — English vocab deck (FSRS) + General
+  deck (SM-2) with sample cards; sets `seededAt`.
+- `lib/date.ts`: local-day helpers (`startOfLocalDay`, `dayKey`, `daysBetween`).
+
+**Decisions** — daily caps derived from `ReviewLog` (prevState new→newDone,
+review→reviewsDone) rather than a separate counter table, avoiding sync bugs.
+Orphaned media after deck delete is acceptable for v1 (GC deferred).
+
+**Stubbed** — none.
