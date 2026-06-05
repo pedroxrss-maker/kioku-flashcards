@@ -1,0 +1,173 @@
+import { DAY_MS, dayKey, startOfLocalDay } from '../../lib/date';
+import type { Deck, ReviewLog } from '../../db/types';
+
+/* --------------------------------------------------------------- heatmap -- */
+
+export interface HeatCell {
+  date: number;
+  key: string;
+  count: number;
+  tier: 0 | 1 | 2 | 3 | 4;
+  future: boolean;
+}
+
+export function reviewsByDay(logs: ReviewLog[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of logs) {
+    const k = dayKey(l.reviewedAt);
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+}
+
+function tierFor(count: number): HeatCell['tier'] {
+  if (count <= 0) return 0;
+  if (count < 4) return 1;
+  if (count < 10) return 2;
+  if (count < 20) return 3;
+  return 4;
+}
+
+/** Columns (weeks) of 7 day-cells, Sunday-aligned, ending today. */
+export function buildHeatmap(logs: ReviewLog[], weeks = 16): HeatCell[][] {
+  const byDay = reviewsByDay(logs);
+  const today = startOfLocalDay();
+  const start = new Date(today - (weeks * 7 - 1) * DAY_MS);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay()); // back to Sunday
+
+  const cells: HeatCell[] = [];
+  for (let t = start.getTime(); t <= today; t += DAY_MS) {
+    const key = dayKey(t);
+    const count = byDay.get(key) ?? 0;
+    cells.push({ date: t, key, count, tier: tierFor(count), future: false });
+  }
+
+  const columns: HeatCell[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    columns.push(cells.slice(i, i + 7));
+  }
+  return columns;
+}
+
+/* ----------------------------------------------------- daily performance -- */
+
+export interface DayPerf {
+  key: string;
+  label: string;
+  again: number;
+  hard: number;
+  goodEasy: number;
+  total: number;
+}
+
+export function dailyPerformance(logs: ReviewLog[], days = 14): DayPerf[] {
+  const today = startOfLocalDay();
+  const buckets = new Map<string, DayPerf>();
+  const fmt = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const t = today - i * DAY_MS;
+    const key = dayKey(t);
+    buckets.set(key, { key, label: fmt.format(new Date(t)), again: 0, hard: 0, goodEasy: 0, total: 0 });
+  }
+  for (const l of logs) {
+    const b = buckets.get(dayKey(l.reviewedAt));
+    if (!b) continue;
+    if (l.rating === 'again') b.again += 1;
+    else if (l.rating === 'hard') b.hard += 1;
+    else b.goodEasy += 1;
+    b.total += 1;
+  }
+  return [...buckets.values()];
+}
+
+/* ---------------------------------------------------------------- sessions */
+
+export interface Session {
+  deckId: string;
+  deckName: string;
+  color: string;
+  start: number;
+  end: number;
+  durationMs: number;
+  count: number;
+  scorePct: number;
+}
+
+const SESSION_GAP_MS = 30 * 60_000;
+
+/** Group logs into study sessions (per deck, split on >30min gaps). */
+export function sessionsFromLogs(
+  logs: ReviewLog[],
+  decks: Deck[],
+  limit = 12,
+): Session[] {
+  const deckMap = new Map(decks.map((d) => [d.id, d]));
+  const sorted = [...logs].sort((a, b) => a.reviewedAt - b.reviewedAt);
+
+  const sessions: Session[] = [];
+  let cur: (Session & { again: number }) | null = null;
+
+  for (const l of sorted) {
+    const deck = deckMap.get(l.deckId);
+    const sameSession =
+      cur &&
+      cur.deckId === l.deckId &&
+      l.reviewedAt - cur.end <= SESSION_GAP_MS;
+
+    if (!sameSession) {
+      if (cur) sessions.push(finalize(cur));
+      cur = {
+        deckId: l.deckId,
+        deckName: deck?.name ?? 'Deck removido',
+        color: deck?.color ?? '#9a9a96',
+        start: l.reviewedAt,
+        end: l.reviewedAt,
+        durationMs: 0,
+        count: 0,
+        scorePct: 0,
+        again: 0,
+      };
+    }
+    if (!cur) continue;
+    cur.end = l.reviewedAt;
+    cur.durationMs += l.durationMs;
+    cur.count += 1;
+    if (l.rating === 'again') cur.again += 1;
+  }
+  if (cur) sessions.push(finalize(cur));
+
+  return sessions.sort((a, b) => b.start - a.start).slice(0, limit);
+}
+
+function finalize(s: Session & { again: number }): Session {
+  const { again, ...rest } = s;
+  return {
+    ...rest,
+    scorePct: s.count ? Math.round(((s.count - again) / s.count) * 100) : 0,
+  };
+}
+
+/* ----------------------------------------------------------------- summary */
+
+export interface StatsSummary {
+  totalReviews: number;
+  accuracyPct: number;
+  reviewsToday: number;
+}
+
+export function statsSummary(logs: ReviewLog[]): StatsSummary {
+  const todayStart = startOfLocalDay();
+  let again = 0;
+  let reviewsToday = 0;
+  for (const l of logs) {
+    if (l.rating === 'again') again += 1;
+    if (l.reviewedAt >= todayStart) reviewsToday += 1;
+  }
+  return {
+    totalReviews: logs.length,
+    accuracyPct: logs.length ? Math.round(((logs.length - again) / logs.length) * 100) : 0,
+    reviewsToday,
+  };
+}

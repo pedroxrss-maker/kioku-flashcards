@@ -201,3 +201,21 @@ swappable), `SpeakerButton` (front+back in review, both faces; deck card list),
 per-deck `ttsLang`, auto-pronounce-on-reveal wired in ReviewSession.
 
 **Stubbed** — none for TTS. Settings page composition lands in step 9.
+
+---
+
+## 2026-06-05 — Step 8: Statistics + heatmap + charts
+
+**Built**
+
+- `features/stats/compute.ts` (pure, tested): `buildHeatmap` (16-week Sunday-
+  aligned columns, 5 intensity tiers), `dailyPerformance` (14-day again/hard/
+  goodEasy buckets), `sessionsFromLogs` (group logs per deck split on >30min
+  gaps, score% = non-again/total), `statsSummary`. **3 tests (15 total green).**
+- `Heatmap` (GitHub-style, accent `color-mix` intensity + legend), `DailyBars`
+  (stacked green/amber/red, day labels + legend).
+- Real **Stats** page: 4 tiles (revisões totais, aproveitamento, dominados,
+  dias seguidos), heatmap panel, daily-performance panel, per-deck mastery
+  bars, recent-sessions list (deck, relative date+time, cards, duration, score%).
+
+**Stubbed** — Settings still placeholder (step 9).
