@@ -2,13 +2,16 @@ import { NavLink } from 'react-router-dom';
 import { useDecks } from '../db/hooks';
 import { cn } from '../lib/cn';
 import { APP_VERSION, NAV_ITEMS } from './nav';
+import brandLogo from '../../neurofluency-logo-branca.png';
 
 function Wordmark() {
   return (
     <NavLink to="/" className="flex items-center gap-2.5 px-1">
-      <span
-        aria-hidden
-        style={{ width: 20, height: 20, background: 'var(--accent)' }}
+      <img
+        src={brandLogo}
+        alt=""
+        draggable={false}
+        style={{ height: 26, width: 'auto' }}
       />
       <span className="display" style={{ fontSize: 22 }}>
         Kioku
