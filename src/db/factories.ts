@@ -68,6 +68,8 @@ export function makeCard(input: CardInput): Card {
 export function defaultSettings(): AppSettings {
   return {
     id: 'global',
+    displayName: 'Estudante',
+    dailyGoal: 40,
     newPerDay: 20,
     reviewsPerDay: 200,
     defaultAlgorithm: 'fsrs',

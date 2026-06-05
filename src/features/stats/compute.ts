@@ -157,6 +157,83 @@ export interface StatsSummary {
   reviewsToday: number;
 }
 
+/** Longest run of consecutive local days that each had >=1 review. */
+export function longestStreak(dayKeys: Set<string>): number {
+  if (dayKeys.size === 0) return 0;
+  const days = [...dayKeys].sort();
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < days.length; i += 1) {
+    const prev = new Date(`${days[i - 1]}T00:00:00`).getTime();
+    const cur = new Date(`${days[i]}T00:00:00`).getTime();
+    if (Math.round((cur - prev) / DAY_MS) === 1) {
+      run += 1;
+      best = Math.max(best, run);
+    } else {
+      run = 1;
+    }
+  }
+  return best;
+}
+
+export function reviewsSince(logs: ReviewLog[], since: number): number {
+  let n = 0;
+  for (const l of logs) if (l.reviewedAt >= since) n += 1;
+  return n;
+}
+
+/** % of reviews rated good/easy within the window since `since`. */
+export function accuracySince(logs: ReviewLog[], since: number): number {
+  let total = 0;
+  let ok = 0;
+  for (const l of logs) {
+    if (l.reviewedAt < since) continue;
+    total += 1;
+    if (l.rating === 'good' || l.rating === 'easy') ok += 1;
+  }
+  return total ? Math.round((ok / total) * 100) : 0;
+}
+
+export function studiedToday(logs: ReviewLog[]): number {
+  return reviewsSince(logs, startOfLocalDay());
+}
+
+export function decksCreatedThisMonth(decks: Deck[]): number {
+  const d = new Date();
+  const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  return decks.filter((x) => x.createdAt >= monthStart).length;
+}
+
+export interface ActivityItem {
+  kind: 'session' | 'deck';
+  main: string;
+  sub: string;
+  time: number;
+  color: string;
+}
+
+/** Recent-activity feed: completed study sessions + created decks, newest first. */
+export function recentActivity(
+  logs: ReviewLog[],
+  decks: Deck[],
+  limit = 4,
+): ActivityItem[] {
+  const items: ActivityItem[] = [];
+  for (const s of sessionsFromLogs(logs, decks, 50)) {
+    items.push({
+      kind: 'session',
+      main: `Você estudou ${s.count} ${s.count === 1 ? 'card' : 'cards'}`,
+      sub: `em ${s.deckName}`,
+      time: s.end,
+      color: s.color,
+    });
+  }
+  for (const d of decks) {
+    items.push({ kind: 'deck', main: 'Novo deck criado', sub: d.name, time: d.createdAt, color: d.color });
+  }
+  return items.sort((a, b) => b.time - a.time).slice(0, limit);
+}
+
 export function statsSummary(logs: ReviewLog[]): StatsSummary {
   const todayStart = startOfLocalDay();
   let again = 0;

@@ -113,7 +113,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
                 aria-label={`Cor ${c}`}
                 onClick={() => setColor(c)}
                 className={cn(
-                  'h-8 w-8 transition-transform',
+                  'h-8 w-8 rounded-[var(--r-sm)] transition-transform',
                   color === c ? 'scale-110' : 'opacity-70 hover:opacity-100',
                 )}
                 style={{
@@ -139,12 +139,13 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
                   onClick={() => setAlgorithm(a)}
                   className="hover-lift px-3 py-2.5 text-left transition-colors"
                   style={{
+                    borderRadius: 'var(--r-sm)',
                     border: selected
                       ? '2px solid var(--accent)'
-                      : '1px solid var(--line)',
+                      : '1px solid var(--line-strong)',
                     background: selected
-                      ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
-                      : 'transparent',
+                      ? 'var(--accent-soft)'
+                      : 'var(--surface-2)',
                   }}
                 >
                   <span className="mono text-xs block">
@@ -161,7 +162,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
           {algorithm === 'fsrs' && (
             <div
               className="mt-3 rise"
-              style={{ border: '1px solid var(--line)', padding: '14px' }}
+              style={{ border: '1px solid var(--line-strong)', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', padding: '14px' }}
             >
               <p className="field-label" style={{ marginBottom: 12 }}>
                 Configurações FSRS

@@ -63,7 +63,7 @@ export function DeckBrowser() {
           type="button"
           onClick={() => setCreateOpen(true)}
           className="hover-lift flex flex-col items-center justify-center gap-2 p-8 text-muted hover:text-fg min-h-[150px] transition-colors"
-          style={{ border: '2px dashed var(--line)' }}
+          style={{ border: '1px dashed var(--line-strong)', borderRadius: 'var(--r-md)' }}
         >
           <Plus size={26} />
           <span className="mono text-xs">Criar novo deck</span>

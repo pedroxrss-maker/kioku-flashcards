@@ -115,10 +115,11 @@ export function CardEditorModal({
           <div
             className="rise"
             style={{
-              background: '#ffffff',
-              color: '#0f0f0f',
-              border: '2px solid var(--fg)',
-              boxShadow: '8px 8px 0 var(--fg)',
+              background: '#fbfbfa',
+              color: '#15151a',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--r-lg)',
+              boxShadow: 'var(--shadow-card)',
               padding: '28px 24px',
               textAlign: 'center',
             }}

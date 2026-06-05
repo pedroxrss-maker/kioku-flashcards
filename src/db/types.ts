@@ -76,6 +76,8 @@ export interface MediaBlob {
 /** Global app settings — a single 'global' row. (Extension of the spec.) */
 export interface AppSettings {
   id: 'global';
+  displayName: string; // shown in the dashboard greeting / user chip
+  dailyGoal: number; // cards/day goal for the daily-progress ring
   newPerDay: number;
   reviewsPerDay: number;
   defaultAlgorithm: Algorithm;

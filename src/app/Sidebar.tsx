@@ -22,11 +22,10 @@ function Wordmark() {
 
 function navItemClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex items-center gap-3 px-3 py-2.5 text-sm font-semibold transition-colors',
-    'border-l-2',
+    'flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-[var(--r-sm)] transition-colors',
     isActive
-      ? 'text-fg border-l-[color:var(--accent)] bg-[color:var(--surface)]'
-      : 'text-muted border-l-transparent hover:text-fg hover:bg-[color:var(--surface)]',
+      ? 'text-fg bg-[color:var(--accent-soft)]'
+      : 'text-muted hover:text-fg hover:bg-[color:var(--surface-2)]',
   );
 }
 
@@ -37,7 +36,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex md:flex-col shrink-0 border-r-2 sticky top-0 h-screen"
+      className="hidden md:flex md:flex-col shrink-0 border-r sticky top-0 h-screen"
       style={{ width: 210, borderColor: 'var(--line)', background: 'var(--bg)' }}
     >
       <div className="px-4 py-5">
@@ -112,7 +111,7 @@ export function Sidebar() {
 export function MobileTopBar() {
   return (
     <header
-      className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b-2"
+      className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b"
       style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
     >
       <Wordmark />

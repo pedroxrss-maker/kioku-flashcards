@@ -122,7 +122,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
                 type="button"
                 aria-label={`Cor ${c}`}
                 onClick={() => setColor(c)}
-                className={cn('h-8 w-8 transition-transform', color === c ? 'scale-110' : 'opacity-70 hover:opacity-100')}
+                className={cn('h-8 w-8 rounded-[var(--r-sm)] transition-transform', color === c ? 'scale-110' : 'opacity-70 hover:opacity-100')}
                 style={{ background: c, outline: color === c ? '2px solid var(--fg)' : 'none', outlineOffset: 2 }}
               />
             ))}
@@ -138,10 +138,10 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
                 type="button"
                 onClick={() => setAlgorithm(a)}
                 className={cn(
-                  'border-2 px-3 py-2 text-left transition-colors',
+                  'rounded-[var(--r-sm)] border px-3 py-2 text-left transition-colors',
                   algorithm === a
-                    ? 'border-[color:var(--accent)] bg-[color:var(--surface)]'
-                    : 'border-[color:var(--line)] hover:border-[color:var(--fg)]',
+                    ? 'border-[color:var(--accent)] bg-[color:var(--accent-soft)]'
+                    : 'border-[color:var(--line-strong)] bg-[color:var(--surface-2)] hover:border-[color:var(--fg)]',
                 )}
               >
                 <span className="mono text-xs block">{a === 'fsrs' ? 'FSRS' : 'SM-2'}</span>
@@ -191,10 +191,10 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
                 type="button"
                 onClick={() => setButtonCount(n)}
                 className={cn(
-                  'border-2 px-3 py-2 transition-colors mono text-xs',
+                  'rounded-[var(--r-sm)] border px-3 py-2 transition-colors mono text-xs',
                   buttonCount === n
-                    ? 'border-[color:var(--accent)] bg-[color:var(--surface)]'
-                    : 'border-[color:var(--line)] hover:border-[color:var(--fg)]',
+                    ? 'border-[color:var(--accent)] bg-[color:var(--accent-soft)]'
+                    : 'border-[color:var(--line-strong)] bg-[color:var(--surface-2)] hover:border-[color:var(--fg)]',
                 )}
               >
                 {n} botões

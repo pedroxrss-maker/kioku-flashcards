@@ -66,15 +66,10 @@ export async function seedIfEmpty(): Promise<void> {
   await db.transaction('rw', db.decks, db.cards, db.settings, async () => {
     await db.decks.bulkAdd([english, general]);
     await db.cards.bulkAdd(cards);
-    const current = settings ?? null;
     await db.settings.put({
+      ...defaultSettings(),
+      ...(settings ?? {}),
       id: 'global',
-      newPerDay: current?.newPerDay ?? 20,
-      reviewsPerDay: current?.reviewsPerDay ?? 200,
-      defaultAlgorithm: current?.defaultAlgorithm ?? 'fsrs',
-      defaultDesiredRetention: current?.defaultDesiredRetention ?? 0.9,
-      defaultButtonCount: current?.defaultButtonCount ?? 4,
-      tts: current?.tts ?? defaultSettings().tts,
       seededAt: Date.now(),
     });
   });

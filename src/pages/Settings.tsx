@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Brain, Database, Palette, SlidersHorizontal, SquareStack } from 'lucide-react';
+import { Brain, Database, Palette, SlidersHorizontal, SquareStack, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { TtsSettings } from '../features/tts/TtsSettings';
@@ -53,6 +53,33 @@ export function Settings() {
     <div className="rise flex flex-col gap-6 max-w-3xl">
       <PageHeader title="Configurações" subtitle="Padrões globais do Kioku." />
 
+      {/* Profile */}
+      <Section icon={<User size={16} />} title="Perfil">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="field-label" htmlFor="s-name">Nome de exibição</label>
+            <input
+              id="s-name"
+              className="field"
+              placeholder="Estudante"
+              value={settings.displayName}
+              onChange={(e) => repo.saveSettings({ displayName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="s-goal">Meta diária de cards</label>
+            <input
+              id="s-goal"
+              type="number"
+              min={1}
+              className="field"
+              value={settings.dailyGoal}
+              onChange={(e) => repo.saveSettings({ dailyGoal: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          </div>
+        </div>
+      </Section>
+
       {/* Study defaults */}
       <Section icon={<SlidersHorizontal size={16} />} title="Estudo (padrões para novos decks)">
         <div className="grid grid-cols-2 gap-4">
@@ -93,10 +120,10 @@ export function Settings() {
               type="button"
               onClick={() => repo.saveSettings({ defaultAlgorithm: a })}
               className={cn(
-                'border-2 px-4 py-3 text-left transition-colors',
+                'rounded-[var(--r-sm)] border px-4 py-3 text-left transition-colors',
                 settings.defaultAlgorithm === a
-                  ? 'border-[color:var(--accent)] bg-[color:var(--bg)]'
-                  : 'border-[color:var(--line)] hover:border-[color:var(--fg)]',
+                  ? 'border-[color:var(--accent)] bg-[color:var(--surface-2)]'
+                  : 'border-[color:var(--line-strong)] hover:bg-[color:var(--surface-2)]',
               )}
             >
               <span className="mono text-sm block mb-0.5">{a === 'fsrs' ? 'FSRS' : 'SM-2'}</span>
@@ -143,14 +170,14 @@ export function Settings() {
               type="button"
               onClick={() => repo.saveSettings({ defaultButtonCount: n })}
               className={cn(
-                'border-2 px-3 py-3 transition-colors text-center',
+                'rounded-[var(--r-sm)] border px-3 py-3 transition-colors text-center',
                 settings.defaultButtonCount === n
-                  ? 'border-[color:var(--accent)] bg-[color:var(--bg)]'
-                  : 'border-[color:var(--line)] hover:border-[color:var(--fg)]',
+                  ? 'border-[color:var(--accent)] bg-[color:var(--surface-2)]'
+                  : 'border-[color:var(--line-strong)] hover:bg-[color:var(--surface-2)]',
               )}
             >
               <span className="display text-lg block">{n}</span>
-              <span className="mono text-[9px] text-muted">
+              <span className="mono text-[11px] text-muted">
                 {n === 2 ? 'Errei/Acertei' : n === 3 ? '+ Difícil' : '+ Bom/Fácil'}
               </span>
             </button>

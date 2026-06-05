@@ -1,19 +1,19 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Kioku design system — a translation of the NeuroFluency brand:
-   bold, brutalist, editorial, high-contrast, single hot accent on black.
+   Kioku design system — warm, friendly study dashboard.
+   Soft rounded surfaces, hairline borders, gentle shadows, Fraunces for
+   headings/numbers + Manrope for everything else (sentence case). Keeps the
+   hot accent and per-deck colors.
    =========================================================================== */
 
-/* Expose the palette + fonts to Tailwind v4 so utilities like `bg-surface`,
-   `text-accent`, `border-line`, `font-display` are generated. */
 @theme {
-  --color-bg: #0a0a0a;
-  --color-surface: #121212;
-  --color-surface-2: #181818;
-  --color-fg: #ffffff;
-  --color-muted: #9a9a96;
-  --color-line: #2a2a2a;
+  --color-bg: #0e0e11;
+  --color-surface: #17171b;
+  --color-surface-2: #1f1f24;
+  --color-fg: #f5f5f4;
+  --color-muted: #a1a1aa;
+  --color-line: rgba(255, 255, 255, 0.06);
   --color-accent: #ff3b1f;
   --color-accent-blue: #1f6dff;
   --color-accent-green: #00b569;
@@ -22,23 +22,36 @@
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-body: 'Manrope', system-ui, sans-serif;
   --font-mono: 'DM Mono', ui-monospace, monospace;
+
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 }
 
-/* Spec-named variables for use inside custom CSS + inline styles. */
 :root {
-  --bg: #0a0a0a;
-  --surface: #121212;
-  --surface-2: #181818;
-  --fg: #ffffff;
-  --muted: #9a9a96;
-  --line: #2a2a2a;
+  --bg: #0e0e11;
+  --surface: #17171b;
+  --surface-2: #1f1f24;
+  --fg: #f5f5f4;
+  --muted: #a1a1aa;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.1);
   --accent: #ff3b1f;
   --accent-blue: #1f6dff;
   --accent-green: #00b569;
   --accent-amber: #ff9d00;
+  --accent-soft: rgba(255, 59, 31, 0.14);
+
   --display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --body: 'Manrope', system-ui, sans-serif;
   --mono: 'DM Mono', ui-monospace, monospace;
+
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-full: 999px;
+
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.45);
 
   color-scheme: dark;
 }
@@ -71,41 +84,41 @@ body {
 
 ::selection {
   background: var(--accent);
-  color: var(--bg);
+  color: #fff;
 }
 
-/* Dark, hairline scrollbars to match the canvas. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-color: var(--surface-2) transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--line);
+  background: var(--surface-2);
   border: 2px solid var(--bg);
   border-radius: 999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3a;
+  background: #2c2c33;
 }
 
 /* ---------------------------------------------------------------- type ---- */
-/* Fraunces — warm, scholarly serif. Sentence case (no uppercase); optical
-   sizing lets large headings pick up the high opsz axis naturally. */
+/* Fraunces — warm scholarly serif for greetings, section titles, big numbers. */
 .display {
   font-family: var(--display);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.005em;
-  line-height: 1.02;
+  line-height: 1.05;
   font-optical-sizing: auto;
 }
+/* Soft label/caption style (Manrope, sentence case) — replaces the old
+   uppercase DM Mono treatment everywhere `.mono` is used. */
 .mono {
-  font-family: var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-family: var(--body);
+  letter-spacing: 0;
+  text-transform: none;
 }
 .accent {
   color: var(--accent);
@@ -120,91 +133,88 @@ button {
   border: none;
 }
 
-/* Mega CTA — white slab, Fraunces sentence case; on hover flips to the accent. */
+/* Primary CTA — accent fill, rounded, soft shadow. */
 .btn-mega {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  background: var(--fg);
-  color: var(--bg);
+  gap: 10px;
+  background: var(--accent);
+  color: #fff;
   border: 0;
-  padding: 20px 28px;
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 18px;
+  padding: 14px 22px;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 16px;
   letter-spacing: 0;
-  border-radius: 0;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  border-radius: var(--r-sm);
+  box-shadow: 0 6px 18px rgba(255, 59, 31, 0.28);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
   text-decoration: none;
 }
 .btn-mega:hover {
-  background: var(--accent);
-  color: var(--fg);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 26px rgba(255, 59, 31, 0.22);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(255, 59, 31, 0.34);
 }
 .btn-mega:active {
   transform: translateY(0);
-  box-shadow: none;
 }
 .btn-mega:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
 
-/* Standard button — hard-edged, bordered. */
+/* Standard button — rounded, soft. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
-  border: 2px solid var(--fg);
-  background: transparent;
+  padding: 9px 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
   color: var(--fg);
-  border-radius: 0;
+  border-radius: var(--r-sm);
   font-family: var(--body);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 14px;
-  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease,
-    border-color 0.18s ease;
+  transition: transform 0.16s ease, background 0.16s ease, filter 0.16s ease,
+    border-color 0.16s ease;
 }
 .btn:hover {
-  background: var(--fg);
-  color: var(--bg);
-  transform: translateY(-2px);
+  background: #2a2a31;
+  transform: translateY(-1px);
 }
 .btn:active {
   transform: translateY(0);
 }
 .btn-accent {
-  border-color: var(--accent);
+  border-color: transparent;
   background: var(--accent);
-  color: var(--fg);
+  color: #fff;
 }
 .btn-accent:hover {
-  background: var(--fg);
-  color: var(--bg);
-  border-color: var(--fg);
+  background: var(--accent);
+  filter: brightness(1.07);
 }
 .btn-ghost {
-  border-color: var(--line);
+  border-color: var(--line-strong);
+  background: transparent;
   color: var(--muted);
 }
 .btn-ghost:hover {
   background: var(--surface-2);
   color: var(--fg);
-  border-color: var(--fg);
 }
 .btn-sm {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none;
 }
@@ -213,108 +223,104 @@ button {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   padding: 7px 14px;
-  border: 1.5px solid var(--fg);
-  border-radius: 999px;
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-full);
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 13px;
   color: var(--fg);
-  background: transparent;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  background: var(--surface-2);
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
   white-space: nowrap;
 }
 .pill-muted {
   border-color: var(--line);
+  background: transparent;
   color: var(--muted);
 }
 .pill-active {
   background: var(--accent);
-  border-color: var(--accent);
-  color: var(--fg);
+  border-color: transparent;
+  color: #fff;
 }
 button.pill:hover {
   border-color: var(--accent);
   color: var(--fg);
 }
 button.pill.pill-active:hover {
-  color: var(--fg);
-}
-
-/* ------------------------------------------------------------ nav links --- */
-.nav-link {
-  position: relative;
-  transition: color 0.2s ease;
-}
-.nav-link::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 1.5px;
-  background: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.nav-link:hover {
-  color: var(--accent);
-}
-.nav-link:hover::after {
-  transform: scaleX(1);
+  color: #fff;
 }
 
 /* ------------------------------------------------------ surfaces & cards -- */
 .surface {
   background: var(--surface);
-  border: 2px solid var(--line);
-  border-radius: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
 }
 
-/* Offset solid shadow — the signature raised panel (no blur). */
+/* Legacy names now map to the soft shadow. */
 .offset-shadow {
-  box-shadow: 10px 10px 0 var(--fg);
+  box-shadow: var(--shadow-card);
 }
 .offset-shadow-accent {
-  box-shadow: 10px 10px 0 var(--accent);
+  box-shadow: 0 10px 30px rgba(255, 59, 31, 0.22);
 }
 
-/* Reusable soft lift for interactive cards. */
 .hover-lift {
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .hover-lift:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-pop);
+  border-color: var(--line-strong);
+}
+
+/* Rounded-square icon tile (accent by default; color override via --tile). */
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  background: var(--tile, var(--accent));
+  color: #fff;
+  flex-shrink: 0;
 }
 
 /* --------------------------------------------------------------- fields --- */
 .field {
   width: 100%;
-  padding: 12px 14px;
-  border: 2px solid var(--line);
-  background: var(--surface);
+  padding: 11px 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
   font-family: var(--body);
   font-size: 15px;
   color: var(--fg);
   outline: none;
-  border-radius: 0;
-  transition: border-color 0.18s ease;
+  border-radius: var(--r-sm);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 .field:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .field::placeholder {
   color: var(--muted);
 }
+.field-round {
+  border-radius: var(--r-full);
+}
 .field-label {
   display: block;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
   margin-bottom: 6px;
   color: var(--muted);
 }
@@ -323,7 +329,8 @@ button.pill.pill-active:hover {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -332,30 +339,33 @@ button.pill.pill-active:hover {
   animation: kioku-fade 0.16s ease-out;
 }
 .modal-box {
-  background: var(--bg);
-  border: 2px solid var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
   max-width: 520px;
   width: 100%;
-  padding: 32px 28px 28px;
+  padding: 28px 26px 24px;
   position: relative;
-  box-shadow: 12px 12px 0 var(--fg);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
   animation: kioku-pop 0.18s ease-out;
 }
 .modal-close {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 26px;
+  top: 12px;
+  right: 12px;
+  font-size: 22px;
   line-height: 1;
-  color: var(--fg);
-  width: 40px;
-  height: 40px;
+  color: var(--muted);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .modal-close:hover {
-  color: var(--accent);
+  color: var(--fg);
+  background: var(--surface-2);
 }
 
 /* ------------------------------------------------------------ card flip --- */
@@ -367,8 +377,6 @@ button.pill.pill-active:hover {
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   transform-style: preserve-3d;
 }
-/* Suppress the rotateY transition on mount / card change so an incoming card
-   never animates from its back face — only user-initiated flips animate. */
 .flip-inner.no-flip-anim {
   transition: none;
 }
@@ -378,7 +386,7 @@ button.pill.pill-active:hover {
 .flip-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  z-index: 2; /* front sits above the back when unflipped */
+  z-index: 2;
 }
 .flip-face-back {
   position: absolute;
@@ -388,11 +396,10 @@ button.pill.pill-active:hover {
 }
 
 /* ---------------------------------------------------------- card content -- */
-/* Rendered HTML from the editor on the review/study surfaces. */
 .card-content {
   font-family: var(--body);
   font-size: clamp(20px, 3vw, 30px);
-  line-height: 1.45;
+  line-height: 1.5;
   font-weight: 500;
   word-break: break-word;
 }
@@ -401,6 +408,7 @@ button.pill.pill-active:hover {
   height: auto;
   margin: 12px auto;
   display: block;
+  border-radius: var(--r-sm);
 }
 .card-content ul {
   text-align: left;
@@ -414,21 +422,21 @@ button.pill.pill-active:hover {
 }
 .card-content-sm {
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
   font-weight: 500;
 }
 .card-content-sm img {
   max-height: 120px;
 }
 
-/* Stored-audio chip (ElevenLabs / attached audio) — hard edges, mono label. */
+/* Stored-audio chip (ElevenLabs / attached audio) — soft, Manrope label. */
 .kioku-audio-chip {
   display: inline-flex;
   flex-direction: column;
   gap: 6px;
   align-items: flex-start;
-  border: 1px solid var(--line);
-  border-radius: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
   padding: 8px 10px;
   margin: 8px 0;
   max-width: 100%;
@@ -436,19 +444,19 @@ button.pill.pill-active:hover {
   user-select: none;
 }
 .kioku-audio-lbl {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--muted);
 }
 .kioku-audio-chip audio {
   height: 34px;
   max-width: 260px;
 }
-/* On the white review face, lift contrast. */
 .review-face .kioku-audio-chip {
-  border-color: rgba(15, 15, 15, 0.2);
+  border-color: rgba(15, 15, 15, 0.16);
 }
 .review-face .kioku-audio-lbl {
   color: #555;
@@ -464,21 +472,17 @@ button.pill.pill-active:hover {
   justify-content: center;
   text-align: center;
   padding: clamp(20px, 4vw, 44px);
-  background: #ffffff;
-  color: #0f0f0f;
-  box-shadow: 10px 10px 0 var(--fg);
+  background: #fbfbfa;
+  color: #15151a;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
   overflow-y: auto;
 }
 .flip-scene:hover .review-face {
-  box-shadow: 10px 10px 0 var(--accent);
+  box-shadow: var(--shadow-pop);
 }
 .review-face .card-content {
-  color: #0f0f0f;
-}
-@media (prefers-reduced-motion: reduce) {
-  .flip-scene:hover .review-face {
-    box-shadow: 10px 10px 0 var(--fg);
-  }
+  color: #15151a;
 }
 
 /* ----------------------------------------------------- review answer btns - */
@@ -489,12 +493,13 @@ button.pill.pill-active:hover {
   justify-content: center;
   gap: 4px;
   padding: 14px 10px;
-  min-height: 76px;
+  min-height: 74px;
   flex: 1 1 0;
-  border: 2px solid var(--btn-color, var(--line));
-  background: var(--btn-color, transparent);
+  border: 1px solid transparent;
+  background: var(--btn-color, var(--surface-2));
   color: var(--btn-text, var(--fg));
-  border-radius: 0;
+  border-radius: var(--r-sm);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
   transition: transform 0.15s ease, filter 0.15s ease;
 }
 .answer-btn:hover {
@@ -506,16 +511,16 @@ button.pill.pill-active:hover {
 }
 .answer-label {
   font-family: var(--body);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 15px;
 }
 .answer-key,
 .answer-int {
   color: var(--btn-text, var(--fg));
   opacity: 0.7;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-family: var(--body);
+  font-size: 12px;
+  letter-spacing: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -542,11 +547,11 @@ button.pill.pill-active:hover {
 @keyframes kioku-pop {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.97) translateY(6px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 @keyframes kioku-rise {

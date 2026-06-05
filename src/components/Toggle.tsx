@@ -11,10 +11,11 @@ export function Toggle({ checked, onChange, label, description }: ToggleProps) {
     <span
       aria-hidden
       style={{
-        width: 46,
+        width: 44,
         height: 26,
-        border: '2px solid var(--line)',
-        background: checked ? 'var(--accent)' : 'transparent',
+        borderRadius: 999,
+        border: '1px solid var(--line-strong)',
+        background: checked ? 'var(--accent)' : 'var(--surface-2)',
         position: 'relative',
         transition: 'background 0.15s ease',
         flexShrink: 0,
@@ -23,11 +24,12 @@ export function Toggle({ checked, onChange, label, description }: ToggleProps) {
       <span
         style={{
           position: 'absolute',
-          top: 2,
-          left: checked ? 22 : 2,
+          top: 3,
+          left: checked ? 21 : 3,
           width: 18,
           height: 18,
-          background: 'var(--fg)',
+          borderRadius: 999,
+          background: '#fff',
           transition: 'left 0.15s ease',
         }}
       />

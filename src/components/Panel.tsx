@@ -3,9 +3,9 @@ import { cn } from '../lib/cn';
 
 interface PanelProps {
   children: ReactNode;
-  /** Adds the brand hover-lift transition. */
+  /** Adds the soft hover-lift transition. */
   hoverable?: boolean;
-  /** Renders the 10px offset solid shadow (white, or accent on hover). */
+  /** Slightly stronger card shadow. */
   raised?: boolean;
   /** Optional colored top strip (e.g. a deck's accent color). */
   accentStrip?: string;
@@ -14,10 +14,7 @@ interface PanelProps {
   onClick?: () => void;
 }
 
-/**
- * Generic raised surface — the brutalist panel primitive. Named `Panel` to
- * avoid colliding with the domain `Card` entity.
- */
+/** Generic soft surface card. (Named `Panel` to avoid colliding with `Card`.) */
 export function Panel({
   children,
   hoverable,
@@ -34,13 +31,14 @@ export function Panel({
         hoverable && 'hover-lift',
         raised && 'offset-shadow',
         onClick && 'cursor-pointer',
+        accentStrip && 'overflow-hidden', // clip the strip to rounded corners
         className,
       )}
       style={style}
       onClick={onClick}
     >
       {accentStrip && (
-        <div style={{ height: 6, background: accentStrip }} aria-hidden />
+        <div style={{ height: 4, background: accentStrip }} aria-hidden />
       )}
       {children}
     </div>

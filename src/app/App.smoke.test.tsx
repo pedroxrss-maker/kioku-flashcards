@@ -19,9 +19,7 @@ describe('App smoke test', () => {
     );
     expect(decks.length).toBeGreaterThan(0);
 
-    // The time-of-day greeting renders on Home.
-    expect(
-      screen.getByText(/Bom dia|Boa tarde|Boa noite/),
-    ).toBeTruthy();
+    // The dashboard greeting renders on Home.
+    expect(screen.getByText(/Bem-vindo de volta/)).toBeTruthy();
   });
 });
