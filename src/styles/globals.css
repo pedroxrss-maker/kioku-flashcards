@@ -1,0 +1,469 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   Kioku design system — a translation of the NeuroFluency brand:
+   bold, brutalist, editorial, high-contrast, single hot accent on black.
+   =========================================================================== */
+
+/* Expose the palette + fonts to Tailwind v4 so utilities like `bg-surface`,
+   `text-accent`, `border-line`, `font-display` are generated. */
+@theme {
+  --color-bg: #0a0a0a;
+  --color-surface: #121212;
+  --color-surface-2: #181818;
+  --color-fg: #ffffff;
+  --color-muted: #9a9a96;
+  --color-line: #2a2a2a;
+  --color-accent: #ff3b1f;
+  --color-accent-blue: #1f6dff;
+  --color-accent-green: #00b569;
+  --color-accent-amber: #ff9d00;
+
+  --font-display: 'Archivo Black', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+}
+
+/* Spec-named variables for use inside custom CSS + inline styles. */
+:root {
+  --bg: #0a0a0a;
+  --surface: #121212;
+  --surface-2: #181818;
+  --fg: #ffffff;
+  --muted: #9a9a96;
+  --line: #2a2a2a;
+  --accent: #ff3b1f;
+  --accent-blue: #1f6dff;
+  --accent-green: #00b569;
+  --accent-amber: #ff9d00;
+  --display: 'Archivo Black', system-ui, sans-serif;
+  --body: 'Manrope', system-ui, sans-serif;
+  --mono: 'DM Mono', ui-monospace, monospace;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Dark, hairline scrollbars to match the canvas. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* ---------------------------------------------------------------- type ---- */
+.display {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+.mono {
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.accent {
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------------- buttons -- */
+button {
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+/* Mega CTA — white slab, Archivo Black; on hover flips to the hot accent. */
+.btn-mega {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--fg);
+  color: var(--bg);
+  border: 0;
+  padding: 20px 28px;
+  font-family: var(--display);
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border-radius: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  text-decoration: none;
+}
+.btn-mega:hover {
+  background: var(--accent);
+  color: var(--fg);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(255, 59, 31, 0.22);
+}
+.btn-mega:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.btn-mega:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Standard button — hard-edged, bordered. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 2px solid var(--fg);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 0;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 14px;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease;
+}
+.btn:hover {
+  background: var(--fg);
+  color: var(--bg);
+  transform: translateY(-2px);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn-accent {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--fg);
+}
+.btn-accent:hover {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+.btn-ghost {
+  border-color: var(--line);
+  color: var(--muted);
+}
+.btn-ghost:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+  border-color: var(--fg);
+}
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ----------------------------------------------------------------- pill --- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1.5px solid var(--fg);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg);
+  background: transparent;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  white-space: nowrap;
+}
+.pill-muted {
+  border-color: var(--line);
+  color: var(--muted);
+}
+.pill-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+button.pill:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+button.pill.pill-active:hover {
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------ nav links --- */
+.nav-link {
+  position: relative;
+  transition: color 0.2s ease;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1.5px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-link:hover {
+  color: var(--accent);
+}
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* ------------------------------------------------------ surfaces & cards -- */
+.surface {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 0;
+}
+
+/* Offset solid shadow — the signature raised panel (no blur). */
+.offset-shadow {
+  box-shadow: 10px 10px 0 var(--fg);
+}
+.offset-shadow-accent {
+  box-shadow: 10px 10px 0 var(--accent);
+}
+
+/* Reusable soft lift for interactive cards. */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* --------------------------------------------------------------- fields --- */
+.field {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--fg);
+  outline: none;
+  border-radius: 0;
+  transition: border-color 0.18s ease;
+}
+.field:focus {
+  border-color: var(--accent);
+}
+.field::placeholder {
+  color: var(--muted);
+}
+.field-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- modal --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: kioku-fade 0.16s ease-out;
+}
+.modal-box {
+  background: var(--bg);
+  border: 2px solid var(--fg);
+  max-width: 520px;
+  width: 100%;
+  padding: 32px 28px 28px;
+  position: relative;
+  box-shadow: 12px 12px 0 var(--fg);
+  animation: kioku-pop 0.18s ease-out;
+}
+.modal-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--fg);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-close:hover {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------ card flip --- */
+.flip-scene {
+  perspective: 1600px;
+}
+.flip-inner {
+  position: relative;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+.flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-face-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* ---------------------------------------------------------- card content -- */
+/* Rendered HTML from the editor on the review/study surfaces. */
+.card-content {
+  font-family: var(--body);
+  font-size: clamp(20px, 3vw, 30px);
+  line-height: 1.45;
+  font-weight: 500;
+  word-break: break-word;
+}
+.card-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 12px auto;
+  display: block;
+}
+.card-content ul {
+  text-align: left;
+  display: inline-block;
+  padding-left: 1.2em;
+  margin: 0.4em 0;
+}
+.card-content b,
+.card-content strong {
+  font-weight: 800;
+}
+.card-content-sm {
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.card-content-sm img {
+  max-height: 120px;
+}
+
+/* --------------------------------------------------------------- a11y ----- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ animations -- */
+@keyframes kioku-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes kioku-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes kioku-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: kioku-rise 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .btn-mega:hover,
+  .btn:hover,
+  .hover-lift:hover {
+    transform: none;
+  }
+  .flip-inner {
+    transition: none;
+  }
+}
