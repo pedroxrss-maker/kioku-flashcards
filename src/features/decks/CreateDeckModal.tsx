@@ -20,6 +20,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
   const [category, setCategory] = useState('');
   const [color, setColor] = useState<string>(DECK_COLORS[0]);
   const [algorithm, setAlgorithm] = useState<Algorithm>('fsrs');
+  const [retention, setRetention] = useState(0.9);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       setCategory('');
       setColor(DECK_COLORS[0]);
       setAlgorithm(settings?.defaultAlgorithm ?? 'fsrs');
+      setRetention(settings?.defaultDesiredRetention ?? 0.9);
     }
   }, [open, settings]);
 
@@ -42,7 +44,9 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
         algorithm,
         newPerDay: settings?.newPerDay,
         reviewsPerDay: settings?.reviewsPerDay,
-        desiredRetention: settings?.defaultDesiredRetention,
+        // FSRS uses the slider value; SM-2 ignores retention (keep a sane default).
+        desiredRetention:
+          algorithm === 'fsrs' ? retention : settings?.defaultDesiredRetention ?? 0.9,
         buttonCount: settings?.defaultButtonCount,
       });
       onClose();
@@ -125,27 +129,66 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
         <div>
           <span className="field-label">Algoritmo</span>
           <div className="grid grid-cols-2 gap-2">
-            {(['fsrs', 'sm2'] as Algorithm[]).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setAlgorithm(a)}
-                className={cn(
-                  'border-2 px-3 py-2.5 text-left transition-colors',
-                  algorithm === a
-                    ? 'border-[color:var(--accent)] bg-[color:var(--surface)]'
-                    : 'border-[color:var(--line)] hover:border-[color:var(--fg)]',
-                )}
-              >
-                <span className="mono text-xs block">
-                  {a === 'fsrs' ? 'FSRS' : 'SM-2'}
-                </span>
-                <span className="text-[11px] text-muted">
-                  {a === 'fsrs' ? 'Moderno e eficiente' : 'Clássico (Anki)'}
-                </span>
-              </button>
-            ))}
+            {(['fsrs', 'sm2'] as Algorithm[]).map((a) => {
+              const selected = algorithm === a;
+              return (
+                <button
+                  key={a}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setAlgorithm(a)}
+                  className="hover-lift px-3 py-2.5 text-left transition-colors"
+                  style={{
+                    border: selected
+                      ? '2px solid var(--accent)'
+                      : '1px solid var(--line)',
+                    background: selected
+                      ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
+                      : 'transparent',
+                  }}
+                >
+                  <span className="mono text-xs block">
+                    {a === 'fsrs' ? 'FSRS' : 'SM-2'}
+                  </span>
+                  <span className="text-[11px] text-muted">
+                    {a === 'fsrs' ? 'Moderno e eficiente' : 'Clássico (Anki)'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+
+          {algorithm === 'fsrs' && (
+            <div
+              className="mt-3 rise"
+              style={{ border: '1px solid var(--line)', padding: '14px' }}
+            >
+              <p className="field-label" style={{ marginBottom: 12 }}>
+                Configurações FSRS
+              </p>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm" htmlFor="deck-retention">
+                  Retenção desejada
+                </label>
+                <span className="mono text-xs" style={{ color: 'var(--accent)' }}>
+                  {Math.round(retention * 100)}%
+                </span>
+              </div>
+              <input
+                id="deck-retention"
+                type="range"
+                min={0.8}
+                max={0.97}
+                step={0.01}
+                value={retention}
+                onChange={(e) => setRetention(Number(e.target.value))}
+                className="w-full accent-[color:var(--accent)]"
+              />
+              <p className="text-[11px] mt-2" style={{ color: 'var(--muted)' }}>
+                Maior retenção significa mais revisões; menor reduz a carga.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </Modal>

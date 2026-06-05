@@ -310,3 +310,16 @@ server boots and transforms. All 10 numbered steps complete.
 
 **Tests** — +4 (filled-button contract, next-card-front-first acceptance, editor
 preview toggle). **23/23 green**; tsc + build clean.
+
+---
+
+## 2026-06-05 — New-deck modal: algorithm select + FSRS reveal
+
+`CreateDeckModal` ALGORITMO is a real single-select: FSRS / SM-2 option cards
+(selected = 2px solid var(--accent) + accent-tinted bg via `color-mix`;
+unselected = 1px var(--line); box-border avoids layout shift; hover-lift; FSRS
+default). Selecting FSRS reveals a "Configurações FSRS" block with a "Retenção
+desejada" slider (0.80–0.97, step 0.01, default 0.90, % shown in mono + muted
+helper) — consistent with Configurações; SM-2 hides it. `submit` writes the
+slider value to `desiredRetention` for FSRS (ignored for SM-2). +1 test (reveal
+toggle). **24/24 green**; tsc + build clean.
