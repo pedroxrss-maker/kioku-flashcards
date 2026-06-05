@@ -78,23 +78,27 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* NeuroFluency lockup — brain + wordmark, on the dark canvas. */}
+      {/* NeuroFluency lockup — fills the sidebar width, proportion preserved. */}
       <div className="mt-auto px-4 pt-5 pb-1" title="NeuroFluency">
-        <div className="flex items-center gap-1.5">
-          <img src={brandLogo} alt="" draggable={false} style={{ height: 18, width: 'auto' }} />
-          <span
-            style={{
-              fontFamily: 'var(--body)',
-              fontWeight: 800,
-              fontSize: 14,
-              letterSpacing: '-0.01em',
-              lineHeight: 1,
-            }}
+        <svg
+          viewBox="0 0 132 24"
+          role="img"
+          aria-label="NeuroFluency"
+          style={{ display: 'block', width: '100%', height: 'auto' }}
+        >
+          <image href={brandLogo} x="0" y="1" width="22" height="22" />
+          <text
+            x="27"
+            y="18"
+            textLength="103"
+            lengthAdjust="spacingAndGlyphs"
+            fontFamily="Manrope, system-ui, sans-serif"
+            fontWeight={800}
+            fontSize="17"
           >
-            <span style={{ color: 'var(--fg)' }}>neuro</span>
-            <span style={{ color: 'var(--accent)' }}>fluency</span>
-          </span>
-        </div>
+            <tspan fill="#ffffff">neuro</tspan><tspan fill="#ff3b1f">fluency</tspan>
+          </text>
+        </svg>
       </div>
 
       <div className="px-4 py-4 mono text-[10px] text-muted border-t" style={{ borderColor: 'var(--line)' }}>
