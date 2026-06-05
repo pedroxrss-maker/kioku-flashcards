@@ -285,3 +285,28 @@ note-type-aware field mapping deferred.
 **Final state** — `tsc --noEmit` clean, `vite build` green (main bundle 366 kB /
 117 kB gzip; jszip+sql.js+wasm code-split), **19/19 vitest tests pass**, dev
 server boots and transforms. All 10 numbered steps complete.
+
+---
+
+## 2026-06-05 — Post-build UI fixes (3)
+
+1. **Card editor preview** — `CardEditorModal` gains a "Pré-visualizar" /
+   "Voltar a editar" toggle (bordered/secondary, leftmost in the footer via
+   `mr-auto`). Preview renders the current *unsaved* front/back with the same
+   `CardHtml` renderer used in review (front · hairline · back, media resolved)
+   on a white brand card. Toggling unmounts the fields but content is held in
+   `front`/`back` state, so edits are preserved.
+2. **Back-flash on advance fixed** — extracted `FlipCard`, keyed by
+   `${card.id}:${counters.total}` so it fully remounts front-first on every
+   advance (incl. a lapsed card recurring). Flip transition is gated by a
+   `.no-flip-anim` class until first paint (rAF), so mounts/card-changes never
+   animate — only user flips do. Added front/back `z-index` alongside the
+   existing `backface-visibility: hidden`.
+3. **Filled answer buttons** — `.answer-btn` is now solid-filled with its role
+   color; `buttonsFor` carries a contrast-aware `text` (Errei→#fff; Difícil/
+   Bom/Fácil→#0a0a0a, green verified ~7.9:1 vs black). Key + interval render in
+   the button's text color at 0.7 opacity; hover = `brightness(1.08)` + lift;
+   focus outline preserved.
+
+**Tests** — +4 (filled-button contract, next-card-front-first acceptance, editor
+preview toggle). **23/23 green**; tsc + build clean.

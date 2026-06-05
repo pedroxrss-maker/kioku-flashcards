@@ -19,7 +19,7 @@ export function AnswerButtons({ buttonCount, preview, onRate }: AnswerButtonsPro
           key={`${b.rating}-${i}`}
           type="button"
           className="answer-btn"
-          style={{ '--btn-color': b.color } as CSSProperties}
+          style={{ '--btn-color': b.color, '--btn-text': b.text } as CSSProperties}
           onClick={() => onRate(b.rating)}
         >
           <span className="answer-key">{i + 1}</span>

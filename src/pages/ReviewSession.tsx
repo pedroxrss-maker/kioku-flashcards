@@ -4,12 +4,10 @@ import { ArrowLeft, Check, RotateCcw, X, Zap } from 'lucide-react';
 import { useReviewSession } from '../features/review/useReviewSession';
 import { AnswerButtons } from '../features/review/AnswerButtons';
 import { buttonsFor } from '../features/review/buttons';
-import { CardHtml } from '../features/media/CardHtml';
-import { SpeakerButton } from '../features/tts/SpeakerButton';
+import { FlipCard } from '../features/review/FlipCard';
 import { useSettings } from '../db/hooks';
 import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
-import { cn } from '../lib/cn';
 
 function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000);
@@ -197,32 +195,16 @@ export function ReviewSession() {
           </p>
         )}
         {current && (
-          <div className="flip-scene w-full max-w-2xl">
-            <div
-              onClick={flip}
-              className={cn('flip-inner w-full cursor-pointer', flipped && 'is-flipped')}
-              style={{ height: 'clamp(280px, 46vh, 440px)' }}
-            >
-              {/* Front face */}
-              <div className="review-face flip-face">
-                <div className="absolute top-3 right-3">
-                  <SpeakerButton text={stripHtml(current.front)} lang={deck.ttsLang} size={18} onLight />
-                </div>
-                <CardHtml html={current.front} className="card-content" />
-              </div>
-              {/* Back face */}
-              <div className="review-face flip-face flip-face-back">
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <SpeakerButton text={stripHtml(current.back)} lang={deck.ttsLang} size={18} onLight />
-                </div>
-                <div className="w-full max-w-xl">
-                  <CardHtml html={current.front} className="card-content-sm" />
-                  <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
-                  <CardHtml html={current.back} className="card-content" />
-                </div>
-              </div>
-            </div>
-          </div>
+          <FlipCard
+            // Remount on every advance (incl. same card recurring after a lapse)
+            // so the incoming card always starts on its front, no back-flash.
+            key={`${current.id}:${counters.total}`}
+            front={current.front}
+            back={current.back}
+            ttsLang={deck.ttsLang}
+            flipped={flipped}
+            onFlip={flip}
+          />
         )}
       </div>
 

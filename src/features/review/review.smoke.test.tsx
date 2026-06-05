@@ -41,4 +41,37 @@ describe('Review session (integration)', () => {
     fireEvent.click(screen.getByText('Fácil'));
     expect(await screen.findByText(/Sessão concluída/)).toBeTruthy();
   });
+
+  it('advances to the next card front-first (no back-flash on card change)', async () => {
+    const deck = await repo.createDeck({
+      name: 'Dois',
+      color: '#1f6dff',
+      algorithm: 'sm2',
+      buttonCount: 4,
+    });
+    await repo.createCard({ deckId: deck.id, front: 'PERGUNTA UM', back: 'RESP UM' });
+    await repo.createCard({ deckId: deck.id, front: 'PERGUNTA DOIS', back: 'RESP DOIS' });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={[`/review/${deck.id}`]}>
+        <Routes>
+          <Route path="/review/:deckId" element={<ReviewSession />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // First card starts on its front (not flipped).
+    await screen.findByText(/Mostrar resposta/);
+    expect(container.querySelector('.flip-inner')?.classList.contains('is-flipped')).toBe(false);
+
+    // Reveal -> flipped.
+    fireEvent.click(screen.getByText(/Mostrar resposta/));
+    await screen.findByText('Fácil');
+    expect(container.querySelector('.flip-inner')?.classList.contains('is-flipped')).toBe(true);
+
+    // Advance: the next card must come up front-first (reveal CTA back, unflipped).
+    fireEvent.click(screen.getByText('Fácil'));
+    await screen.findByText(/Mostrar resposta/);
+    expect(container.querySelector('.flip-inner')?.classList.contains('is-flipped')).toBe(false);
+  });
 });

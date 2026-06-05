@@ -364,17 +364,24 @@ button.pill.pill-active:hover {
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   transform-style: preserve-3d;
 }
+/* Suppress the rotateY transition on mount / card change so an incoming card
+   never animates from its back face — only user-initiated flips animate. */
+.flip-inner.no-flip-anim {
+  transition: none;
+}
 .flip-inner.is-flipped {
   transform: rotateY(180deg);
 }
 .flip-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  z-index: 2; /* front sits above the back when unflipped */
 }
 .flip-face-back {
   position: absolute;
   inset: 0;
   transform: rotateY(180deg);
+  z-index: 1;
 }
 
 /* ---------------------------------------------------------- card content -- */
@@ -449,14 +456,13 @@ button.pill.pill-active:hover {
   min-height: 76px;
   flex: 1 1 0;
   border: 2px solid var(--btn-color, var(--line));
-  background: transparent;
-  color: var(--btn-color, var(--fg));
+  background: var(--btn-color, transparent);
+  color: var(--btn-text, var(--fg));
   border-radius: 0;
-  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
 .answer-btn:hover {
-  background: var(--btn-color, var(--fg));
-  color: var(--bg);
+  filter: brightness(1.08);
   transform: translateY(-2px);
 }
 .answer-btn:active {
@@ -469,15 +475,11 @@ button.pill.pill-active:hover {
 }
 .answer-key,
 .answer-int {
-  color: var(--muted);
+  color: var(--btn-text, var(--fg));
+  opacity: 0.7;
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.04em;
-}
-.answer-btn:hover .answer-key,
-.answer-btn:hover .answer-int {
-  color: var(--bg);
-  opacity: 0.85;
 }
 
 @media (prefers-reduced-motion: reduce) {
