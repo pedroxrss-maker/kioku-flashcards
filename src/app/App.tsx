@@ -16,7 +16,9 @@ export function App() {
   }, []);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <Routes>
         {/* Full-screen review session (no sidebar). */}
         <Route path="/review/:deckId" element={<ReviewSession />} />

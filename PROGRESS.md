@@ -263,3 +263,25 @@ decoder); the importer detects and explains how to re-export. Multi-deck and
 note-type-aware field mapping deferred.
 
 **Stubbed** — none. All 10 steps implemented.
+
+---
+
+## 2026-06-05 — Final: verification + first-run fix + docs
+
+**Built**
+
+- jsdom integration smoke tests (`@testing-library/react` + `fake-indexeddb`):
+  **App smoke** (boots/seeds/renders shell + seeded deck) and **Review smoke**
+  (render → flip → interval previews → rate → completion). vitest `include`
+  widened to `.tsx`.
+- **Bug found + fixed by the App smoke test:** `useSettings` called
+  `repo.getSettings()` inside a Dexie liveQuery, but `getSettings` *wrote* default
+  settings when the row was missing → `ReadOnlyError` on first run. `getSettings`
+  is now read-only (the 'global' row is created by the seed / on first save).
+- Opted into React Router v7 future flags (silences console warnings).
+- `MORNING.md` (status, run/test commands, known issues, prioritized refinements)
+  and `README.md`.
+
+**Final state** — `tsc --noEmit` clean, `vite build` green (main bundle 366 kB /
+117 kB gzip; jszip+sql.js+wasm code-split), **19/19 vitest tests pass**, dev
+server boots and transforms. All 10 numbered steps complete.
