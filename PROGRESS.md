@@ -57,3 +57,36 @@ review→reviewsDone) rather than a separate counter table, avoiding sync bugs.
 Orphaned media after deck delete is acceptable for v1 (GC deferred).
 
 **Stubbed** — none.
+
+---
+
+## 2026-06-05 — Step 3: Scheduling (SM-2 + FSRS) + tests
+
+**Built**
+
+- `features/scheduling/types.ts`: `Scheduler` interface (preview/apply) +
+  `RatingPreview`.
+- `features/scheduling/sm2-adapter.ts`: full Anki-flavored SM-2 implemented
+  verbatim from the spec (learning/relearning steps, lapses, ease floor, leech,
+  fuzz on commit only, `labelInterval`).
+- `features/scheduling/fsrs-adapter.ts`: ts-fsrs 5.4 (FSRS-6) adapter,
+  verbatim from the spec with two required adaptations for the installed types
+  (documented below).
+- `features/scheduling/index.ts`: `schedulerForDeck(deck)` factory + re-exports.
+- `features/scheduling/scheduler.test.ts`: 7 vitest tests — **all green**.
+  SM-2: good×2→review@1, easy→review@4, again→relearning+lapse+ease−0.20, ease
+  floor 1.3, good preview = oldInterval×ease (25 d). FSRS: preview 4 outcomes
+  non-decreasing again→easy; apply(good) advances due + writes stability/difficulty.
+
+**Decisions / deviations from the verbatim adapter** (required by ts-fsrs 5.4):
+- `RATING` map written `as const` (not `Record<Rating, FsrsRating>`) so values
+  stay literal grades and satisfy ts-fsrs's `Grade`-typed `repeat`/`next`.
+- Added the `import { labelInterval } from './sm2-adapter'` the spec's note
+  said was shared but omitted from the FSRS import block.
+
+**Known limitation** — ts-fsrs 5 `Card` has a `learning_steps` field not present
+in Kioku's `FsrsFields`; `toFsrs` inherits it from `createEmptyCard` (0) and
+`fromFsrs` doesn't persist it, so FSRS multi-step *learning* progression resets
+each review. Acceptable per the spec's verbatim adapter; noted for follow-up.
+
+**Stubbed** — none.
