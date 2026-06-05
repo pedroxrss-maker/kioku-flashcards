@@ -1,53 +1,37 @@
-import { useState } from 'react';
-import { Button } from '../components/Button';
-import { Pill } from '../components/Pill';
-import { Panel } from '../components/Panel';
-import { Modal } from '../components/Modal';
+import { useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { seedIfEmpty } from '../db';
+import { AppLayout } from './AppLayout';
+import { Home } from '../pages/Home';
+import { Decks } from '../pages/Decks';
+import { DeckDetail } from '../pages/DeckDetail';
+import { ReviewHub } from '../pages/ReviewHub';
+import { ReviewSession } from '../pages/ReviewSession';
+import { Stats } from '../pages/Stats';
+import { Settings } from '../pages/Settings';
 
-/**
- * Step 1 placeholder showcase — verifies the design system renders.
- * Replaced by the router shell in step 4.
- */
 export function App() {
-  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    seedIfEmpty().catch((err) => console.error('seed failed', err));
+  }, []);
+
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
-      <p className="mono text-accent text-xs mb-3">Kioku · Design System</p>
-      <h1 className="display" style={{ fontSize: 64 }}>
-        Lembre<span className="text-accent">.</span>
-      </h1>
-      <p className="text-muted mt-4 max-w-md">
-        Flashcards com repetição espaçada. SM-2 e FSRS. Bonito, rápido,
-        brutalista.
-      </p>
+    <BrowserRouter>
+      <Routes>
+        {/* Full-screen review session (no sidebar). */}
+        <Route path="/review/:deckId" element={<ReviewSession />} />
 
-      <div className="mt-8 flex flex-wrap gap-3">
-        <Pill active>Revisão</Pill>
-        <Pill>Vocabulário</Pill>
-        <Pill muted>Gramática</Pill>
-      </div>
-
-      <div className="mt-8 flex flex-wrap gap-4">
-        <Button variant="mega" onClick={() => setOpen(true)}>
-          Revisar agora
-        </Button>
-        <Button variant="accent">Novo deck</Button>
-        <Button variant="ghost">Configurações</Button>
-      </div>
-
-      <Panel raised className="mt-10 p-8">
-        <p className="mono text-muted text-xs">Frente</p>
-        <p className="card-content mt-2">ephemeral</p>
-      </Panel>
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Tudo certo"
-        footer={<Button variant="accent" onClick={() => setOpen(false)}>Fechar</Button>}
-      >
-        <p className="text-muted">O sistema de design está funcionando.</p>
-      </Modal>
-    </main>
+        {/* Everything else lives inside the app shell. */}
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/decks" element={<Decks />} />
+          <Route path="/decks/:id" element={<DeckDetail />} />
+          <Route path="/review" element={<ReviewHub />} />
+          <Route path="/stats" element={<Stats />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }

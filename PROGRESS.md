@@ -90,3 +90,32 @@ in Kioku's `FsrsFields`; `toFsrs` inherits it from `createEmptyCard` (0) and
 each review. Acceptable per the spec's verbatim adapter; noted for follow-up.
 
 **Stubbed** — none.
+
+---
+
+## 2026-06-05 — Step 4: App shell + routing + sidebar
+
+**Built**
+
+- Added `dexie-react-hooks`; `db/hooks.ts` reactive hooks (`useDecks`, `useDeck`,
+  `useCards`, `useAllCards`, `useAllLogs`, `useSettings`) — query bodies call the
+  repo, Dexie live-query keeps them reactive.
+- `lib/deckStats.ts` (`countCards`, `effectiveIntervalDays`, `groupCardsByDeck`,
+  `MATURE_DAYS=21`), `lib/greeting.ts` (greeting + streak).
+- App shell: `app/App.tsx` (BrowserRouter + routes + first-run seed on mount),
+  `app/AppLayout.tsx`, `app/Sidebar.tsx` (desktop sidebar + mobile top bar,
+  wordmark with accent square, nav, Recentes deck dots, version), `app/nav.ts`.
+- Shared UI: `StatTile`, `PageHeader`. Deck features: `DeckCard` (accent strip,
+  counts, mastery bar), `DeckBrowser` (category pills + search + grid + dashed
+  create cell), `CreateDeckModal` (name/category/color/algorithm → repo.createDeck).
+- Pages: **Home** (greeting, continue-reviewing banner for most-due deck, 3 stat
+  tiles, deck browser), **Decks**, **ReviewHub** (deck picker). Placeholders for
+  DeckDetail (step 5), ReviewSession (step 6), Stats (step 8), Settings (step 9).
+
+**Decisions** — reactive reads via `useLiveQuery` wrapping repo calls: keeps the
+repository abstraction as the read/write path while gaining Dexie reactivity
+(documented tradeoff: a non-Dexie backend would replace these hooks). Review
+session is a full-screen route outside the sidebar layout.
+
+**Stubbed** — DeckDetail / ReviewSession / Stats / Settings are titled
+placeholders, replaced in their numbered steps. Build + typecheck green.
