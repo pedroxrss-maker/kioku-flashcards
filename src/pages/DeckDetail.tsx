@@ -7,6 +7,7 @@ import { Panel } from '../components/Panel';
 import { CardRow } from '../features/decks/CardRow';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
+import { ExportButton } from '../features/importer/ExportButton';
 import { countCards } from '../lib/deckStats';
 import type { Card } from '../db/types';
 
@@ -114,6 +115,7 @@ export function DeckDetail() {
             <Button variant="default" icon={<Plus size={16} />} onClick={addCard}>
               Adicionar card
             </Button>
+            <ExportButton deckId={deck.id} size="md" />
           </div>
         </div>
       </section>

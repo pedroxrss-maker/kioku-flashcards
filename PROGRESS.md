@@ -234,3 +234,32 @@ per-deck `ttsLang`, auto-pronounce-on-reveal wired in ReviewSession.
   persist immediately via `repo.saveSettings`.
 
 **Stubbed** — only `.apkg` import/export remains (step 10).
+
+---
+
+## 2026-06-05 — Step 10: .apkg import + export
+
+**Built**
+
+- `features/importer/apkg-import.ts`: parse `.apkg` (jszip) → SQLite via sql.js
+  (wasm loaded through Vite `?url`), read `notes.flds` (split on 0x1f), create one
+  Kioku deck of `new` cards, deck name from `col.decks` JSON (fallback filename),
+  rewrite `<img>` media → imported MediaBlobs (lazy, cached). Clear errors for the
+  new compressed `anki21b` format. Scheduling reset to `new` (not translated).
+- `features/importer/apkg-export.ts` + `anki-schema.ts`: best-effort Anki2
+  writer — standard schema (col/notes/cards/revlog/graves + indexes), Basic
+  model, decks/conf/dconf JSON, sha1 field checksums, media files + map. **node
+  test validates the DDL + note round-trip** (17 tests total green).
+- `ImportButton` (Decks header) + `ExportButton` (DeckDetail hero), both
+  **code-split** — jszip/sql.js/wasm load on demand (main bundle unchanged;
+  `sql-wasm.wasm` 660 kB emitted as a separate asset).
+
+**Decisions** — all notes import into a single Kioku deck (v1); first field =
+front, remaining fields joined with `<hr>` = back. Export is best-effort for
+Anki re-import; it round-trips through Kioku's own importer.
+
+**Known limitation** — `anki21b` (zstd) packages aren't supported (need a zstd
+decoder); the importer detects and explains how to re-export. Multi-deck and
+note-type-aware field mapping deferred.
+
+**Stubbed** — none. All 10 steps implemented.
