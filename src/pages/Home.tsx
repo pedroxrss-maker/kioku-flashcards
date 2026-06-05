@@ -52,7 +52,10 @@ export function Home() {
             month: 'long',
           })}
         </p>
-        <h1 className="display" style={{ fontSize: 'clamp(34px, 6vw, 52px)' }}>
+        <h1
+          className="display"
+          style={{ fontSize: 'clamp(34px, 6vw, 52px)', fontWeight: 900 }}
+        >
           {greeting()}
           <span className="text-accent">.</span>
         </h1>

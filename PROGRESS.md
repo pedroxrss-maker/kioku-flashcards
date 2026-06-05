@@ -323,3 +323,18 @@ desejada" slider (0.80–0.97, step 0.01, default 0.90, % shown in mono + muted
 helper) — consistent with Configurações; SM-2 hides it. `submit` writes the
 slider value to `desiredRetention` for FSRS (ignored for SM-2). +1 test (reveal
 toggle). **24/24 green**; tsc + build clean.
+
+---
+
+## 2026-06-05 — Typography: warmer, study-friendly display
+
+Swapped the display face from Archivo Black to **Fraunces** (variable serif,
+`opsz,wght@9..144,400..900`) — font link + `--display`/`--font-display`. Softened
+`.display`: removed `text-transform: uppercase`, `letter-spacing: -0.005em`,
+`line-height: 1.02`, base `font-weight: 700`, `font-optical-sizing: auto`; the
+Home greeting (largest hero) uses 900. Mega button now Fraunces sentence case,
+weight 600, `letter-spacing: 0` (fill/hover unchanged). Body `line-height: 1.6`.
+Mono labels/pills/counters/interval previews **stay uppercase** (`.mono` etc.
+untouched). Sentence-cased the "Meus decks" heading + nav label; other display
+strings were already sentence case (CSS was uppercasing them). Fonts URL verified
+to serve all three families. tsc + build clean, 24/24 tests.

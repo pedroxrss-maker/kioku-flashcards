@@ -8,7 +8,7 @@ export function Decks() {
   return (
     <div className="rise">
       <PageHeader
-        title="Meus Decks"
+        title="Meus decks"
         subtitle={`${decks.length} ${decks.length === 1 ? 'deck' : 'decks'}`}
         action={<ImportButton variant="ghost" />}
       />

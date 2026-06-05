@@ -19,7 +19,7 @@
   --color-accent-green: #00b569;
   --color-accent-amber: #ff9d00;
 
-  --font-display: 'Archivo Black', system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-body: 'Manrope', system-ui, sans-serif;
   --font-mono: 'DM Mono', ui-monospace, monospace;
 }
@@ -36,7 +36,7 @@
   --accent-blue: #1f6dff;
   --accent-green: #00b569;
   --accent-amber: #ff9d00;
-  --display: 'Archivo Black', system-ui, sans-serif;
+  --display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --body: 'Manrope', system-ui, sans-serif;
   --mono: 'DM Mono', ui-monospace, monospace;
 
@@ -59,6 +59,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--body);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   min-height: 100vh;
@@ -92,12 +93,14 @@ body {
 }
 
 /* ---------------------------------------------------------------- type ---- */
+/* Fraunces — warm, scholarly serif. Sentence case (no uppercase); optical
+   sizing lets large headings pick up the high opsz axis naturally. */
 .display {
   font-family: var(--display);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 0.9;
-  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.02;
+  font-optical-sizing: auto;
 }
 .mono {
   font-family: var(--mono);
@@ -117,7 +120,7 @@ button {
   border: none;
 }
 
-/* Mega CTA — white slab, Archivo Black; on hover flips to the hot accent. */
+/* Mega CTA — white slab, Fraunces sentence case; on hover flips to the accent. */
 .btn-mega {
   display: inline-flex;
   align-items: center;
@@ -128,9 +131,9 @@ button {
   border: 0;
   padding: 20px 28px;
   font-family: var(--display);
+  font-weight: 600;
   font-size: 18px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   border-radius: 0;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   text-decoration: none;
