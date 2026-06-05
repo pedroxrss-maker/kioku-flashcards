@@ -119,3 +119,36 @@ session is a full-screen route outside the sidebar layout.
 
 **Stubbed** — DeckDetail / ReviewSession / Stats / Settings are titled
 placeholders, replaced in their numbered steps. Build + typecheck green.
+
+**Verified** — dev server boots (vite ready 226ms); `/src/main.tsx` + `/src/app/
+App.tsx` transform 200 OK over HMR.
+
+---
+
+## 2026-06-05 — Step 5: Deck detail + card editor (rich text + images)
+
+**Built**
+
+- Media layer (`features/media/media.ts`): object-URL cache, `resolveMediaHtml`
+  (storage→display), `toEditorHtml`/`fromEditorHtml` (editor⇄storage with
+  `data-kioku-media` tagging), `storeImage` (→ MediaBlob). `CardHtml` renders
+  sanitized + media-resolved HTML. `lib/sanitize.ts` strips scripts/handlers/
+  js: URLs (defends the .apkg import path).
+- `RichTextField`: contentEditable + toolbar (bold/italic/underline/list/image
+  via execCommand; image insert stores a MediaBlob + inserts object-URL img).
+- `CardEditorModal` (add/edit + "salvar e adicionar"), `DeckSettingsModal`
+  (edit name/category/color/algorithm/new+review caps/FSRS retention/buttonCount/
+  ttsLang + delete with inline confirm), `CardRow` (Frente/Verso labels, state
+  pill, speaker, edit/delete).
+- Real **DeckDetail**: colored hero (name, counts, mastery bar, FSRS/SM-2 badge,
+  Revisar agora + Adicionar card + settings), card list / empty state.
+- **TTS service pulled forward** (CardRow needs it): `features/tts/tts.ts`
+  (`TtsService` interface + Web Speech impl, provider-swappable) + `SpeakerButton`
+  + `lib/text.ts` `stripHtml`.
+
+**Decisions** — editor uses `document.execCommand` (deprecated but the pragmatic,
+universally-supported path for a small rich-text field). Images shown via object
+URLs while editing, serialized back to `kioku-media://` on save.
+
+**Stubbed** — ReviewSession/Stats/Settings still placeholders. Step 7 will wire
+TTS auto-pronounce into review + voice/rate pickers in Settings.
