@@ -219,3 +219,18 @@ per-deck `ttsLang`, auto-pronounce-on-reveal wired in ReviewSession.
   bars, recent-sessions list (deck, relative date+time, cards, duration, score%).
 
 **Stubbed** — Settings still placeholder (step 9).
+
+---
+
+## 2026-06-05 — Step 9: Settings
+
+**Built**
+
+- Real **Settings** page composing: global study defaults (new/day, reviews/day),
+  default algorithm (FSRS/SM-2 cards + explanation that FSRS is the modern,
+  efficient default), FSRS desired-retention slider (0.80–0.97), King of Buttons
+  default (2/3/4), the `<TtsSettings/>` block, an appearance note (dark-first by
+  brand), and a Data danger zone (apagar tudo → `resetAll` + reseed). All changes
+  persist immediately via `repo.saveSettings`.
+
+**Stubbed** — only `.apkg` import/export remains (step 10).
