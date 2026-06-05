@@ -13,6 +13,8 @@ interface CardEditorModalProps {
   deckId: string;
   /** When set, edits this card; otherwise creates a new one. */
   card?: Card | null;
+  /** Deck language, forwarded to the audio (ElevenLabs) dialog. */
+  ttsLang?: string;
 }
 
 function isEmptyHtml(html: string): boolean {
@@ -24,6 +26,7 @@ export function CardEditorModal({
   onClose,
   deckId,
   card,
+  ttsLang = 'en-US',
 }: CardEditorModalProps) {
   const editing = !!card;
   const [front, setFront] = useState('');
@@ -139,12 +142,14 @@ export function CardEditorModal({
             valueHtml={front}
             onChange={setFront}
             autoFocus
+            ttsLang={ttsLang}
           />
           <RichTextField
             key={`back-${nonce}`}
             label="Verso"
             valueHtml={back}
             onChange={setBack}
+            ttsLang={ttsLang}
           />
         </div>
       )}

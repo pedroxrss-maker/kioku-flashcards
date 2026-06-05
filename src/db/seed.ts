@@ -1,4 +1,4 @@
-import { makeCard, makeDeck } from './factories';
+import { defaultSettings, makeCard, makeDeck } from './factories';
 import { db } from './db';
 import type { Card, Deck } from './types';
 
@@ -74,12 +74,7 @@ export async function seedIfEmpty(): Promise<void> {
       defaultAlgorithm: current?.defaultAlgorithm ?? 'fsrs',
       defaultDesiredRetention: current?.defaultDesiredRetention ?? 0.9,
       defaultButtonCount: current?.defaultButtonCount ?? 4,
-      tts: current?.tts ?? {
-        enabled: true,
-        voiceURI: null,
-        rate: 1,
-        autoPronounceFront: false,
-      },
+      tts: current?.tts ?? defaultSettings().tts,
       seededAt: Date.now(),
     });
   });

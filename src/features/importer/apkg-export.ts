@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import initSqlJs from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { repo } from '../../db/repositories';
-import { MEDIA_PROTOCOL } from '../media/media';
+import { AUDIO_PROTOCOL, MEDIA_PROTOCOL } from '../media/media';
 import { stripHtml } from '../../lib/text';
 import {
   ANKI_SCHEMA,
@@ -87,11 +87,12 @@ export async function exportApkg(deckId: string): Promise<{ blob: Blob; name: st
   }
 
   async function rewriteForExport(html: string): Promise<string> {
-    if (!html.includes(MEDIA_PROTOCOL)) return html;
+    if (!html.includes(MEDIA_PROTOCOL) && !html.includes(AUDIO_PROTOCOL)) return html;
     const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-    const imgs = Array.from(doc.querySelectorAll('img'));
+
+    // Images -> exported media filename in src.
     await Promise.all(
-      imgs.map(async (img) => {
+      Array.from(doc.querySelectorAll('img')).map(async (img) => {
         const src = img.getAttribute('src') ?? '';
         if (src.startsWith(MEDIA_PROTOCOL)) {
           const fname = await exportMedia(src.slice(MEDIA_PROTOCOL.length));
@@ -99,6 +100,18 @@ export async function exportApkg(deckId: string): Promise<{ blob: Blob; name: st
         }
       }),
     );
+
+    // Audio chips -> Anki [sound:filename] (carries the real MP3 as media).
+    await Promise.all(
+      Array.from(doc.querySelectorAll('audio')).map(async (audio) => {
+        const src = audio.getAttribute('src') ?? '';
+        if (!src.startsWith(AUDIO_PROTOCOL)) return;
+        const fname = await exportMedia(src.slice(AUDIO_PROTOCOL.length));
+        const chip = audio.closest('.kioku-audio-chip') ?? audio;
+        chip.replaceWith(doc.createTextNode(fname ? ` [sound:${fname}] ` : ''));
+      }),
+    );
+
     return doc.body.innerHTML;
   }
 

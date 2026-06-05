@@ -421,6 +421,39 @@ button.pill.pill-active:hover {
   max-height: 120px;
 }
 
+/* Stored-audio chip (ElevenLabs / attached audio) — hard edges, mono label. */
+.kioku-audio-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 8px 10px;
+  margin: 8px 0;
+  max-width: 100%;
+  vertical-align: middle;
+  user-select: none;
+}
+.kioku-audio-lbl {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kioku-audio-chip audio {
+  height: 34px;
+  max-width: 260px;
+}
+/* On the white review face, lift contrast. */
+.review-face .kioku-audio-chip {
+  border-color: rgba(15, 15, 15, 0.2);
+}
+.review-face .kioku-audio-lbl {
+  color: #555;
+}
+
 /* --------------------------------------------------------- review card --- */
 .review-face {
   position: absolute;

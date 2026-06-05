@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, RotateCcw, X, Zap } from 'lucide-react';
 import { useReviewSession } from '../features/review/useReviewSession';
@@ -22,6 +22,7 @@ export function ReviewSession() {
   const settings = useSettings();
   const session = useReviewSession(deckId);
   const { deck, current, flipped, preview, counters, flip, rate } = session;
+  const cardWrapRef = useRef<HTMLDivElement>(null);
 
   const exitTo = deckId ? `/decks/${deckId}` : '/';
 
@@ -57,15 +58,26 @@ export function ReviewSession() {
     return () => window.removeEventListener('keydown', onKey);
   }, [current, flipped, deck, flip, rate, nav, exitTo]);
 
-  // Auto-pronounce the front when the answer is revealed.
+  // Auto-pronounce the front when the answer is revealed. A stored audio chip
+  // (e.g. ElevenLabs) plays offline with no key; otherwise fall back to Web Speech.
   useEffect(() => {
-    if (
-      flipped &&
-      current &&
-      deck &&
-      settings?.tts.enabled &&
-      settings.tts.autoPronounceFront
-    ) {
+    if (!flipped || !current || !deck) return;
+    if (!settings?.tts.autoPronounceFront) return;
+
+    const frontAudio = cardWrapRef.current?.querySelector<HTMLAudioElement>(
+      '.flip-face:not(.flip-face-back) audio',
+    );
+    if (frontAudio) {
+      try {
+        frontAudio.currentTime = 0;
+      } catch {
+        /* not loaded yet */
+      }
+      void frontAudio.play().catch(() => {});
+      return;
+    }
+
+    if (settings.tts.enabled) {
       const text = stripHtml(current.front);
       if (text) {
         void tts.speak(text, {
@@ -188,7 +200,7 @@ export function ReviewSession() {
       </header>
 
       {/* Card */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
+      <div ref={cardWrapRef} className="flex-1 flex flex-col items-center justify-center px-4 py-6">
         {!flipped && (
           <p className="mono text-[11px] text-muted mb-4 animate-pulse">
             Clique ou pressione espaço para revelar

@@ -78,6 +78,9 @@ export function defaultSettings(): AppSettings {
       voiceURI: null,
       rate: 1,
       autoPronounceFront: false,
+      elevenLabsApiKey: '',
+      elevenLabsModel: 'eleven_multilingual_v2',
+      elevenLabsVoiceId: '',
     },
     seededAt: null,
   };

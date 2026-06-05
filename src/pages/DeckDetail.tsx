@@ -154,6 +154,7 @@ export function DeckDetail() {
         onClose={() => setEditorOpen(false)}
         deckId={deck.id}
         card={editingCard}
+        ttsLang={deck.ttsLang}
       />
       <DeckSettingsModal
         open={settingsOpen}

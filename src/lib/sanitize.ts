@@ -7,7 +7,7 @@
 const ALLOWED = new Set([
   'B', 'STRONG', 'I', 'EM', 'U', 'S', 'BR', 'P', 'DIV', 'SPAN', 'UL', 'OL',
   'LI', 'IMG', 'A', 'SUB', 'SUP', 'H1', 'H2', 'H3', 'BLOCKQUOTE', 'CODE',
-  'PRE', 'HR', 'B*', 'FONT',
+  'PRE', 'HR', 'B*', 'FONT', 'AUDIO', 'SOURCE',
 ]);
 const DROP_WITH_CONTENT = new Set([
   'SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'SVG',

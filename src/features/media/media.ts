@@ -1,13 +1,17 @@
 import { repo } from '../../db/repositories';
 
 /**
- * Media handling. Images live as `MediaBlob` rows in IndexedDB and are
- * referenced from card HTML as `kioku-media://<id>`. At render time we swap
- * those refs for object URLs; in the editor we additionally tag <img> with
- * `data-kioku-media` so we can serialize back to the storage form.
+ * Media handling. Images and audio both live as `MediaBlob` rows in IndexedDB.
+ * Card HTML references them with custom URIs:
+ *   - images  -> `kioku-media://<id>`  (rendered as <img>)
+ *   - audio   -> `kioku-audio://<id>`  (rendered as a playable <audio> chip)
+ * At render time we swap those refs for object URLs; in the editor we additionally
+ * tag the element (`data-kioku-media` / `data-kioku-audio`) so we can serialize
+ * back to the storage form. Audio works offline with no API key once stored.
  */
 
 const MEDIA_PROTOCOL = 'kioku-media://';
+const AUDIO_PROTOCOL = 'kioku-audio://';
 
 // One object URL per media id, reused across renders (not revoked in v1 —
 // bounded by the number of distinct media blobs).
@@ -23,46 +27,47 @@ export async function objectUrlForMedia(id: string): Promise<string | null> {
   return url;
 }
 
-/** Storage HTML (kioku-media refs) -> display HTML (object URLs). */
+function refId(src: string): { id: string; isAudio: boolean } | null {
+  if (src.startsWith(MEDIA_PROTOCOL)) return { id: src.slice(MEDIA_PROTOCOL.length), isAudio: false };
+  if (src.startsWith(AUDIO_PROTOCOL)) return { id: src.slice(AUDIO_PROTOCOL.length), isAudio: true };
+  return null;
+}
+
+/** Storage HTML (kioku-media / kioku-audio refs) -> display HTML (object URLs). */
 export async function resolveMediaHtml(html: string): Promise<string> {
-  if (!html.includes(MEDIA_PROTOCOL)) return html;
+  if (!html.includes(MEDIA_PROTOCOL) && !html.includes(AUDIO_PROTOCOL)) return html;
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  const imgs = Array.from(doc.querySelectorAll('img'));
+  const els = Array.from(doc.querySelectorAll('img, audio'));
   await Promise.all(
-    imgs.map(async (img) => {
-      const src = img.getAttribute('src') ?? '';
-      if (src.startsWith(MEDIA_PROTOCOL)) {
-        const id = src.slice(MEDIA_PROTOCOL.length);
-        const url = await objectUrlForMedia(id);
-        if (url) img.setAttribute('src', url);
-      }
+    els.map(async (el) => {
+      const ref = refId(el.getAttribute('src') ?? '');
+      if (!ref) return;
+      const url = await objectUrlForMedia(ref.id);
+      if (url) el.setAttribute('src', url);
     }),
   );
   return doc.body.innerHTML;
 }
 
-/** Storage HTML -> editor HTML (object URLs + data-kioku-media tag). */
+/** Storage HTML -> editor HTML (object URLs + data-kioku-* tags). */
 export async function toEditorHtml(html: string): Promise<string> {
   if (!html) return '';
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  const imgs = Array.from(doc.querySelectorAll('img'));
+  const els = Array.from(doc.querySelectorAll('img, audio'));
   await Promise.all(
-    imgs.map(async (img) => {
-      const src = img.getAttribute('src') ?? '';
-      if (src.startsWith(MEDIA_PROTOCOL)) {
-        const id = src.slice(MEDIA_PROTOCOL.length);
-        const url = await objectUrlForMedia(id);
-        if (url) {
-          img.setAttribute('src', url);
-          img.setAttribute('data-kioku-media', id);
-        }
-      }
+    els.map(async (el) => {
+      const ref = refId(el.getAttribute('src') ?? '');
+      if (!ref) return;
+      const url = await objectUrlForMedia(ref.id);
+      if (!url) return;
+      el.setAttribute('src', url);
+      el.setAttribute(ref.isAudio ? 'data-kioku-audio' : 'data-kioku-media', ref.id);
     }),
   );
   return doc.body.innerHTML;
 }
 
-/** Editor HTML -> storage HTML (data-kioku-media imgs become kioku-media refs). */
+/** Editor HTML -> storage HTML (data-kioku-* elements become custom-URI refs). */
 export function fromEditorHtml(html: string): string {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   doc.querySelectorAll('img[data-kioku-media]').forEach((img) => {
@@ -70,6 +75,13 @@ export function fromEditorHtml(html: string): string {
     if (id) {
       img.setAttribute('src', `${MEDIA_PROTOCOL}${id}`);
       img.removeAttribute('data-kioku-media');
+    }
+  });
+  doc.querySelectorAll('audio[data-kioku-audio]').forEach((audio) => {
+    const id = audio.getAttribute('data-kioku-audio');
+    if (id) {
+      audio.setAttribute('src', `${AUDIO_PROTOCOL}${id}`);
+      audio.removeAttribute('data-kioku-audio');
     }
   });
   return doc.body.innerHTML;
@@ -91,4 +103,41 @@ export async function storeImage(
   return { id, url };
 }
 
-export { MEDIA_PROTOCOL };
+/** Persist an audio Blob (e.g. a generated MP3) as a MediaBlob. */
+export async function storeAudio(
+  blob: Blob,
+): Promise<{ id: string; url: string }> {
+  const id = crypto.randomUUID();
+  await repo.putMedia({
+    id,
+    mime: blob.type || 'audio/mpeg',
+    data: blob,
+    createdAt: Date.now(),
+  });
+  const url = URL.createObjectURL(blob);
+  urlCache.set(id, url);
+  return { id, url };
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Build the editor-form HTML for a stored-audio chip (object URL src +
+ * data-kioku-audio). `fromEditorHtml` serializes it to the kioku-audio:// form.
+ */
+export function audioChipHtml(opts: { id: string; url: string; label: string }): string {
+  return (
+    `<span class="kioku-audio-chip" contenteditable="false">` +
+    `<span class="kioku-audio-lbl">🔊 ${escapeHtml(opts.label)}</span>` +
+    `<audio controls preload="none" data-kioku-audio="${opts.id}" src="${opts.url}"></audio>` +
+    `</span>`
+  );
+}
+
+export { MEDIA_PROTOCOL, AUDIO_PROTOCOL };

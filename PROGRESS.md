@@ -338,3 +338,40 @@ Mono labels/pills/counters/interval previews **stay uppercase** (`.mono` etc.
 untouched). Sentence-cased the "Meus decks" heading + nav label; other display
 strings were already sentence case (CSS was uppercasing them). Fonts URL verified
 to serve all three families. tsc + build clean, 24/24 tests.
+
+---
+
+## 2026-06-05 — ElevenLabs cloud TTS (generate-and-store)
+
+Heads-up: the "existing audio popover / Anexar áudio / kioku-audio:// / attached
+chips" the request assumed did **not** exist — only the live `SpeakerButton`
+(Web Speech on card text). So this BUILT the stored-audio substrate, then added
+ElevenLabs on top (two coexisting paths: live `speechSynthesis` token vs.
+generate-and-store MP3).
+
+- **kioku-audio://** stored audio in the existing `MediaBlob` store: `storeAudio`,
+  `audioChipHtml`, and audio handling added to `resolveMediaHtml`/`toEditorHtml`/
+  `fromEditorHtml`. Sanitizer now allows `<audio>`. Brand chip CSS (hard edges,
+  mono label). Plays offline via native `<audio controls>` (object URL), no key.
+- **Provider abstraction** (`features/tts/providers.ts`): `TtsProvider`
+  (`synthesize`/`listVoices`) + `ElevenLabsProvider` (POST /v1/text-to-speech,
+  GET /v1/voices; 401/422/429/CORS → pt-BR messages; arrayBuffer → audio/mpeg
+  Blob). `baseUrl` is injectable for a future proxy.
+- **Settings** (`ElevenLabsSettings`, under TTS): API key (password, IndexedDB
+  only, "salva apenas neste navegador"), default model (3 options), default voice
+  (+ Atualizar vozes), Testar conexão. Key never hardcoded/committed.
+- **Editor**: audio toolbar button → popover (Anexar áudio · Gerar com
+  ElevenLabs). `ElevenLabsDialog`: text (prefilled), idioma, modelo, voz, char
+  count + per-char billing hint, Testar (preview, not saved), Gerar e anexar
+  (stores MP3 + inserts chip "ElevenLabs · <lang>"); no-key disables + links to
+  Settings; in-flight spinner/disable.
+- **Review/export**: stored audio auto-plays on reveal when "auto-pronunciar" is
+  on (else Web Speech); `.apkg` export emits `[sound:file.mp3]` + bundles the MP3.
+- **Tests** (+7, 31 total): provider synthesize returns audio Blob + sends
+  arg-sourced key/body; 401 + CORS error mapping; listVoices mapping; synthesize→
+  store→`kioku-audio://` resolves to object URL; card-with-audio repo round-trip;
+  key read from settings (not code). tsc + build clean.
+
+Deferred: inline live-TTS token chip (live TTS already covered by the speaker
+buttons); Anki `[sound:]` import (export-only for now). CORS is browser-direct
+for v1 (proxy = one-line `baseUrl` swap).

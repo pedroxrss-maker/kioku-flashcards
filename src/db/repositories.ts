@@ -152,9 +152,13 @@ class DexieRepository implements KiokuRepository {
   // ------------------------------------------------------------- settings --
   async getSettings(): Promise<AppSettings> {
     // Read-only: must be safe to call inside a liveQuery (read) context. The
-    // 'global' row is created by the seed / on first saveSettings.
+    // 'global' row is created by the seed / on first saveSettings. Defaults are
+    // merged so rows written before a field existed (e.g. ElevenLabs) read back
+    // complete.
+    const fallback = defaultSettings();
     const existing = await db.settings.get('global');
-    return existing ?? defaultSettings();
+    if (!existing) return fallback;
+    return { ...fallback, ...existing, tts: { ...fallback.tts, ...existing.tts } };
   }
   async saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
     const current = await this.getSettings();

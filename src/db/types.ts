@@ -86,6 +86,10 @@ export interface AppSettings {
     voiceURI: string | null;
     rate: number; // 0.5 – 1.5
     autoPronounceFront: boolean;
+    // ElevenLabs cloud TTS (generate-and-store). Key lives only in IndexedDB.
+    elevenLabsApiKey: string;
+    elevenLabsModel: string; // model_id, default 'eleven_multilingual_v2'
+    elevenLabsVoiceId: string; // default voice_id
   };
   seededAt: number | null; // first-run seed marker
 }
