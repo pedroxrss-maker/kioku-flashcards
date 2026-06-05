@@ -182,3 +182,22 @@ SpeakerButtons aren't invalidly nested; keyboard handled by a global listener.
 In-session learning steps recur via re-queue rather than wall-clock waits.
 
 **Stubbed** — Stats/Settings still placeholders (steps 8/9).
+
+---
+
+## 2026-06-05 — Step 7: TTS service + speaker controls
+
+**Built** (core service + speakers landed in steps 5–6; this step completes it)
+
+- `features/tts/useVoices.ts`: reactive voice list (handles async `voiceschanged`).
+- `components/Toggle.tsx`: brutalist on/off switch.
+- `features/tts/TtsSettings.tsx`: settings block — enable, voice picker
+  (auto-by-deck-language or explicit), rate slider (0.5–1.5×), auto-pronounce
+  toggle, "Testar voz" — persisted via `repo.saveSettings`. Composed into the
+  Settings page in step 9.
+
+**Already in place** — `TtsService` interface + Web Speech impl (provider-
+swappable), `SpeakerButton` (front+back in review, both faces; deck card list),
+per-deck `ttsLang`, auto-pronounce-on-reveal wired in ReviewSession.
+
+**Stubbed** — none for TTS. Settings page composition lands in step 9.
