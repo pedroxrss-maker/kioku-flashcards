@@ -1,0 +1,16 @@
+{
+  // Cloudflare Workers Static Assets deploy for the Kioku SPA.
+  // `npx wrangler deploy` serves the Vite build (./dist) as static assets.
+  //
+  // SPA routing is handled the Workers way via assets.not_found_handling:
+  // "single-page-application" serves /index.html (HTTP 200) for any unknown
+  // path, so react-router deep links and refreshes work. This replaces the
+  // Pages-style public/_redirects rule, which the Workers assets runtime
+  // rejects as an infinite redirect loop.
+  "name": "kioku",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
