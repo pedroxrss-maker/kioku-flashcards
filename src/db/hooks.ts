@@ -1,39 +1,69 @@
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useQuery } from './store';
+import type { QueryResult } from './store';
 import { repo } from './repositories';
 import type { AppSettings, Card, Deck, ReviewLog } from './types';
 
 /**
- * Reactive read hooks. The query bodies call through the repository (not Dexie
- * directly), but Dexie's live-query observes the tables they touch, so the UI
- * stays reactive to writes. A non-Dexie backend would replace these.
+ * Reactive read hooks backed by Supabase (via the keyed query store). The public
+ * signatures are unchanged from the old Dexie/liveQuery versions, so components
+ * keep calling them as-is; reactivity now comes from invalidate() on every write.
  */
+
+const EMPTY_DECKS: Deck[] = [];
+const EMPTY_CARDS: Card[] = [];
+const EMPTY_LOGS: ReviewLog[] = [];
+
 export function useDecks(): Deck[] {
-  return useLiveQuery(() => repo.listDecks(), [], []);
+  return useQuery('decks', () => repo.listDecks(), EMPTY_DECKS).data;
 }
 
 export function useDeck(id: string | undefined): Deck | undefined {
-  return useLiveQuery(
+  return useDeckResource(id).data;
+}
+
+/** Like useDeck but exposes loading/error for the Deck detail page. */
+export function useDeckResource(id: string | undefined): QueryResult<Deck | undefined> {
+  return useQuery(
+    id ? `deck:${id}` : 'deck:none',
     () => (id ? repo.getDeck(id) : Promise.resolve(undefined)),
-    [id],
+    undefined,
   );
 }
 
 export function useCards(deckId: string | undefined): Card[] {
-  return useLiveQuery(
-    () => (deckId ? repo.listCards(deckId) : Promise.resolve([])),
-    [deckId],
-    [],
-  );
+  return useQuery(
+    deckId ? `cards:deck:${deckId}` : 'cards:none',
+    () => (deckId ? repo.listCards(deckId) : Promise.resolve(EMPTY_CARDS)),
+    EMPTY_CARDS,
+  ).data;
 }
 
 export function useAllCards(): Card[] {
-  return useLiveQuery(() => repo.allCards(), [], []);
+  return useQuery('cards:all', () => repo.allCards(), EMPTY_CARDS).data;
 }
 
 export function useAllLogs(): ReviewLog[] {
-  return useLiveQuery(() => repo.allLogs(), [], []);
+  return useQuery('logs:all', () => repo.allLogs(), EMPTY_LOGS).data;
 }
 
 export function useSettings(): AppSettings | undefined {
-  return useLiveQuery(() => repo.getSettings(), []);
+  return useQuery<AppSettings | undefined>('settings', () => repo.getSettings(), undefined).data;
+}
+
+/**
+ * Initial app data load used to gate the shell: waits for the core datasets so
+ * pages render with data instead of flashing empty. Shares cache keys with the
+ * hooks above, so pages read warm data after the gate resolves.
+ */
+export function useInitialLoad(): { ready: boolean; error: unknown; reload: () => void } {
+  const decks = useQuery('decks', () => repo.listDecks(), EMPTY_DECKS);
+  const cards = useQuery('cards:all', () => repo.allCards(), EMPTY_CARDS);
+  const logs = useQuery('logs:all', () => repo.allLogs(), EMPTY_LOGS);
+  const settings = useQuery<AppSettings | undefined>('settings', () => repo.getSettings(), undefined);
+
+  const all = [decks, cards, logs, settings];
+  const ready = all.every((q) => q.loaded);
+  const error = ready ? null : (all.find((q) => q.error !== undefined)?.error ?? null);
+  const reload = () => all.forEach((q) => q.reload());
+  return { ready, error, reload };
 }

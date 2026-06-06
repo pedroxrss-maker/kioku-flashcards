@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Flame,
   Layers,
+  LogOut,
   MoreVertical,
   Pencil,
   Play,
@@ -22,6 +23,8 @@ import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
 import { CreateDeckModal } from '../features/decks/CreateDeckModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
+import { AlgoBadge } from '../features/decks/AlgoBadge';
+import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { computeStreak } from '../lib/greeting';
 import { dayKey } from '../lib/date';
@@ -158,7 +161,10 @@ function DeckStudyRow({
 
       <div className="min-w-0 flex-1">
         <p className="font-semibold truncate leading-tight">{deck.name}</p>
-        <p className="text-xs text-muted mb-1.5">{count} cards</p>
+        <div className="flex items-center gap-2 mb-1.5">
+          <p className="text-xs text-muted">{count} cards</p>
+          <AlgoBadge algorithm={deck.algorithm} className="shrink-0" />
+        </div>
         <div className="flex items-center gap-2">
           <div className="h-1.5 flex-1 rounded-full" style={{ background: 'var(--surface-2)' }}>
             <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 999 }} />
@@ -233,6 +239,7 @@ function DeckStudyRow({
 /* ================================================================ Home ==== */
 export function Home() {
   const nav = useNavigate();
+  const { displayName, signOut } = useAuth();
   const settings = useSettings();
   const decks = useDecks();
   const allCards = useAllCards();
@@ -242,8 +249,9 @@ export function Home() {
   const [createOpen, setCreateOpen] = useState(false);
   const [menuDeckId, setMenuDeckId] = useState<string | null>(null);
   const [settingsDeck, setSettingsDeck] = useState<Deck | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const name = settings?.displayName?.trim() || 'Estudante';
+  const name = displayName;
   const goal = settings?.dailyGoal ?? 40;
 
   const byDeck = useMemo(() => groupCardsByDeck(allCards), [allCards]);
@@ -310,21 +318,60 @@ export function Home() {
           >
             <Bell size={18} />
           </button>
-          <button
-            type="button"
-            onClick={() => nav('/settings')}
-            className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full shrink-0 hover:bg-[color:var(--surface-2)] transition-colors"
-            title="Conta"
-          >
-            <span
-              className="flex items-center justify-center rounded-full font-bold text-white"
-              style={{ width: 34, height: 34, background: 'var(--accent)', fontSize: 13 }}
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen((o) => !o)}
+              className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full hover:bg-[color:var(--surface-2)] transition-colors"
+              title="Conta"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
             >
-              {initials(name)}
-            </span>
-            <span className="text-sm hidden sm:inline">Olá, {name}</span>
-            <ChevronDown size={15} className="text-muted hidden sm:inline" />
-          </button>
+              <span
+                className="flex items-center justify-center rounded-full font-bold text-white"
+                style={{ width: 34, height: 34, background: 'var(--accent)', fontSize: 13 }}
+              >
+                {initials(name)}
+              </span>
+              <span className="text-sm hidden sm:inline">Olá, {name}</span>
+              <ChevronDown size={15} className="text-muted hidden sm:inline" />
+            </button>
+            {userMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                <div
+                  className="absolute right-0 z-50 mt-1 w-48 py-1"
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line-strong)',
+                    borderRadius: 'var(--r-md)',
+                    boxShadow: 'var(--shadow-pop)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      nav('/settings');
+                    }}
+                  >
+                    <Settings2 size={14} /> Configurações
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-[color:var(--surface-2)] transition-colors"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      void signOut();
+                    }}
+                  >
+                    <LogOut size={14} /> Sair
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

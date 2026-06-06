@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+
+// Back the repository with the in-memory fake supabase client (logged in).
+vi.mock('../../lib/supabase', async () => {
+  const { createFakeSupabase } = await import('../../test/fakeSupabase');
+  return { supabase: createFakeSupabase(), isSupabaseConfigured: true };
+});
+
 import { repo } from '../../db/repositories';
 import { ReviewSession } from '../../pages/ReviewSession';
 

@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Settings2, Zap } from 'lucide-react';
-import { useCards, useDeck } from '../db/hooks';
+import { useCards, useDeckResource } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
 import { CardRow } from '../features/decks/CardRow';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
+import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { ExportButton } from '../features/importer/ExportButton';
 import { countCards } from '../lib/deckStats';
 import type { Card } from '../db/types';
 
 export function DeckDetail() {
   const { id } = useParams();
-  const deck = useDeck(id);
+  const { data: deck, loading, error, reload } = useDeckResource(id);
   const cards = useCards(id);
 
   const [editorOpen, setEditorOpen] = useState(false);
@@ -24,6 +25,33 @@ export function DeckDetail() {
     () => countCards(cards, Date.now(), deck),
     [cards, deck],
   );
+
+  if (loading) {
+    return (
+      <div className="rise">
+        <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
+          ← Meus Decks
+        </Link>
+        <p className="mono text-muted text-sm mt-6">Carregando…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rise">
+        <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
+          ← Meus Decks
+        </Link>
+        <div className="mt-6 flex flex-col items-start gap-3">
+          <p className="text-muted">Não foi possível carregar. Tente novamente.</p>
+          <button type="button" className="btn btn-accent" onClick={reload}>
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!deck) {
     return (
@@ -98,9 +126,7 @@ export function DeckDetail() {
             <span>·</span>
             <span style={{ color: 'var(--accent-blue)' }}>{counts.newCount} novos</span>
             <span style={{ color: 'var(--accent-green)' }}>{counts.review} em revisão</span>
-            <span className="pill pill-muted" style={{ fontSize: 10 }}>
-              {deck.algorithm === 'fsrs' ? 'FSRS' : 'SM-2'}
-            </span>
+            <AlgoBadge algorithm={deck.algorithm} />
           </div>
 
           <div className="mt-4 max-w-md">

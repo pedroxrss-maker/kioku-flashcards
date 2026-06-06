@@ -3,6 +3,7 @@ export { db, KiokuDB } from './db';
 export { repo } from './repositories';
 export type { KiokuRepository } from './repositories';
 export { seedIfEmpty } from './seed';
+export { seedForUserIfEmpty } from './seedSupabase';
 export {
   makeCard,
   makeDeck,

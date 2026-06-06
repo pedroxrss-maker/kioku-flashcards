@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Panel } from '../../components/Panel';
+import { AlgoBadge } from './AlgoBadge';
 import { countCards } from '../../lib/deckStats';
 import type { Card, Deck } from '../../db/types';
 
@@ -31,9 +32,7 @@ export function DeckCard({ deck, cards }: DeckCardProps) {
           )}
           <h3 className="display text-lg leading-tight">{deck.name}</h3>
         </div>
-        <span className="pill pill-muted shrink-0" style={{ fontSize: 10, padding: '4px 9px' }}>
-          {deck.algorithm === 'fsrs' ? 'FSRS' : 'SM-2'}
-        </span>
+        <AlgoBadge algorithm={deck.algorithm} className="shrink-0" />
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">

@@ -1,25 +1,39 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { App } from './App';
 
+// Back the app with the in-memory fake supabase client, configured + signed in,
+// so the auth gate renders the real shell, seeds this user's decks, and reads
+// them back through SupabaseRepository.
+vi.mock('../lib/supabase', async () => {
+  const { createFakeSupabase } = await import('../test/fakeSupabase');
+  return {
+    isSupabaseConfigured: true,
+    supabase: createFakeSupabase({ userId: 'u1', displayName: 'Pedro' }),
+  };
+});
+
 describe('App smoke test', () => {
-  it('boots, seeds sample data, and renders the shell + a seeded deck', async () => {
+  it('gates on auth, then boots, seeds the user\'s decks, and renders the shell', async () => {
     render(<App />);
 
     // The Kioku wordmark renders in the shell (sidebar + mobile bar).
-    expect(screen.getAllByText('Kioku').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Kioku')).length).toBeGreaterThan(0);
 
-    // After the async first-run seed + live query, a seeded deck is visible.
+    // First-run per-user seed creates the sample decks in Supabase.
     const decks = await screen.findAllByText(
-      /Inglês — Vocabulário Essencial/,
+      /Inglês: Vocabulário Essencial/,
       {},
       { timeout: 8000 },
     );
     expect(decks.length).toBeGreaterThan(0);
 
-    // The dashboard greeting renders on Home.
-    expect(screen.getByText(/Bem-vindo de volta/)).toBeTruthy();
+    // The dashboard greeting renders with the profile display name. Awaited:
+    // the shell shows decks (sidebar) before the data-gate mounts Home.
+    expect(
+      await screen.findByText(/Bem-vindo de volta, Pedro/, {}, { timeout: 8000 }),
+    ).toBeTruthy();
   });
 });

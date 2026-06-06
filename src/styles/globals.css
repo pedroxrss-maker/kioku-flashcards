@@ -253,6 +253,24 @@ button.pill.pill-active:hover {
   color: #fff;
 }
 
+/* Discreet algorithm badge (FSRS / SM-2) — soft surface pill, sentence-style
+   Manrope. Used on deck rows, deck cards and the deck detail header. */
+.pill-algo {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--r-full);
+  padding: 3px 9px;
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------ surfaces & cards -- */
 .surface {
   background: var(--surface);

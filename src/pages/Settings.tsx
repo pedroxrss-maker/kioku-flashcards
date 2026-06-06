@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { TtsSettings } from '../features/tts/TtsSettings';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
-import { seedIfEmpty } from '../db/seed';
+import { seedForUserIfEmpty } from '../db/seedSupabase';
 import { cn } from '../lib/cn';
 import type { Algorithm, ButtonCount } from '../db/types';
 
@@ -45,7 +45,7 @@ export function Settings() {
 
   async function resetAll() {
     await repo.resetAll();
-    await seedIfEmpty();
+    await seedForUserIfEmpty();
     window.location.href = '/';
   }
 
@@ -200,8 +200,8 @@ export function Settings() {
       {/* Data / danger zone */}
       <Section icon={<Database size={16} />} title="Dados">
         <p className="text-sm text-muted mb-3">
-          Todos os dados ficam no seu navegador (IndexedDB). Apagar remove decks,
-          cards, histórico e mídias, e recria os decks de exemplo.
+          Seus decks, cards e histórico ficam na sua conta (nuvem). Apagar remove
+          tudo desta conta e recria os decks de exemplo.
         </p>
         {confirmReset ? (
           <div className="flex items-center gap-2">

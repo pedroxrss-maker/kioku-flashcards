@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Back the repository (decks/cards/settings) with the in-memory fake supabase
+// client; media still rides on IndexedDB (fake-indexeddb above).
+vi.mock('../../lib/supabase', async () => {
+  const { createFakeSupabase } = await import('../../test/fakeSupabase');
+  return { supabase: createFakeSupabase(), isSupabaseConfigured: true };
+});
+
 import { ElevenLabsProvider } from './providers';
 import { resolveMediaHtml, storeAudio } from '../media/media';
 import { repo } from '../../db/repositories';
