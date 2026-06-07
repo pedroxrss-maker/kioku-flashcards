@@ -5,11 +5,14 @@
  * states used while gating the app.
  */
 import { useEffect, useState } from 'react';
-import type { CSSProperties, FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import brandLogo from '../../../neurofluency-logo-branca.png';
+
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 type Mode = 'signin' | 'signup';
 
@@ -24,14 +27,9 @@ function BrandLockup({ size = 30 }: { size?: number }) {
   );
 }
 
-function tabStyle(active: boolean): CSSProperties {
-  return active
-    ? { background: 'var(--accent)', color: '#fff' }
-    : { color: 'var(--muted)' };
-}
-
 export function AuthPage() {
   const { signIn, signUp } = useAuth();
+  const reduce = useReducedMotion();
   // Tab is driven by the URL: /entrar?mode=signup opens "Criar conta",
   // /entrar (or ?mode=login) opens "Entrar".
   const [searchParams] = useSearchParams();
@@ -98,53 +96,76 @@ export function AuthPage() {
         </div>
 
         <div className="surface p-6 md:p-7">
-          {/* Tabs */}
+          {/* Tabs — the accent pill slides between options (shared layout). */}
           <div
             className="flex gap-1 p-1 mb-5"
             style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-full)' }}
             role="tablist"
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!isSignup}
-              onClick={() => switchMode('signin')}
-              className="flex-1 py-2 text-sm font-semibold transition-colors"
-              style={{ borderRadius: 'var(--r-full)', ...tabStyle(!isSignup) }}
-            >
-              Entrar
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isSignup}
-              onClick={() => switchMode('signup')}
-              className="flex-1 py-2 text-sm font-semibold transition-colors"
-              style={{ borderRadius: 'var(--r-full)', ...tabStyle(isSignup) }}
-            >
-              Criar conta
-            </button>
+            {(['signin', 'signup'] as Mode[]).map((m) => {
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => switchMode(m)}
+                  className="relative flex-1 py-2 text-sm font-semibold"
+                  style={{
+                    borderRadius: 'var(--r-full)',
+                    background: 'transparent',
+                    color: active ? '#fff' : 'var(--muted)',
+                    transition: 'color 0.25s ease',
+                  }}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="authTabPill"
+                      transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }}
+                      style={{ position: 'absolute', inset: 0, background: 'var(--accent)', borderRadius: 'var(--r-full)', zIndex: 0 }}
+                    />
+                  )}
+                  <span style={{ position: 'relative', zIndex: 1 }}>
+                    {m === 'signin' ? 'Entrar' : 'Criar conta'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-            {isSignup && (
-              <div>
-                <label className="field-label" htmlFor="auth-name">
-                  Nome de exibição
-                </label>
-                <input
-                  id="auth-name"
-                  className="field"
-                  type="text"
-                  autoComplete="name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Como devemos te chamar?"
-                />
-              </div>
-            )}
+          <form onSubmit={onSubmit} className="flex flex-col" noValidate>
+            {/* Signup-only name field: smoothly expands/collapses on toggle.
+                Its 16px spacing lives inside the animated box so nothing jumps. */}
+            <AnimatePresence initial={false}>
+              {isSignup && (
+                <motion.div
+                  key="name-field"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: reduce ? 0 : 0.3, ease: EASE }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div style={{ marginBottom: 16 }}>
+                    <label className="field-label" htmlFor="auth-name">
+                      Nome de exibição
+                    </label>
+                    <input
+                      id="auth-name"
+                      className="field"
+                      type="text"
+                      autoComplete="name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Como devemos te chamar?"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-            <div>
+            <div style={{ marginBottom: 16 }}>
               <label className="field-label" htmlFor="auth-email">
                 E-mail
               </label>
@@ -159,7 +180,7 @@ export function AuthPage() {
               />
             </div>
 
-            <div>
+            <div style={{ marginBottom: 16 }}>
               <label className="field-label" htmlFor="auth-password">
                 Senha
               </label>
@@ -172,13 +193,25 @@ export function AuthPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
               />
-              {isSignup && (
-                <p className="text-xs text-muted mt-1.5">Mínimo de 6 caracteres.</p>
-              )}
+              <AnimatePresence initial={false}>
+                {isSignup && (
+                  <motion.p
+                    key="pw-hint"
+                    className="text-xs text-muted"
+                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                    animate={{ height: 'auto', opacity: 1, marginTop: 6 }}
+                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                    transition={{ duration: reduce ? 0 : 0.3, ease: EASE }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    Mínimo de 6 caracteres.
+                  </motion.p>
+                )}
+              </AnimatePresence>
             </div>
 
             {error && (
-              <p className="text-sm" style={{ color: 'var(--accent)' }} role="alert">
+              <p className="text-sm" style={{ color: 'var(--accent)', marginBottom: 16 }} role="alert">
                 {error}
               </p>
             )}

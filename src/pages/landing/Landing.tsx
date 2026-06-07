@@ -7,7 +7,7 @@
  */
 import { useNavigate } from 'react-router-dom';
 import { Reveal } from './anim';
-import { NeuroWordmark } from './brand';
+import { NeuroLockup } from './brand';
 import { LandingNav } from './LandingNav';
 import { Hero } from './Hero';
 import { ForgettingCurve } from './ForgettingCurve';
@@ -30,10 +30,14 @@ function NeuroBand() {
           }}
         >
           <div className="mb-3 flex justify-center">
-            <NeuroWordmark size={18} />
+            <NeuroLockup size={18} />
           </div>
           <p className="display" style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 600, lineHeight: 1.2 }}>
-            O Kioku é o app de flashcards do NeuroFluency.
+            O Kioku é o app de flashcards do{' '}
+            <span style={{ fontFamily: 'var(--body)', fontWeight: 800 }}>
+              neuro<span style={{ color: 'var(--accent)' }}>fluency</span>
+            </span>
+            .
           </p>
           <p className="text-muted mt-3" style={{ maxWidth: 640, marginInline: 'auto', lineHeight: 1.6 }}>
             A mesma neurociência aplicada ao aprendizado: recordação ativa, repetição espaçada e
@@ -82,8 +86,8 @@ export function Landing() {
         <Hero />
         <NeuroBand />
         <ForgettingCurve />
-        <Features />
         <HowItWorks />
+        <Features />
         <Science />
         <ComingSoon />
         <FinalCta />

@@ -25,12 +25,18 @@ export function Features() {
 
       <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mt-10">
         {FEATURES.map(({ icon: Icon, title, desc }) => (
-          <StaggerCard key={title} className="surface hover-lift p-5 md:p-6" style={{ borderRadius: 'var(--r-lg)' }}>
-            <span className="icon-tile mb-4" style={{ width: 42, height: 42, background: 'var(--accent-soft)', color: 'var(--accent)' }}>
-              <Icon size={20} />
-            </span>
-            <h3 className="display" style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.2 }}>{title}</h3>
-            <p className="text-sm text-muted mt-2" style={{ lineHeight: 1.55 }}>{desc}</p>
+          <StaggerCard key={title} className="h-full">
+            {/* tech-border: a glowing accent line slowly traces the border on hover */}
+            <div
+              className="surface hover-lift tech-border p-5 md:p-6 h-full"
+              style={{ borderRadius: 'var(--r-lg)', position: 'relative' }}
+            >
+              <span className="icon-tile mb-4" style={{ width: 42, height: 42, background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                <Icon size={20} />
+              </span>
+              <h3 className="display" style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.2 }}>{title}</h3>
+              <p className="text-sm text-muted mt-2" style={{ lineHeight: 1.55 }}>{desc}</p>
+            </div>
           </StaggerCard>
         ))}
       </StaggerGroup>

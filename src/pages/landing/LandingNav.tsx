@@ -48,7 +48,7 @@ export function LandingNav() {
               key={id}
               type="button"
               onClick={() => scrollToId(id, reduce)}
-              className="px-3 py-2 text-sm text-muted hover:text-fg transition-colors rounded-[var(--r-sm)]"
+              className="nav-link px-3 py-2 text-sm text-muted hover:text-fg transition-colors"
             >
               {label}
             </button>

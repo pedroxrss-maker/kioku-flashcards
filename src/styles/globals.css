@@ -547,6 +547,124 @@ button.pill.pill-active:hover {
   }
 }
 
+/* ------------------------------------------------- tech tracing border ---- */
+/* On hover, a glowing accent segment slowly traces the element's border
+   (masked conic gradient on a ::before ring). Add the `tech-border` class to a
+   position:relative element with a border-radius. */
+@property --trace-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.tech-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  /* two bright segments 180deg apart: the trace runs down both sides at once */
+  background: conic-gradient(
+    from var(--trace-angle),
+    transparent 0%,
+    var(--accent) 6%,
+    #ffae97 10%,
+    transparent 18%,
+    transparent 50%,
+    var(--accent) 56%,
+    #ffae97 60%,
+    transparent 68%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.tech-border:hover::before {
+  opacity: 1;
+  animation: trace-spin 3.6s linear infinite;
+}
+@keyframes trace-spin {
+  to {
+    --trace-angle: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tech-border:hover::before {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------- hero answer chips (hover) -- */
+/* On hover: fill with the role color (--bc), flip text to a readable tone
+   (--tc) and pop forward in 3D (translateZ works inside the tilt frame). */
+.answer-chip {
+  background: var(--surface-2);
+  border: 1.5px solid var(--bc);
+  border-radius: 10px;
+  padding: 7px 6px;
+  text-align: center;
+  font-family: var(--body);
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: translateZ(0);
+  transition: background 0.25s ease, transform 0.3s ease, box-shadow 0.3s ease,
+    color 0.25s ease;
+}
+.answer-chip .chip-sub {
+  color: var(--muted);
+}
+.answer-chip .chip-rating {
+  color: var(--bc);
+}
+.answer-chip:hover {
+  background: var(--bc);
+  transform: translateZ(34px);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--bc) 40%, transparent);
+}
+.answer-chip:hover .chip-sub,
+.answer-chip:hover .chip-rating {
+  color: var(--tc);
+}
+@media (prefers-reduced-motion: reduce) {
+  .answer-chip:hover {
+    transform: none;
+  }
+}
+
+/* ----------------------------------------------- landing nav link hover -- */
+/* An accent underline grows in from the left on hover. */
+.nav-link {
+  position: relative;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.25s ease;
+}
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-link::after {
+    transition: none;
+  }
+}
+
 /* --------------------------------------------------------------- a11y ----- */
 :focus-visible {
   outline: 2px solid var(--accent);
