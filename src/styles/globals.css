@@ -653,6 +653,34 @@ button.pill.pill-active:hover {
   }
 }
 
+/* ----------------------------------------------- hero responsive layout -- */
+/* Mobile: single column with the product mockup right after the title.
+   Desktop: two columns (text left, mockup spanning both rows on the right). */
+.hero-head {
+  grid-area: head;
+}
+.hero-body {
+  grid-area: body;
+}
+.hero-mockup {
+  grid-area: mockup;
+}
+.hero-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+@media (min-width: 1024px) {
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 0.85fr 1.25fr;
+    grid-template-areas: 'head mockup' 'body mockup';
+    column-gap: 3.5rem;
+    row-gap: 0;
+    align-items: center;
+  }
+}
+
 /* ----------------------------------------------- landing nav link hover -- */
 /* An accent underline grows in from the left on hover. */
 .nav-link {

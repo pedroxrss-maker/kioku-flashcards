@@ -17,9 +17,9 @@ export function Hero() {
 
   return (
     <section id="topo" className="relative">
-      <div className="mx-auto max-w-[1180px] px-5 md:px-8 pt-12 md:pt-16 pb-16 grid lg:grid-cols-[0.85fr_1.25fr] gap-10 lg:gap-14 items-center">
-        {/* LEFT */}
-        <div>
+      <div className="mx-auto max-w-[1180px] px-5 md:px-8 pt-12 md:pt-16 pb-16 hero-grid">
+        {/* HEAD: pill + title (mobile: above the mockup) */}
+        <div className="hero-head">
           <Reveal>
             <span className="pill pill-muted" style={{ padding: '6px 12px', fontSize: 12, gap: 7 }}>
               Powered by <NeuroWordmark size={12} />
@@ -31,7 +31,17 @@ export function Hero() {
               A cura para o esquecimento<span style={{ color: 'var(--accent)' }}>.</span>
             </h1>
           </Reveal>
+        </div>
 
+        {/* MOCKUP: on mobile it sits right after the title; on desktop, right column */}
+        <div className="hero-mockup">
+          <Reveal delay={0.1} y={30}>
+            <HeroMockup />
+          </Reveal>
+        </div>
+
+        {/* BODY: subhead + CTAs + value props */}
+        <div className="hero-body">
           <Reveal delay={0.12}>
             <div className="text-muted mt-5" style={{ fontSize: 'clamp(15px, 1.6vw, 18px)', maxWidth: 540, lineHeight: 1.6 }}>
               <p>
@@ -71,11 +81,6 @@ export function Hero() {
             </div>
           </Reveal>
         </div>
-
-        {/* RIGHT: light, floating, interactive product mockup */}
-        <Reveal delay={0.1} y={30}>
-          <HeroMockup />
-        </Reveal>
       </div>
     </section>
   );

@@ -25,21 +25,22 @@ function NeuroBand() {
           className="p-7 md:p-10 text-center"
           style={{
             borderRadius: 'var(--r-lg)',
-            border: '1px solid var(--line)',
-            background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, var(--surface)), var(--surface))',
+            border: '1px solid #e6e5e0',
+            background: '#f5f4f1',
+            color: '#17171b',
           }}
         >
           <div className="mb-3 flex justify-center">
-            <NeuroLockup size={18} />
+            <NeuroLockup size={18} onLight />
           </div>
-          <p className="display" style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 600, lineHeight: 1.2 }}>
+          <p className="display" style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 600, lineHeight: 1.2, color: '#17171b' }}>
             O Kioku é o app de flashcards do{' '}
             <span style={{ fontFamily: 'var(--body)', fontWeight: 800 }}>
               neuro<span style={{ color: 'var(--accent)' }}>fluency</span>
             </span>
             .
           </p>
-          <p className="text-muted mt-3" style={{ maxWidth: 640, marginInline: 'auto', lineHeight: 1.6 }}>
+          <p className="mt-3" style={{ maxWidth: 640, marginInline: 'auto', lineHeight: 1.6, color: '#5b5b63' }}>
             A mesma neurociência aplicada ao aprendizado: recordação ativa, repetição espaçada e
             consistência acima de intensidade.
           </p>
