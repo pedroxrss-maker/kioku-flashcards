@@ -50,7 +50,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
         // FSRS uses the slider value; SM-2 ignores retention (keep a sane default).
         desiredRetention:
           algorithm === 'fsrs' ? retention : settings?.defaultDesiredRetention ?? 0.9,
-        buttonCount: settings?.defaultButtonCount,
+        buttonCount: 4,
       });
       if (icon) {
         await repo.saveSettings({ deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon } });

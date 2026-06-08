@@ -351,9 +351,13 @@ button.pill.pill-active:hover {
   backdrop-filter: blur(4px);
   z-index: 1000;
   display: flex;
-  align-items: center;
+  /* flex-start + margin:auto on the box centers short modals but lets tall
+     ones (e.g. deck settings on mobile) scroll fully instead of being clipped
+     beyond the viewport (so the close button stays reachable). */
+  align-items: flex-start;
   justify-content: center;
   padding: 20px;
+  overflow-y: auto;
   animation: kioku-fade 0.16s ease-out;
 }
 .modal-box {
@@ -361,6 +365,7 @@ button.pill.pill-active:hover {
   border: 1px solid var(--line-strong);
   max-width: 520px;
   width: 100%;
+  margin: auto;
   padding: 28px 26px 24px;
   position: relative;
   border-radius: var(--r-lg);

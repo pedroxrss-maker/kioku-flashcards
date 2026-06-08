@@ -179,8 +179,10 @@ export function DeckIconPicker({
               color: iconColor,
               width: 38,
               height: 38,
-              outline: selected ? `2px solid ${iconColor}` : 'none',
+              outline: `2px solid ${selected ? iconColor : 'transparent'}`,
               outlineOffset: 2,
+              transform: selected ? 'scale(1.1)' : 'none',
+              transition: 'transform 0.18s ease, background-color 0.2s ease, outline-color 0.2s ease',
             } as CSSProperties}
           >
             <Icon size={18} />
@@ -203,6 +205,8 @@ export function DeckIconPicker({
           overflow: 'hidden',
           outline: isCustom ? `2px solid ${color}` : '1px dashed var(--line-strong)',
           outlineOffset: 2,
+          transform: isCustom ? 'scale(1.1)' : 'none',
+          transition: 'transform 0.18s ease, outline-color 0.2s ease',
         } as CSSProperties}
       >
         {isCustom ? (

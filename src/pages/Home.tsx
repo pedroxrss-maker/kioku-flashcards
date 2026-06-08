@@ -171,8 +171,8 @@ function DeckStudyRow({
         </div>
       </div>
 
-      <Link to={`/review/${deck.id}`} className="btn btn-accent btn-sm shrink-0">
-        <Play size={14} /> Estudar
+      <Link to={`/review/${deck.id}`} className="btn btn-accent btn-sm shrink-0" aria-label="Estudar">
+        <Play size={14} /> <span className="hidden sm:inline">Estudar</span>
       </Link>
 
       <div className="relative shrink-0">
@@ -408,12 +408,12 @@ export function Home() {
       <section className="grid lg:grid-cols-3 gap-4 md:gap-5 items-start">
         {/* LEFT — continue studying */}
         <Panel className="lg:col-span-2 p-4 md:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="display" style={{ fontSize: 19, fontWeight: 600 }}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="display truncate" style={{ fontSize: 19, fontWeight: 600 }}>
               Continuar estudando
             </h2>
-            <Link to="/decks" className="text-sm text-accent hover:underline">
-              Ver todos os decks
+            <Link to="/decks" className="text-sm text-accent hover:underline shrink-0 whitespace-nowrap">
+              Ver todos<span className="hidden sm:inline"> os decks</span>
             </Link>
           </div>
 

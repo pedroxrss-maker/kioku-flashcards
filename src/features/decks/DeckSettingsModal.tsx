@@ -10,7 +10,7 @@ import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
 import { DeckIconPicker, defaultIconFor } from './deckIcons';
 import { UNLIMITED_PER_DAY } from '../../db/types';
-import type { Algorithm, ButtonCount, Deck } from '../../db/types';
+import type { Algorithm, Deck } from '../../db/types';
 
 interface DeckSettingsModalProps {
   open: boolean;
@@ -40,7 +40,6 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
   const [newPerDay, setNewPerDay] = useState(deck.newPerDay);
   const [reviewsPerDay, setReviewsPerDay] = useState(deck.reviewsPerDay);
   const [retention, setRetention] = useState(deck.desiredRetention);
-  const [buttonCount, setButtonCount] = useState<ButtonCount>(deck.buttonCount);
   const [ttsLang, setTtsLang] = useState(deck.ttsLang);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -53,7 +52,6 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       setNewPerDay(deck.newPerDay);
       setReviewsPerDay(deck.reviewsPerDay);
       setRetention(deck.desiredRetention);
-      setButtonCount(deck.buttonCount);
       setTtsLang(deck.ttsLang);
       setConfirmDelete(false);
     }
@@ -74,7 +72,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       newPerDay,
       reviewsPerDay,
       desiredRetention: retention,
-      buttonCount,
+      buttonCount: 4,
       ttsLang,
     });
     await repo.saveSettings({
@@ -209,27 +207,6 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
             />
           </div>
         )}
-
-        <div>
-          <span className="field-label">Botões de resposta (King of Buttons)</span>
-          <div className="grid grid-cols-3 gap-2">
-            {([2, 3, 4] as ButtonCount[]).map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setButtonCount(n)}
-                className={cn(
-                  'rounded-[var(--r-sm)] border px-3 py-2 transition-colors mono text-xs',
-                  buttonCount === n
-                    ? 'border-[color:var(--accent)] bg-[color:var(--accent-soft)]'
-                    : 'border-[color:var(--line-strong)] bg-[color:var(--surface-2)] hover:border-[color:var(--fg)]',
-                )}
-              >
-                {n} botões
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="pt-2 border-t" style={{ borderColor: 'var(--line)' }}>
           {confirmDelete ? (

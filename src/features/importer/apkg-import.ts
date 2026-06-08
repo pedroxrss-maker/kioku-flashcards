@@ -1,7 +1,6 @@
 import JSZip from 'jszip';
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
-import { MEDIA_PROTOCOL } from '../media/media';
 import { stripHtml } from '../../lib/text';
 import { mimeFromName } from './mime';
 import { loadSqlJs } from './sqljs';
@@ -9,6 +8,39 @@ import type { Card } from '../../db/types';
 
 // Anki separates note fields with the Unit Separator control char (0x1f).
 const FIELD_SEP = String.fromCharCode(0x1f);
+
+/**
+ * Downscale an image blob to <= `max` px on its longest side and return a
+ * compact data: URL. Imported images are embedded inline in the card HTML (not
+ * stored as local-only MediaBlobs), so they sync with the card to Supabase and
+ * render on every device. Resizing keeps the synced rows small.
+ */
+async function resizedDataUrl(blob: Blob, mime: string, max = 700): Promise<string> {
+  const objUrl = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('image decode failed'));
+      i.src = objUrl;
+    });
+    const longest = Math.max(img.width, img.height) || 1;
+    const scale = Math.min(1, max / longest);
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    ctx.drawImage(img, 0, 0, w, h);
+    // Keep PNG (transparency); compress the rest as JPEG.
+    const keepPng = mime === 'image/png' || mime === 'image/webp';
+    return canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.82);
+  } finally {
+    URL.revokeObjectURL(objUrl);
+  }
+}
 
 /**
  * Strip Anki-only markup that would otherwise leak onto the card as literal
@@ -75,10 +107,10 @@ export async function importApkg(file: File): Promise<ImportResult> {
       }
     }
 
-    const mediaCache = new Map<string, string | null>(); // filename -> kioku id
+    const mediaCache = new Map<string, string | null>(); // filename -> data: URL
     let mediaCount = 0;
 
-    async function ensureMedia(filename: string): Promise<string | null> {
+    async function mediaDataUrl(filename: string): Promise<string | null> {
       if (mediaCache.has(filename)) return mediaCache.get(filename) ?? null;
       const key =
         fileByName.get(filename) ?? fileByName.get(decodeURIComponent(filename));
@@ -87,14 +119,17 @@ export async function importApkg(file: File): Promise<ImportResult> {
         mediaCache.set(filename, null);
         return null;
       }
-      const raw = await entry.async('blob');
       const mime = mimeFromName(filename);
-      const data = raw.slice(0, raw.size, mime); // retype the blob
-      const id = crypto.randomUUID();
-      await repo.putMedia({ id, mime, data, createdAt: Date.now() });
-      mediaCache.set(filename, id);
+      let url: string;
+      try {
+        url = await resizedDataUrl(await entry.async('blob'), mime);
+      } catch {
+        // Fallback: embed the original bytes if it can't be decoded/resized.
+        url = `data:${mime};base64,${await entry.async('base64')}`;
+      }
+      mediaCache.set(filename, url);
       mediaCount += 1;
-      return id;
+      return url;
     }
 
     async function rewriteMedia(html: string): Promise<string> {
@@ -104,9 +139,9 @@ export async function importApkg(file: File): Promise<ImportResult> {
       await Promise.all(
         imgs.map(async (img) => {
           const src = img.getAttribute('src');
-          if (!src) return;
-          const id = await ensureMedia(src);
-          if (id) img.setAttribute('src', `${MEDIA_PROTOCOL}${id}`);
+          if (!src || src.startsWith('data:')) return;
+          const url = await mediaDataUrl(src);
+          if (url) img.setAttribute('src', url);
         }),
       );
       return doc.body.innerHTML;

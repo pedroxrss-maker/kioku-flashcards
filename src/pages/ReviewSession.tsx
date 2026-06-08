@@ -10,6 +10,9 @@ import { useSettings } from '../db/hooks';
 import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
 
+// All decks use 4 answer buttons (the King of Buttons option was removed).
+const REVIEW_BUTTONS = 4 as const;
+
 function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000);
   const m = Math.floor(total / 60);
@@ -50,9 +53,9 @@ export function ReviewSession() {
         return;
       }
       const n = Number(e.key);
-      if (deck && n >= 1 && n <= deck.buttonCount) {
+      if (deck && n >= 1 && n <= REVIEW_BUTTONS) {
         e.preventDefault();
-        const def = buttonsFor(deck.buttonCount)[n - 1];
+        const def = buttonsFor(REVIEW_BUTTONS)[n - 1];
         rate(def.rating);
       }
     }
@@ -264,7 +267,7 @@ export function ReviewSession() {
                 transition={{ duration: reduce ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
                 <AnswerButtons
-                  buttonCount={deck.buttonCount}
+                  buttonCount={REVIEW_BUTTONS}
                   preview={preview}
                   onRate={rate}
                 />
