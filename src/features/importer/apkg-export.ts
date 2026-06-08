@@ -1,7 +1,6 @@
 import JSZip from 'jszip';
-import initSqlJs from 'sql.js';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { repo } from '../../db/repositories';
+import { loadSqlJs } from './sqljs';
 import { AUDIO_PROTOCOL, MEDIA_PROTOCOL } from '../media/media';
 import { stripHtml } from '../../lib/text';
 import {
@@ -58,7 +57,7 @@ export async function exportApkg(deckId: string): Promise<{ blob: Blob; name: st
   if (!deck) throw new Error('Deck não encontrado.');
   const cards = await repo.listCards(deckId);
 
-  const SQL = await initSqlJs({ locateFile: () => sqlWasmUrl });
+  const SQL = await loadSqlJs();
   const db = new SQL.Database();
   db.run(ANKI_SCHEMA);
 

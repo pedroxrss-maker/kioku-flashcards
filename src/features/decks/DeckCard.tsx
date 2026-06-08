@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Panel } from '../../components/Panel';
 import { AlgoBadge } from './AlgoBadge';
+import { DeckAvatar } from './deckIcons';
 import { countCards } from '../../lib/deckStats';
 import type { Card, Deck } from '../../db/types';
 
@@ -23,8 +24,9 @@ export function DeckCard({ deck, cards }: DeckCardProps) {
       onClick={() => nav(`/decks/${deck.id}`)}
       className="p-5 flex flex-col gap-4 h-full"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex items-start gap-3">
+        <DeckAvatar deck={deck} size={40} />
+        <div className="min-w-0 flex-1">
           {deck.category && (
             <p className="mono text-[10px] text-muted mb-1 truncate">
               {deck.category}

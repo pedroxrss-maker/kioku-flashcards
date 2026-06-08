@@ -8,6 +8,7 @@ import { CardRow } from '../features/decks/CardRow';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
+import { DeckAvatar } from '../features/decks/deckIcons';
 import { ExportButton } from '../features/importer/ExportButton';
 import { countCards } from '../lib/deckStats';
 import type { Card } from '../db/types';
@@ -101,14 +102,19 @@ export function DeckDetail() {
               >
                 <ArrowLeft size={13} /> Meus Decks
               </Link>
-              {deck.category && (
-                <p className="mono text-[11px] mb-1" style={{ color: deck.color }}>
-                  {deck.category}
-                </p>
-              )}
-              <h1 className="display" style={{ fontSize: 'clamp(28px, 5vw, 44px)' }}>
-                {deck.name}
-              </h1>
+              <div className="flex items-center gap-3">
+                <DeckAvatar deck={deck} size={52} />
+                <div className="min-w-0">
+                  {deck.category && (
+                    <p className="mono text-[11px] mb-1" style={{ color: deck.color }}>
+                      {deck.category}
+                    </p>
+                  )}
+                  <h1 className="display" style={{ fontSize: 'clamp(28px, 5vw, 44px)' }}>
+                    {deck.name}
+                  </h1>
+                </div>
+              </div>
             </div>
             <button
               type="button"

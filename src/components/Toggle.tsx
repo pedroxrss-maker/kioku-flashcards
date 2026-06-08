@@ -11,6 +11,7 @@ export function Toggle({ checked, onChange, label, description }: ToggleProps) {
     <span
       aria-hidden
       style={{
+        display: 'inline-block',
         width: 44,
         height: 26,
         borderRadius: 999,

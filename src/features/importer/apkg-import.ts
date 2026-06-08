@@ -1,15 +1,32 @@
 import JSZip from 'jszip';
-import initSqlJs from 'sql.js';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
 import { MEDIA_PROTOCOL } from '../media/media';
 import { stripHtml } from '../../lib/text';
 import { mimeFromName } from './mime';
+import { loadSqlJs } from './sqljs';
 import type { Card } from '../../db/types';
 
 // Anki separates note fields with the Unit Separator control char (0x1f).
 const FIELD_SEP = String.fromCharCode(0x1f);
+
+/**
+ * Strip Anki-only markup that would otherwise leak onto the card as literal
+ * text, and tidy the leftover whitespace. Audio is NOT imported yet — the
+ * `[sound:...]` token is simply removed. (`<img>` media is handled separately by
+ * rewriteMedia, so raw image filenames never reach the card as text.)
+ */
+export function cleanAnkiMarkup(html: string): string {
+  return html
+    .replace(/\[sound:[^\]]*\]/gi, '') // [sound:file.mp3] -> removed
+    .replace(/\[anki:[^\]]*\]/gi, '') // leftover [anki:...] tags
+    .replace(/[ \t]{2,}/g, ' ') // collapse runs of spaces/tabs
+    .replace(/(?:\s*<br\s*\/?>\s*){3,}/gi, '<br><br>') // collapse 3+ <br> to 2
+    .replace(/^(?:\s*<br\s*\/?>\s*)+/i, '') // drop leading <br>
+    .replace(/(?:\s*<br\s*\/?>\s*)+$/i, '') // drop trailing <br>
+    .replace(/\n{3,}/g, '\n\n') // collapse blank lines
+    .trim();
+}
 
 export interface ImportResult {
   deckId: string;
@@ -42,7 +59,7 @@ export async function importApkg(file: File): Promise<ImportResult> {
   }
 
   const dbBytes = await collEntry.async('uint8array');
-  const SQL = await initSqlJs({ locateFile: () => sqlWasmUrl });
+  const SQL = await loadSqlJs();
   const db = new SQL.Database(dbBytes);
 
   try {
@@ -134,12 +151,31 @@ export async function importApkg(file: File): Promise<ImportResult> {
     const cards: Card[] = [];
     for (const row of rows) {
       const flds = String(row[0] ?? '');
-      const fields = flds.split(FIELD_SEP);
-      const front = await rewriteMedia(fields[0] ?? '');
+      // Clean each field first so a field that was only [sound:...] becomes
+      // empty and is dropped (no stray <hr> separators left behind).
+      const fields = flds.split(FIELD_SEP).map((f) => cleanAnkiMarkup(f));
+      // Belt-and-suspenders: clean again on the EXACT strings we save, after any
+      // media rewrite, so no [sound:...] / Anki markup can survive to the card.
+      const front = cleanAnkiMarkup(await rewriteMedia(fields[0] ?? ''));
       const rest = fields.slice(1).filter((f) => f.trim().length > 0);
-      const back = await rewriteMedia(rest.join('<hr>'));
+      const back = cleanAnkiMarkup(await rewriteMedia(rest.join('<hr>')));
       if (!stripHtml(front) && !stripHtml(back)) continue;
       cards.push(makeCard({ deckId: deck.id, front, back }));
+    }
+
+    // TEMP (verification): confirm the sanitize ran on the strings being saved.
+    // Remove once you've checked the console during an import.
+    if (cards[0]) {
+      const leaked = cards.filter(
+        (c) => /\[sound:/i.test(c.front) || /\[sound:/i.test(c.back),
+      ).length;
+      // eslint-disable-next-line no-console
+      console.log(
+        '[apkg import] sample front at save:',
+        JSON.stringify(cards[0].front),
+        '| cards still containing [sound:]:',
+        leaked,
+      );
     }
 
     if (cards.length === 0) {

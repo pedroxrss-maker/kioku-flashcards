@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Flame,
@@ -21,8 +22,10 @@ import type { LucideIcon } from 'lucide-react';
 import { useAllCards, useAllLogs, useDecks, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
+import { Heatmap } from '../features/stats/Heatmap';
 import { CreateDeckModal } from '../features/decks/CreateDeckModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
+import { DeckAvatar } from '../features/decks/deckIcons';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
@@ -61,22 +64,29 @@ function StatCard({
   label,
   value,
   sub,
+  color = 'var(--accent)',
+  iconClassName,
 }: {
   icon: LucideIcon;
   label: string;
   value: string | number;
   sub: string;
+  color?: string;
+  iconClassName?: string;
 }) {
   return (
     <Panel className="p-4 md:p-5">
-      <span className="icon-tile mb-3">
-        <Icon size={20} />
+      <span
+        className="icon-tile mb-3"
+        style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}
+      >
+        <Icon size={20} className={iconClassName} />
       </span>
       <p className="text-sm text-muted">{label}</p>
       <p className="display" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1 }}>
         {value}
       </p>
-      <p className="text-xs text-accent mt-0.5">{sub}</p>
+      <p className="text-xs mt-0.5" style={{ color }}>{sub}</p>
     </Panel>
   );
 }
@@ -145,19 +155,7 @@ function DeckStudyRow({
     <div
       className="flex items-center gap-3 p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)]"
     >
-      <span
-        className="icon-tile"
-        style={
-          {
-            '--tile': deck.color,
-            fontFamily: 'var(--display)',
-            fontWeight: 700,
-            fontSize: 18,
-          } as CSSProperties
-        }
-      >
-        {deck.name.trim()[0]?.toUpperCase() ?? '?'}
-      </span>
+      <DeckAvatar deck={deck} size={44} />
 
       <div className="min-w-0 flex-1">
         <p className="font-semibold truncate leading-tight">{deck.name}</p>
@@ -186,12 +184,18 @@ function DeckStudyRow({
         >
           <MoreVertical size={18} />
         </button>
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={onCloseMenu} />
-            <div
+        {menuOpen && <div className="fixed inset-0 z-40" onClick={onCloseMenu} />}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              key="deckmenu"
               className="absolute right-0 z-50 mt-1 w-44 py-1"
+              initial={{ opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.97 }}
+              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
               style={{
+                transformOrigin: 'top right',
                 background: 'var(--surface)',
                 border: '1px solid var(--line-strong)',
                 borderRadius: 'var(--r-md)',
@@ -228,9 +232,9 @@ function DeckStudyRow({
               >
                 <Trash2 size={14} /> Excluir
               </button>
-            </div>
-          </>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -304,7 +308,8 @@ export function Home() {
           <div className="relative flex-1">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
-              className="field field-round pl-11"
+              className="field field-round"
+              style={{ paddingLeft: '2.75rem' }}
               placeholder="Buscar decks, cards ou temas..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -337,11 +342,19 @@ export function Home() {
               <ChevronDown size={15} className="text-muted hidden sm:inline" />
             </button>
             {userMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                <div
+              <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+            )}
+            <AnimatePresence>
+              {userMenuOpen && (
+                <motion.div
+                  key="usermenu"
                   className="absolute right-0 z-50 mt-1 w-48 py-1"
+                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                  transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
                   style={{
+                    transformOrigin: 'top right',
                     background: 'var(--surface)',
                     border: '1px solid var(--line-strong)',
                     borderRadius: 'var(--r-md)',
@@ -368,9 +381,9 @@ export function Home() {
                   >
                     <LogOut size={14} /> Sair
                   </button>
-                </div>
-              </>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>
@@ -385,10 +398,10 @@ export function Home() {
 
       {/* Stat cards */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <StatCard icon={Layers} label="Decks criados" value={stats.totalDecks} sub={`+${stats.decksMonth} este mês`} />
-        <StatCard icon={CheckCircle2} label="Cards estudados" value={stats.totalReviews} sub={`+${stats.reviews7d} esta semana`} />
-        <StatCard icon={Flame} label="Sequência atual" value={`${stats.streak} ${stats.streak === 1 ? 'dia' : 'dias'}`} sub={`Melhor: ${stats.best} dias 🔥`} />
-        <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" />
+        <StatCard icon={Layers} label="Decks criados" value={stats.totalDecks} sub={`+${stats.decksMonth} este mês`} color="var(--accent-blue)" />
+        <StatCard icon={CheckCircle2} label="Cards estudados" value={stats.totalReviews} sub={`+${stats.reviews7d} esta semana`} color="var(--accent-green)" />
+        <StatCard icon={Flame} label="Sequência atual" value={`${stats.streak} ${stats.streak === 1 ? 'dia' : 'dias'}`} sub={`Melhor: ${stats.best} dias`} color="var(--accent)" iconClassName="flame-anim" />
+        <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="#b14cff" />
       </section>
 
       {/* Main two-column */}
@@ -510,6 +523,15 @@ export function Home() {
           </Panel>
         </div>
       </section>
+
+      {/* Review heatmap */}
+      <Panel className="p-5 md:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={16} className="text-muted" />
+          <h2 className="mono text-sm text-muted">Mapa de revisões · 16 semanas</h2>
+        </div>
+        <Heatmap logs={logs} />
+      </Panel>
 
       <CreateDeckModal open={createOpen} onClose={() => setCreateOpen(false)} />
       {settingsDeck && (

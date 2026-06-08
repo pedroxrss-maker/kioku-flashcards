@@ -6,6 +6,7 @@ import { cn } from '../../lib/cn';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
+import { DeckIconPicker } from './deckIcons';
 import type { Algorithm } from '../../db/types';
 
 interface CreateDeckModalProps {
@@ -21,6 +22,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
   const [color, setColor] = useState<string>(DECK_COLORS[0]);
   const [algorithm, setAlgorithm] = useState<Algorithm>('fsrs');
   const [retention, setRetention] = useState(0.9);
+  const [icon, setIcon] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       setName('');
       setCategory('');
       setColor(DECK_COLORS[0]);
+      setIcon(undefined);
       setAlgorithm(settings?.defaultAlgorithm ?? 'fsrs');
       setRetention(settings?.defaultDesiredRetention ?? 0.9);
     }
@@ -49,6 +52,9 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
           algorithm === 'fsrs' ? retention : settings?.defaultDesiredRetention ?? 0.9,
         buttonCount: settings?.defaultButtonCount,
       });
+      if (icon) {
+        await repo.saveSettings({ deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon } });
+      }
       onClose();
       nav(`/decks/${deck.id}`);
     } finally {
@@ -127,6 +133,14 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
         </div>
 
         <div>
+          <span className="field-label">Logo</span>
+          <DeckIconPicker color={color} value={icon} onChange={setIcon} />
+          <p className="text-[11px] text-muted mt-2">
+            Escolha um ícone ou anexe uma imagem do seu computador (fica sempre com cantos arredondados).
+          </p>
+        </div>
+
+        <div>
           <span className="field-label">Algoritmo</span>
           <div className="grid grid-cols-2 gap-2">
             {(['fsrs', 'sm2'] as Algorithm[]).map((a) => {
@@ -158,6 +172,12 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
               );
             })}
           </div>
+
+          <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.5 }}>
+            {algorithm === 'fsrs'
+              ? 'FSRS aprende com o seu histórico para prever quando você esqueceria e agenda a revisão nesse momento — menos repetições para a mesma retenção.'
+              : 'SM-2 é o algoritmo clássico do Anki: a cada acerto multiplica o intervalo por um fator de facilidade. Simples, previsível e testado por décadas.'}
+          </p>
 
           {algorithm === 'fsrs' && (
             <div

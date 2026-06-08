@@ -1,3 +1,4 @@
+import { UNLIMITED_PER_DAY } from '../../db/types';
 import type { Card, Deck } from '../../db/types';
 
 /** Fisher–Yates shuffle (copy). */
@@ -38,8 +39,11 @@ export function buildInitialQueue({
   const dueReviews = cards.filter((c) => c.state === 'review' && c.due <= now);
   const news = cards.filter((c) => c.state === 'new');
 
-  const reviewCap = Math.max(0, deck.reviewsPerDay - reviewsDone);
-  const newCap = Math.max(0, deck.newPerDay - newDone);
+  // "Infinitas": deliver every due review the scheduler surfaced, no ceiling.
+  const reviewCap =
+    deck.reviewsPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, deck.reviewsPerDay - reviewsDone);
+  const newCap =
+    deck.newPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, deck.newPerDay - newDone);
 
   const pickedReviews = shuffle(dueReviews).slice(0, reviewCap);
   // New cards keep their insertion order (so a deck is learned top-to-bottom),

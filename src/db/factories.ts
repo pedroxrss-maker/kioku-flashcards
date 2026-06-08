@@ -79,12 +79,13 @@ export function defaultSettings(): AppSettings {
       enabled: true,
       voiceURI: null,
       rate: 1,
-      autoPronounceFront: false,
+      autoPronounceFront: true,
       elevenLabsApiKey: '',
       elevenLabsModel: 'eleven_multilingual_v2',
       elevenLabsVoiceId: '',
     },
     seededAt: null,
+    deckIcons: {},
   };
 }
 

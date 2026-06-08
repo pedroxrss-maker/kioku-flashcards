@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, RotateCcw, X, Zap } from 'lucide-react';
 import { useReviewSession } from '../features/review/useReviewSession';
@@ -23,6 +24,7 @@ export function ReviewSession() {
   const session = useReviewSession(deckId);
   const { deck, current, flipped, preview, counters, flip, rate } = session;
   const cardWrapRef = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
 
   const exitTo = deckId ? `/decks/${deckId}` : '/';
 
@@ -58,37 +60,54 @@ export function ReviewSession() {
     return () => window.removeEventListener('keydown', onKey);
   }, [current, flipped, deck, flip, rate, nav, exitTo]);
 
-  // Auto-pronounce the front when the answer is revealed. A stored audio chip
-  // (e.g. ElevenLabs) plays offline with no key; otherwise fall back to Web Speech.
+  // Pronounce the front as soon as a card appears. Cards with a stored audio
+  // chip (e.g. ElevenLabs) play it offline with no key; text-only cards fall back
+  // to Web Speech. The audio chip's object URL resolves asynchronously, so for
+  // audio cards we poll briefly until the <audio> element is in the DOM.
   useEffect(() => {
-    if (!flipped || !current || !deck) return;
+    if (!current || !deck) return;
     if (!settings?.tts.autoPronounceFront) return;
 
-    const frontAudio = cardWrapRef.current?.querySelector<HTMLAudioElement>(
-      '.flip-face:not(.flip-face-back) audio',
-    );
-    if (frontAudio) {
-      try {
-        frontAudio.currentTime = 0;
-      } catch {
-        /* not loaded yet */
+    const hasAudio = current.front.includes('kioku-audio://');
+
+    if (!hasAudio) {
+      if (settings.tts.enabled) {
+        const text = stripHtml(current.front);
+        if (text) {
+          void tts.speak(text, {
+            lang: deck.ttsLang,
+            voiceURI: settings.tts.voiceURI,
+            rate: settings.tts.rate,
+          });
+        }
       }
-      void frontAudio.play().catch(() => {});
       return;
     }
 
-    if (settings.tts.enabled) {
-      const text = stripHtml(current.front);
-      if (text) {
-        void tts.speak(text, {
-          lang: deck.ttsLang,
-          voiceURI: settings.tts.voiceURI,
-          rate: settings.tts.rate,
-        });
+    let cancelled = false;
+    let tries = 0;
+    const playWhenReady = () => {
+      if (cancelled) return;
+      const el = cardWrapRef.current?.querySelector<HTMLAudioElement>(
+        '.flip-face:not(.flip-face-back) audio',
+      );
+      if (el) {
+        try {
+          el.currentTime = 0;
+        } catch {
+          /* not loaded yet */
+        }
+        void el.play().catch(() => {});
+        return;
       }
-    }
+      if (tries++ < 12) window.setTimeout(playWhenReady, 90);
+    };
+    playWhenReady();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flipped, current?.id]);
+  }, [current?.id]);
 
   if (session.loading) {
     return (
@@ -222,19 +241,37 @@ export function ReviewSession() {
 
       {/* Bottom */}
       <div className="px-4 md:px-6 pb-6 pt-2 shrink-0 w-full max-w-2xl mx-auto">
-        {!flipped ? (
-          <button className="btn-mega w-full" onClick={flip}>
-            <Zap size={18} /> Mostrar resposta
-          </button>
-        ) : (
-          preview && (
-            <AnswerButtons
-              buttonCount={deck.buttonCount}
-              preview={preview}
-              onRate={rate}
-            />
-          )
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {!flipped ? (
+            <motion.button
+              key="show"
+              className="btn-mega w-full"
+              onClick={flip}
+              initial={reduce ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
+              transition={{ duration: reduce ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <Zap size={18} /> Mostrar resposta
+            </motion.button>
+          ) : (
+            preview && (
+              <motion.div
+                key="answers"
+                initial={reduce ? false : { opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                transition={{ duration: reduce ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AnswerButtons
+                  buttonCount={deck.buttonCount}
+                  preview={preview}
+                  onRate={rate}
+                />
+              </motion.div>
+            )
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

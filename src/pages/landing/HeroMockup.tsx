@@ -8,11 +8,13 @@
  *
  * Respects prefers-reduced-motion: static final positions, no float/parallax.
  */
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import type { MotionValue } from 'framer-motion';
 import { ArrowRight, Flame, MoreVertical, Star } from 'lucide-react';
+import { makeSm2Scheduler } from '../../features/scheduling/sm2-adapter';
+import type { Card, Rating } from '../../db/types';
 import { useCountUp } from './anim';
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -43,12 +45,81 @@ const pill: CSSProperties = {
   fontFamily: 'var(--body)',
 };
 
-const ANSWERS = [
-  { rating: 'again', sub: 'errei', color: 'var(--accent)', text: '#ffffff' },
-  { rating: 'hard', sub: 'acertei, mas demorei', color: 'var(--accent-amber)', text: '#1a1205' },
-  { rating: 'good', sub: 'sei', color: 'var(--accent-green)', text: '#04130c' },
-  { rating: 'easy', sub: 'fácil demais', color: 'var(--accent-blue)', text: '#ffffff' },
+const ANSWERS: Array<{ rating: Rating; color: string; text: string }> = [
+  { rating: 'again', color: 'var(--accent)', text: '#ffffff' },
+  { rating: 'hard', color: 'var(--accent-amber)', text: '#1a1205' },
+  { rating: 'good', color: 'var(--accent-green)', text: '#04130c' },
+  { rating: 'easy', color: 'var(--accent-blue)', text: '#ffffff' },
 ];
+
+/* ----------------------------------------- live SM-2 demo (deck + ratings) */
+interface DemoMeta {
+  q: string; // front question
+  a: string; // back answer (text)
+  img: string; // back illustration
+  bg: string; // back bg color, matched to the image so it blends
+}
+const DECK: DemoMeta[] = [
+  { q: 'Qual é a principal função das mitocôndrias na célula?', a: 'Produzir energia (ATP) para a célula.', img: '/mitochondria-atp.png', bg: '#16171B' },
+  { q: 'O que vence a curva do esquecimento?', a: 'Repetição espaçada, no momento certo.', img: '/card2.png', bg: '#121215' },
+  { q: 'O que supera maratonas de estudo?', a: 'Consistência: pouco, todo dia.', img: '/card3.png', bg: '#121215' },
+];
+
+function newDemoCard(): Card {
+  const t = Date.now();
+  return {
+    id: Math.random().toString(36).slice(2),
+    deckId: 'demo',
+    front: '',
+    back: '',
+    state: 'new',
+    due: t,
+    sm2: { ease: 2.5, intervalDays: 0, reps: 0, lapses: 0, step: 0, isLeech: false },
+    fsrs: { stability: 0, difficulty: 0, elapsedDays: 0, scheduledDays: 0, reps: 0, lapses: 0, lastReview: null },
+    createdAt: t,
+    updatedAt: t,
+  };
+}
+
+interface DemoState {
+  meta: DemoMeta;
+  index: number;
+  flipped: boolean;
+  flip: () => void;
+  preview: Record<Rating, { card: Card; intervalLabel: string }>;
+  rate: (r: Rating) => void;
+}
+const DemoCtx = createContext<DemoState | null>(null);
+const useDemo = () => useContext(DemoCtx) as DemoState;
+
+/** Drives the hero deck through the REAL SM-2 adapter: each button previews the
+ *  interval SM-2 would schedule, and rating commits it and advances the deck. */
+function useSm2Demo(): DemoState {
+  const scheduler = useMemo(() => makeSm2Scheduler(), []);
+  const [cards, setCards] = useState<Card[]>(() => DECK.map(newDemoCard));
+  const [index, setIndex] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+
+  const current = cards[index];
+  const preview = useMemo(() => scheduler.preview(current, Date.now()), [scheduler, current]);
+
+  const rate = (r: Rating) => {
+    if (!flipped) return;
+    const { card } = scheduler.apply(current, r, Date.now(), 0);
+    setCards((cs) => cs.map((c, i) => (i === index ? card : c)));
+    setIndex((i) => (i + 1) % DECK.length);
+    setFlipped(false);
+  };
+
+  return {
+    meta: DECK[index],
+    index,
+    flipped,
+    flip: () => setFlipped((f) => !f),
+    preview,
+    rate,
+  };
+}
 
 /* ----------------------------------------------- responsive scaler -------- */
 function Scaler({ designWidth, designHeight, maxWidth, children }: { designWidth: number; designHeight: number; maxWidth: number; children: ReactNode }) {
@@ -131,135 +202,147 @@ function Draggable({ width, pct = 0.1, children }: { width: number; pct?: number
   );
 }
 
-/* ----------------------------------------------- main flashcard ----------- */
+/* ----------------------------------------------- main flashcard (deck) ---- */
+function CardBack({ meta }: { meta: DemoMeta }) {
+  const [imgOk, setImgOk] = useState(true);
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {imgOk ? (
+        <img
+          src={meta.img}
+          alt=""
+          onError={() => setImgOk(false)}
+          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      ) : (
+        <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.4, fontFamily: 'var(--body)', textAlign: 'center' }}>{meta.a}</p>
+      )}
+    </div>
+  );
+}
+
+const FACE: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  backfaceVisibility: 'hidden',
+  WebkitBackfaceVisibility: 'hidden',
+  background: 'var(--surface)',
+  border: HAIRLINE,
+  borderRadius: 20,
+  boxShadow: '0 28px 54px rgba(0,0,0,0.55)',
+  padding: '22px 22px 18px',
+  display: 'flex',
+  flexDirection: 'column',
+};
+const SIL: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  background: 'var(--surface)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: 20,
+  boxShadow: '0 18px 36px rgba(0,0,0,0.42)',
+};
+
 function MainCard() {
   const reduce = useReducedMotion();
-  const [flipped, setFlipped] = useState(false);
-  const [imgOk, setImgOk] = useState(true);
+  const { meta, index, flipped, flip } = useDemo();
   const W = 300;
   const H = 252;
-
-  const face: CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    backfaceVisibility: 'hidden',
-    WebkitBackfaceVisibility: 'hidden',
-    background: 'var(--surface)',
-    border: HAIRLINE,
-    borderRadius: 20,
-    boxShadow: '0 28px 54px rgba(0,0,0,0.55)',
-    padding: '22px 22px 18px',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-  const sil: CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    background: 'var(--surface)',
-    border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: 20,
-    boxShadow: '0 18px 36px rgba(0,0,0,0.42)',
-  };
 
   return (
     <div
       style={{ position: 'relative', width: W, height: H, perspective: TILT_PERSPECTIVE, cursor: 'pointer' }}
-      // Hover/click live on this FLAT wrapper (a normal rectangular hit box that
-      // covers the whole card), not on the 3D-transformed card inside — 3D
-      // hit-testing only catches the painted text, so hovering empty areas missed.
-      onMouseEnter={() => setFlipped(true)}
-      onMouseLeave={() => setFlipped(false)}
-      onClick={() => setFlipped((f) => !f)}
+      onClick={flip}
     >
-      {/* Shared 3D frame: the card leans back into depth (rotateX/rotateY) with a
-          hint of in-plane tilt (rotateZ). The tilt lives HERE; the float
-          (translateY) lives on an ANCESTOR wrapper (Bob/FloatItem), so the two
-          compose and never overwrite each other. */}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          transformStyle: 'preserve-3d',
-          transform: TILT_TRANSFORM,
-        }}
-      >
-        {/* three stacked silhouettes receding in depth (translateZ) behind the main
-            card; the furthest is dimmer (appears smaller in perspective) for added
-            depth without clutter */}
-        <div style={{ ...sil, opacity: 0.6, transform: 'translate(44px, 40px) translateZ(-82px) rotate(3deg)' }} />
-        <div style={{ ...sil, transform: 'translate(24px, 22px) translateZ(-52px) rotate(1.5deg)' }} />
-        <div style={{ ...sil, transform: 'translate(-12px, 13px) translateZ(-26px) rotate(-1deg)' }} />
-
-        {/* main flip card — covers the whole card surface, so hovering anywhere on
-            it flips to the back (and back to front on leave). The rotateY flip lives
-            inside the tilted, preserve-3d frame, so it keeps the 3D perspective. */}
-        <motion.div
-          style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', pointerEvents: 'none' }}
-          animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={reduce ? { duration: 0 } : { duration: 0.5, ease: EASE }}
-        >
-          {/* FRONT */}
-          <div style={face}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Shared 3D frame: tilt lives HERE; the float (translateY) lives on an
+          ancestor (Bob/FloatItem), so the two compose. */}
+      <div style={{ position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', transform: TILT_TRANSFORM }}>
+        {/* the two upcoming flashcards in the queue, peeking behind the current one */}
+        {[2, 1].map((off) => {
+          const m = DECK[(index + off) % DECK.length];
+          const t = off === 2 ? { x: 38, y: 40, z: -82, rot: 3, op: 0.45 } : { x: 18, y: 22, z: -52, rot: 1.5, op: 0.72 };
+          return (
+            <div
+              key={off}
+              style={{ ...SIL, opacity: t.op, padding: '20px', overflow: 'hidden', transform: `translate(${t.x}px, ${t.y}px) translateZ(${t.z}px) rotate(${t.rot}deg)` }}
+            >
               <span style={pill}>Frente</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                <Star size={17} color="var(--accent-amber)" fill="var(--accent-amber)" />
-                <MoreVertical size={17} color="var(--muted)" />
-              </span>
+              <p style={{ color: 'var(--muted)', fontSize: 14.5, fontWeight: 600, lineHeight: 1.35, fontFamily: 'var(--body)', marginTop: 14 }}>{m.q}</p>
             </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-              <p style={{ color: 'var(--fg)', fontSize: 19, fontWeight: 600, lineHeight: 1.35, fontFamily: 'var(--body)' }}>
-                Qual é a principal função das mitocôndrias na célula?
-              </p>
-            </div>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--muted)', fontSize: 13, fontFamily: 'var(--body)' }}>
-              <ArrowRight size={15} /> Clique para ver a resposta
-            </span>
-          </div>
+          );
+        })}
 
-          {/* BACK — answer text above the illustration; bg matches the mitochondria image */}
-          <div style={{ ...face, background: '#16171B', transform: 'rotateY(180deg)', padding: '16px 16px 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={pill}>Verso</span>
-              <Star size={17} color="var(--accent-amber)" fill="var(--accent-amber)" />
-            </div>
-            <span style={{ color: 'var(--fg)', fontSize: 15, fontWeight: 600, fontFamily: 'var(--body)', textAlign: 'center', marginBottom: 4 }}>
-              Produzir energia (ATP) para a célula.
-            </span>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {imgOk ? (
-                <img
-                  src="/mitochondria-atp.png"
-                  alt="Mitocôndria: a respiração celular gera ATP, a energia da célula"
-                  onError={() => setImgOk(false)}
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
-                />
-              ) : (
-                <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.4, fontFamily: 'var(--body)', textAlign: 'center' }}>
-                  São as usinas de energia da célula.
-                </p>
-              )}
-            </div>
-          </div>
-        </motion.div>
+        {/* current card: flips on click; slides out / next slides in on advance */}
+        <AnimatePresence>
+          <motion.div
+            key={index}
+            style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d' }}
+            initial={reduce ? false : { opacity: 0, y: 26, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -52, scale: 0.94 }}
+            transition={{ duration: reduce ? 0 : 0.42, ease: EASE }}
+          >
+            <motion.div
+              style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', pointerEvents: 'none' }}
+              animate={{ rotateY: flipped ? 180 : 0 }}
+              transition={reduce ? { duration: 0 } : { duration: 0.5, ease: EASE }}
+            >
+              {/* FRONT */}
+              <div style={FACE}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={pill}>Frente</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <Star size={17} color="var(--accent-amber)" fill="var(--accent-amber)" />
+                    <MoreVertical size={17} color="var(--muted)" />
+                  </span>
+                </div>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                  <p style={{ color: 'var(--fg)', fontSize: 19, fontWeight: 600, lineHeight: 1.35, fontFamily: 'var(--body)' }}>{meta.q}</p>
+                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--muted)', fontSize: 13, fontFamily: 'var(--body)' }}>
+                  <ArrowRight size={15} /> Clique para ver a resposta
+                </span>
+              </div>
+
+              {/* BACK — answer text above the illustration; bg matches the image */}
+              <div style={{ ...FACE, background: meta.bg, transform: 'rotateY(180deg)', padding: '16px 16px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={pill}>Verso</span>
+                  <Star size={17} color="var(--accent-amber)" fill="var(--accent-amber)" />
+                </div>
+                <span style={{ color: 'var(--fg)', fontSize: 15, fontWeight: 600, fontFamily: 'var(--body)', textAlign: 'center', marginBottom: 4 }}>{meta.a}</span>
+                <CardBack meta={meta} />
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
 }
 
 /* ----------------------------------------------- answer buttons ----------- */
+/** Real SM-2 entry point: each chip shows the interval SM-2 would schedule for
+ *  that rating (once the answer is revealed); tapping it commits via the adapter
+ *  and advances the deck. Still individually draggable (springs back). */
 function AnswerButtons() {
   const reduce = useReducedMotion();
+  const { preview, rate, flipped } = useDemo();
+  const active = flipped;
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
       {ANSWERS.map((a) => {
-        // Each button tilts on its own (narrow element = gentle foreshortening) and
-        // is freely draggable on its own — no tether, stays where you drop it.
         const chip = (
           <Tilt3D fill>
-            <div className="answer-chip" style={{ '--bc': a.color, '--tc': a.text, height: '100%' } as CSSProperties}>
-              <span className="chip-sub" style={{ display: 'block', fontSize: 9, lineHeight: 1.2 }}>{a.sub}</span>
+            <div
+              className="answer-chip"
+              style={{ '--bc': a.color, '--tc': a.text, height: '100%', opacity: active ? 1 : 0.4 } as CSSProperties}
+              onClick={() => rate(a.rating)}
+            >
+              <span className="chip-sub" style={{ display: 'block', fontSize: 9.5, lineHeight: 1.2 }}>
+                {active ? preview[a.rating].intervalLabel : '·'}
+              </span>
               <span className="chip-rating" style={{ display: 'block', fontSize: 11, fontWeight: 800, marginTop: 2 }}>{a.rating}</span>
             </div>
           </Tilt3D>
@@ -303,7 +386,7 @@ function StreakCard() {
   return (
     <div style={{ ...satCard, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <Flame size={21} color="var(--accent-amber)" fill="var(--accent-amber)" />
+        <Flame size={21} color="var(--accent-amber)" fill="var(--accent-amber)" className="flame-anim" />
         <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--fg)', fontFamily: 'var(--display)', lineHeight: 1 }}>12</span>
       </div>
       <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 6, fontFamily: 'var(--body)' }}>dia(s) de sequência</p>
@@ -393,8 +476,10 @@ export function HeroMockup() {
   const pStreak = useTransform(scrollY, [0, 700], [0, -46]);
   const pProg = useTransform(scrollY, [0, 700], [0, 30]);
   const pEvo = useTransform(scrollY, [0, 700], [0, -36]);
+  const demo = useSm2Demo();
 
   return (
+    <DemoCtx.Provider value={demo}>
     <Scaler designWidth={520} designHeight={460} maxWidth={680}>
       {/* MAIN card (3D-tilted) + its answer buttons — draggable within 5% of size */}
       <FloatItem left={6} top={66} width={300} dur={6} delay={0} parallax={pMain} zIndex={3}>
@@ -429,5 +514,6 @@ export function HeroMockup() {
         </Draggable>
       </FloatItem>
     </Scaler>
+    </DemoCtx.Provider>
   );
 }

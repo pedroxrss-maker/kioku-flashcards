@@ -8,6 +8,10 @@ export type CardState = 'new' | 'learning' | 'review' | 'relearning';
 export type Rating = 'again' | 'hard' | 'good' | 'easy';
 export type ButtonCount = 2 | 3 | 4;
 
+/** Sentinel value for an uncapped daily limit — the queue delivers every card
+ *  the scheduler (SM-2/FSRS) marks as due, with no per-day ceiling. */
+export const UNLIMITED_PER_DAY = 1_000_000_000;
+
 export interface Deck {
   id: string;
   name: string;
@@ -94,6 +98,8 @@ export interface AppSettings {
     elevenLabsVoiceId: string; // default voice_id
   };
   seededAt: number | null; // first-run seed marker
+  /** Per-deck logo: deckId -> preset icon id OR a data: URL (custom image). */
+  deckIcons?: Record<string, string>;
 }
 
 /* --------------------------------------------------------- creation inputs */

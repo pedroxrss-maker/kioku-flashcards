@@ -1,6 +1,7 @@
 import { Volume2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
+import { SmoothSlider } from '../../components/SmoothSlider';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { tts } from './tts';
@@ -59,27 +60,21 @@ export function TtsSettings() {
                 </select>
               </div>
 
-              <div>
-                <label className="field-label" htmlFor="tts-rate">
-                  Velocidade · {tt.rate.toFixed(2)}×
-                </label>
-                <input
-                  id="tts-rate"
-                  type="range"
-                  min={0.5}
-                  max={1.5}
-                  step={0.05}
-                  value={tt.rate}
-                  onChange={(e) => save({ rate: Number(e.target.value) })}
-                  className="w-full accent-[color:var(--accent)]"
-                />
-              </div>
+              <SmoothSlider
+                id="tts-rate"
+                value={tt.rate}
+                min={0.5}
+                max={1.5}
+                step={0.025}
+                onCommit={(v) => save({ rate: v })}
+                label={(v) => `Velocidade · ${v.toFixed(2)}×`}
+              />
 
               <Toggle
                 checked={tt.autoPronounceFront}
                 onChange={(v) => save({ autoPronounceFront: v })}
-                label="Pronunciar a frente ao revelar"
-                description="Fala a frente automaticamente quando o card é virado."
+                label="Pronunciar a frente ao aparecer"
+                description="Assim que um card aparece, toca o áudio dele (se houver) ou fala a frente automaticamente."
               />
 
               <div>

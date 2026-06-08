@@ -36,6 +36,32 @@ export function effectiveIntervalDays(card: Card, deck?: Deck): number {
   return Math.max(card.sm2.intervalDays, card.fsrs.scheduledDays);
 }
 
+export interface CardStateCounts {
+  new: number;
+  learning: number;
+  relearning: number;
+  young: number;
+  mature: number;
+  total: number;
+}
+
+/**
+ * Anki-style breakdown of cards by scheduling state. Review cards split into
+ * young vs mature at MATURE_DAYS, using the deck's own algorithm interval — so
+ * it mirrors exactly how the user's SM-2/FSRS history has classified each card.
+ */
+export function countCardStates(cards: Card[], deckById: Map<string, Deck>): CardStateCounts {
+  const out: CardStateCounts = { new: 0, learning: 0, relearning: 0, young: 0, mature: 0, total: cards.length };
+  for (const c of cards) {
+    if (c.state === 'new') out.new += 1;
+    else if (c.state === 'learning') out.learning += 1;
+    else if (c.state === 'relearning') out.relearning += 1;
+    else if (effectiveIntervalDays(c, deckById.get(c.deckId)) >= MATURE_DAYS) out.mature += 1;
+    else out.young += 1;
+  }
+  return out;
+}
+
 export function countCards(
   cards: Card[],
   now: number = Date.now(),

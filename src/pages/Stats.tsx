@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
-import { Activity, CalendarDays, Flame, Trophy } from 'lucide-react';
+import { Activity, CalendarDays, Flame, PieChart, Trophy } from 'lucide-react';
 import { useAllCards, useAllLogs, useDecks } from '../db/hooks';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { StatTile } from '../components/StatTile';
 import { Heatmap } from '../features/stats/Heatmap';
 import { DailyBars } from '../features/stats/DailyBars';
+import { CardCountsPie } from '../features/stats/CardCountsPie';
 import { sessionsFromLogs, statsSummary } from '../features/stats/compute';
-import { countCards, groupCardsByDeck } from '../lib/deckStats';
+import { countCardStates, countCards, groupCardsByDeck } from '../lib/deckStats';
 import { computeStreak } from '../lib/greeting';
 import { DAY_MS, dayKey, startOfLocalDay } from '../lib/date';
 
@@ -42,6 +43,8 @@ export function Stats() {
   const decks = useDecks();
 
   const byDeck = useMemo(() => groupCardsByDeck(cards), [cards]);
+  const deckById = useMemo(() => new Map(decks.map((d) => [d.id, d])), [decks]);
+  const cardStates = useMemo(() => countCardStates(cards, deckById), [cards, deckById]);
   const summary = useMemo(() => statsSummary(logs), [logs]);
   const streak = useMemo(
     () => computeStreak(new Set(logs.map((l) => dayKey(l.reviewedAt)))),
@@ -82,12 +85,20 @@ export function Stats() {
           value={
             <span className="inline-flex items-center gap-2">
               {streak}
-              {streak > 0 && <Flame size={24} className="text-accent" />}
+              {streak > 0 && <Flame size={24} className="text-accent flame-anim" />}
             </span>
           }
           caption="sequência"
         />
       </section>
+
+      <Panel className="p-5 md:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <PieChart size={16} className="text-muted" />
+          <h2 className="mono text-sm text-muted">Cards por estado</h2>
+        </div>
+        <CardCountsPie counts={cardStates} />
+      </Panel>
 
       <Panel className="p-5 md:p-6">
         <div className="flex items-center gap-2 mb-4">

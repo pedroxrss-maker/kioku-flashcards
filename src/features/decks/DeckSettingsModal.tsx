@@ -3,9 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
+import { Toggle } from '../../components/Toggle';
 import { cn } from '../../lib/cn';
 import { repo } from '../../db/repositories';
+import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
+import { DeckIconPicker, defaultIconFor } from './deckIcons';
+import { UNLIMITED_PER_DAY } from '../../db/types';
 import type { Algorithm, ButtonCount, Deck } from '../../db/types';
 
 interface DeckSettingsModalProps {
@@ -27,6 +31,8 @@ const TTS_LANGS = [
 
 export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProps) {
   const nav = useNavigate();
+  const settings = useSettings();
+  const [icon, setIcon] = useState<string | undefined>(undefined);
   const [name, setName] = useState(deck.name);
   const [category, setCategory] = useState(deck.category ?? '');
   const [color, setColor] = useState(deck.color);
@@ -53,6 +59,11 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
     }
   }, [open, deck]);
 
+  useEffect(() => {
+    if (open) setIcon(settings?.deckIcons?.[deck.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, deck.id]);
+
   async function save() {
     if (!name.trim()) return;
     await repo.updateDeck(deck.id, {
@@ -65,6 +76,9 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       desiredRetention: retention,
       buttonCount,
       ttsLang,
+    });
+    await repo.saveSettings({
+      deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon ?? defaultIconFor(deck.id) },
     });
     onClose();
   }
@@ -130,6 +144,11 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
         </div>
 
         <div>
+          <span className="field-label">Logo</span>
+          <DeckIconPicker color={color} value={icon} onChange={setIcon} />
+        </div>
+
+        <div>
           <span className="field-label">Algoritmo</span>
           <div className="grid grid-cols-2 gap-2">
             {(['fsrs', 'sm2'] as Algorithm[]).map((a) => (
@@ -159,8 +178,17 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
           </div>
           <div>
             <label className="field-label" htmlFor="ds-rev">Revisões / dia</label>
-            <input id="ds-rev" type="number" min={0} className="field" value={reviewsPerDay}
-              onChange={(e) => setReviewsPerDay(Math.max(0, Number(e.target.value) || 0))} />
+            {reviewsPerDay >= UNLIMITED_PER_DAY ? (
+              <div className="field flex items-center font-semibold" style={{ color: 'var(--accent)' }}>Infinitas</div>
+            ) : (
+              <input id="ds-rev" type="number" min={0} className="field" value={reviewsPerDay}
+                onChange={(e) => setReviewsPerDay(Math.max(0, Number(e.target.value) || 0))} />
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              <Toggle checked={reviewsPerDay >= UNLIMITED_PER_DAY}
+                onChange={(v) => setReviewsPerDay(v ? UNLIMITED_PER_DAY : 200)} />
+              <span className="text-xs">Infinitas</span>
+            </div>
           </div>
         </div>
 

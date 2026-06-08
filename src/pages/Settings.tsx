@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Brain, Database, Palette, SlidersHorizontal, SquareStack, User } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Brain, Check, Database, Palette, SlidersHorizontal, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
+import { Toggle } from '../components/Toggle';
+import { SmoothSlider } from '../components/SmoothSlider';
 import { TtsSettings } from '../features/tts/TtsSettings';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { seedForUserIfEmpty } from '../db/seedSupabase';
-import { cn } from '../lib/cn';
-import type { Algorithm, ButtonCount } from '../db/types';
+import { UNLIMITED_PER_DAY } from '../db/types';
+import type { Algorithm } from '../db/types';
 
 function Section({
   icon,
@@ -33,6 +36,7 @@ function Section({
 export function Settings() {
   const settings = useSettings();
   const [confirmReset, setConfirmReset] = useState(false);
+  const reduce = useReducedMotion();
 
   if (!settings) {
     return (
@@ -48,6 +52,8 @@ export function Settings() {
     await seedForUserIfEmpty();
     window.location.href = '/';
   }
+
+  const reviewsUnlimited = settings.reviewsPerDay >= UNLIMITED_PER_DAY;
 
   return (
     <div className="rise flex flex-col gap-6 max-w-3xl">
@@ -96,93 +102,139 @@ export function Settings() {
           </div>
           <div>
             <label className="field-label" htmlFor="s-rev">Revisões por dia</label>
-            <input
-              id="s-rev"
-              type="number"
-              min={0}
-              className="field"
-              value={settings.reviewsPerDay}
-              onChange={(e) => repo.saveSettings({ reviewsPerDay: Math.max(0, Number(e.target.value) || 0) })}
-            />
+            <div style={{ position: 'relative', minHeight: 46 }}>
+              <AnimatePresence mode="wait" initial={false}>
+                {reviewsUnlimited ? (
+                  <motion.div
+                    key="inf"
+                    initial={reduce ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                    transition={{ duration: reduce ? 0 : 0.22, ease: 'easeOut' }}
+                    className="field flex items-center"
+                    style={{ color: 'var(--accent)', fontWeight: 600 }}
+                  >
+                    Infinitas
+                  </motion.div>
+                ) : (
+                  <motion.input
+                    key="num"
+                    initial={reduce ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                    transition={{ duration: reduce ? 0 : 0.22, ease: 'easeOut' }}
+                    id="s-rev"
+                    type="number"
+                    min={0}
+                    className="field"
+                    value={settings.reviewsPerDay}
+                    onChange={(e) => repo.saveSettings({ reviewsPerDay: Math.max(0, Number(e.target.value) || 0) })}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <Toggle
+                checked={reviewsUnlimited}
+                onChange={(v) => repo.saveSettings({ reviewsPerDay: v ? UNLIMITED_PER_DAY : 200 })}
+              />
+              <span className="text-xs">Infinitas</span>
+            </div>
           </div>
         </div>
         <p className="text-xs text-muted mt-3">
           Decks existentes mantêm seus próprios limites (ajuste em cada deck).
         </p>
+        <p className="text-xs text-muted mt-2" style={{ lineHeight: 1.55 }}>
+          Com <b className="text-fg">Infinitas</b>, o Kioku entrega todas as revisões que o algoritmo
+          (SM-2 ou FSRS) marcar como devidas no dia, sem teto — ideal para zerar o acúmulo de cards.
+          Em compensação, dias com muitas cartas vencidas podem render sessões longas.
+        </p>
       </Section>
 
       {/* Default algorithm */}
       <Section icon={<Brain size={16} />} title="Algoritmo padrão">
-        <div className="grid grid-cols-2 gap-2">
-          {(['fsrs', 'sm2'] as Algorithm[]).map((a) => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => repo.saveSettings({ defaultAlgorithm: a })}
-              className={cn(
-                'rounded-[var(--r-sm)] border px-4 py-3 text-left transition-colors',
-                settings.defaultAlgorithm === a
-                  ? 'border-[color:var(--accent)] bg-[color:var(--surface-2)]'
-                  : 'border-[color:var(--line-strong)] hover:bg-[color:var(--surface-2)]',
-              )}
-            >
-              <span className="mono text-sm block mb-0.5">{a === 'fsrs' ? 'FSRS' : 'SM-2'}</span>
-              <span className="text-xs text-muted">
-                {a === 'fsrs' ? 'Moderno · padrão' : 'Clássico (Anki)'}
-              </span>
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-muted mt-3">
-          O <b className="text-fg">FSRS</b> é o algoritmo moderno e mais eficiente:
-          agenda revisões a partir da estabilidade e da dificuldade da memória,
-          reduzindo revisões desnecessárias. O <b className="text-fg">SM-2</b> é o
-          clássico do Anki, previsível e simples.
+        <p className="text-xs text-muted mb-3">
+          Aplicado a cada novo deck. Cada deck pode trocar de algoritmo depois, nas configurações dele.
         </p>
+        <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Algoritmo padrão">
+          {(['fsrs', 'sm2'] as Algorithm[]).map((a) => {
+            const selected = settings.defaultAlgorithm === a;
+            return (
+              <button
+                key={a}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => repo.saveSettings({ defaultAlgorithm: a })}
+                className="algo-option relative rounded-[var(--r-sm)] px-4 py-3 text-left cursor-pointer"
+              >
+                {selected && (
+                  <motion.span
+                    layoutId="algo-highlight"
+                    className="absolute inset-0 rounded-[var(--r-sm)]"
+                    style={{ boxShadow: 'inset 0 0 0 2px var(--accent)', background: 'var(--accent-soft)', pointerEvents: 'none' }}
+                    transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <span className="relative z-[1] flex items-center justify-between gap-2 mb-0.5">
+                  <span className="mono text-sm" style={{ color: selected ? 'var(--accent)' : 'var(--fg)' }}>
+                    {a === 'fsrs' ? 'FSRS' : 'SM-2'}
+                  </span>
+                  {selected && <Check size={15} style={{ color: 'var(--accent)' }} />}
+                </span>
+                <span className="relative z-[1] block text-xs text-muted">
+                  {a === 'fsrs' ? 'Moderno · padrão' : 'Clássico (Anki)'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-        <div className="mt-5">
-          <label className="field-label" htmlFor="s-ret">
-            Retenção desejada (FSRS) · {Math.round(settings.defaultDesiredRetention * 100)}%
-          </label>
-          <input
-            id="s-ret"
-            type="range"
-            min={0.8}
-            max={0.97}
-            step={0.01}
-            value={settings.defaultDesiredRetention}
-            onChange={(e) => repo.saveSettings({ defaultDesiredRetention: Number(e.target.value) })}
-            className="w-full accent-[color:var(--accent)]"
-          />
-          <div className="flex justify-between mono text-[10px] text-muted mt-1">
-            <span>80% · menos revisões</span>
-            <span>97% · mais retenção</span>
+        {/* Detailed explanation — only for the selected algorithm */}
+        {settings.defaultAlgorithm === 'fsrs' ? (
+          <p className="text-sm text-muted mt-4" style={{ lineHeight: 1.65 }}>
+            O <b className="text-fg">FSRS</b> (Free Spaced Repetition Scheduler) é o agendador moderno
+            do Kioku. Ele modela a sua memória com três variáveis — <b className="text-fg">estabilidade</b>{' '}
+            (quanto tempo a lembrança dura), <b className="text-fg">dificuldade</b> (o quão custoso é o
+            card) e a probabilidade de você recordar agora — e aprende com todo o seu histórico de
+            revisões. Com isso, prevê o momento em que você estaria prestes a esquecer e agenda a
+            revisão exatamente ali: menos repetições para o que você já domina e mais foco no que é
+            difícil. Você define a meta de retenção abaixo e ele calcula os intervalos para alcançá-la
+            com o mínimo de revisões.
+          </p>
+        ) : (
+          <p className="text-sm text-muted mt-4" style={{ lineHeight: 1.65 }}>
+            O <b className="text-fg">SM-2</b> é o algoritmo clássico do SuperMemo, o mesmo que
+            popularizou o Anki. A cada revisão você avalia o card (errei, difícil, bom, fácil) e ele
+            ajusta um <b className="text-fg">fator de facilidade</b> que multiplica o intervalo:
+            acertos afastam o card no tempo, erros o trazem de volta aos passos de aprendizado. É
+            simples, previsível e testado por décadas — ideal se você prefere um comportamento estável
+            e fácil de entender. Em troca, não se adapta à sua memória tão finamente quanto o FSRS e
+            tende a gerar mais revisões.
+          </p>
+        )}
+
+        {/* Retention slider — exclusive to FSRS */}
+        {settings.defaultAlgorithm === 'fsrs' && (
+          <div className="mt-5">
+            <SmoothSlider
+              id="s-ret"
+              value={settings.defaultDesiredRetention}
+              min={0.8}
+              max={0.97}
+              step={0.005}
+              onCommit={(v) => repo.saveSettings({ defaultDesiredRetention: v })}
+              label={(v) => `Retenção desejada (FSRS) · ${Math.round(v * 100)}%`}
+              footer={
+                <div className="flex justify-between mono text-[10px] text-muted mt-1">
+                  <span>80% · menos revisões</span>
+                  <span>97% · mais retenção</span>
+                </div>
+              }
+            />
           </div>
-        </div>
-      </Section>
-
-      {/* King of Buttons */}
-      <Section icon={<SquareStack size={16} />} title="Botões de resposta padrão (King of Buttons)">
-        <div className="grid grid-cols-3 gap-2">
-          {([2, 3, 4] as ButtonCount[]).map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => repo.saveSettings({ defaultButtonCount: n })}
-              className={cn(
-                'rounded-[var(--r-sm)] border px-3 py-3 transition-colors text-center',
-                settings.defaultButtonCount === n
-                  ? 'border-[color:var(--accent)] bg-[color:var(--surface-2)]'
-                  : 'border-[color:var(--line-strong)] hover:bg-[color:var(--surface-2)]',
-              )}
-            >
-              <span className="display text-lg block">{n}</span>
-              <span className="mono text-[11px] text-muted">
-                {n === 2 ? 'Errei/Acertei' : n === 3 ? '+ Difícil' : '+ Bom/Fácil'}
-              </span>
-            </button>
-          ))}
-        </div>
+        )}
       </Section>
 
       {/* TTS */}
