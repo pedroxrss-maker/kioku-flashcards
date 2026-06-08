@@ -50,6 +50,78 @@ export function buildHeatmap(logs: ReviewLog[], weeks = 16): HeatCell[][] {
   return columns;
 }
 
+/** Full calendar year (Jan 1 -> Dec 31 of `year`), Sunday-aligned columns.
+ *  Days after today are flagged `future`. */
+export function buildYear(logs: ReviewLog[], year: number): HeatCell[][] {
+  const byDay = reviewsByDay(logs);
+  const todayKey = dayKey(startOfLocalDay());
+  const start = new Date(year, 0, 1);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay()); // back to the Sunday on/before Jan 1
+  const end = new Date(year, 11, 31).getTime();
+
+  const cells: HeatCell[] = [];
+  for (let t = start.getTime(); t <= end; t += DAY_MS) {
+    const key = dayKey(t);
+    const count = byDay.get(key) ?? 0;
+    cells.push({ date: t, key, count, tier: tierFor(count), future: key > todayKey });
+  }
+  const columns: HeatCell[][] = [];
+  for (let i = 0; i < cells.length; i += 7) columns.push(cells.slice(i, i + 7));
+  return columns;
+}
+
+/** Short month label for each heatmap column (only where a new month begins). */
+export function monthLabels(columns: HeatCell[][]): string[] {
+  const fmt = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
+  let last = -1;
+  return columns.map((col) => {
+    const d = col[0]?.date;
+    if (d == null) return '';
+    const m = new Date(d).getMonth();
+    if (m !== last) {
+      last = m;
+      return fmt.format(new Date(d)).replace('.', '');
+    }
+    return '';
+  });
+}
+
+export interface MonthCell extends HeatCell {
+  day: number;
+}
+
+/** A single calendar month as day cells, padded with leading nulls to a Sunday. */
+export function buildMonth(logs: ReviewLog[], year: number, month: number): (MonthCell | null)[] {
+  const byDay = reviewsByDay(logs);
+  const startPad = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = dayKey(startOfLocalDay());
+  const cells: (MonthCell | null)[] = [];
+  for (let i = 0; i < startPad; i += 1) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    const date = new Date(year, month, d).getTime();
+    const key = dayKey(date);
+    const count = byDay.get(key) ?? 0;
+    cells.push({ date, key, count, tier: tierFor(count), future: key > todayKey, day: d });
+  }
+  return cells;
+}
+
+/** Mean cards/day over the day cells that aren't in the future. */
+export function dailyAverage(columns: HeatCell[][]): number {
+  let sum = 0;
+  let days = 0;
+  for (const col of columns) {
+    for (const cell of col) {
+      if (cell.future) continue;
+      sum += cell.count;
+      days += 1;
+    }
+  }
+  return days ? sum / days : 0;
+}
+
 /* ----------------------------------------------------- daily performance -- */
 
 export interface DayPerf {

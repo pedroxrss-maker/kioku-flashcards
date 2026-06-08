@@ -340,6 +340,26 @@ export class SupabaseRepository implements KiokuRepository {
       pushToast('error', 'Não foi possível salvar sua revisão. Verifique sua conexão.');
     }
   }
+  async undoReview(card: Card, logId: string): Promise<void> {
+    try {
+      await withRetry(async () => {
+        const userId = await currentUserId();
+        const cardRes = await supabase.from('cards').upsert(cardToRow(card, userId));
+        if (cardRes.error) throw cardRes.error;
+        const delRes = await supabase
+          .from('review_logs')
+          .delete()
+          .eq('id', logId)
+          .eq('user_id', userId);
+        if (delRes.error) throw delRes.error;
+      }, 3);
+      invalidate();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[supabase undoReview]', err);
+      pushToast('error', 'Não foi possível desfazer a revisão.');
+    }
+  }
   async dailyProgress(deckId: string, dayStart: number): Promise<DailyProgress> {
     const { data, error } = await supabase
       .from('review_logs')

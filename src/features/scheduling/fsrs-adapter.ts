@@ -37,6 +37,11 @@ function buildScheduler(desiredRetention: number) {
       request_retention: desiredRetention, // e.g. 0.9
       maximum_interval: 36500,
       enable_fuzz: true,
+      // Long-term scheduler: "Good" on a new/learning card jumps straight to a
+      // multi-day Review interval in ONE pass instead of a sub-day learning
+      // step. Without this, FSRS keeps short-term learning cards intraday and
+      // the session queue reinserts them forever (only "Easy" graduated them).
+      enable_short_term: false,
     }),
   );
 }

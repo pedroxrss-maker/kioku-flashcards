@@ -73,6 +73,9 @@ body {
   color: var(--fg);
   font-family: var(--body);
   line-height: 1.6;
+  /* Hard stop: the page must never scroll/leak horizontally on mobile.
+     clip (not hidden) so position: sticky headers keep working. */
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   min-height: 100vh;
@@ -112,6 +115,12 @@ body {
   letter-spacing: -0.005em;
   line-height: 1.05;
   font-optical-sizing: auto;
+}
+/* Landing titles use Playfair Display (elegant high-contrast serif), like the
+   "Remember everything you study" reference. Scoped to the landing only so the
+   app keeps Fraunces. Sizes are bumped ~20% inline on each title. */
+.landing-root .display {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
 }
 /* Soft label/caption style (Manrope, sentence case) — replaces the old
    uppercase DM Mono treatment everywhere `.mono` is used. */
@@ -656,6 +665,16 @@ button.pill.pill-active:hover {
   .answer-chip:hover {
     transform: none;
   }
+}
+
+/* A simple accent outline that fades in on hover (deck-overview card rows). */
+.card-hover-ring {
+  outline: 1.5px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.22s ease;
+}
+.card-hover-ring:hover {
+  outline-color: var(--accent);
 }
 
 /* ----------------------------------------------- hero responsive layout -- */

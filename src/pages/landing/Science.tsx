@@ -33,7 +33,7 @@ export function Science() {
   return (
     <section id="ciencia" className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28" style={{ scrollMarginTop: 76 }}>
       <Reveal>
-        <h2 className="display" style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 600 }}>
+        <h2 className="display" style={{ fontSize: 'clamp(31px, 4.8vw, 48px)', fontWeight: 600 }}>
           Ciência, não autoajuda
         </h2>
       </Reveal>

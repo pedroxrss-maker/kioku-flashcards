@@ -103,7 +103,7 @@ export function Stats() {
       <Panel className="p-5 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           <CalendarDays size={16} className="text-muted" />
-          <h2 className="mono text-sm text-muted">Mapa de revisões · 16 semanas</h2>
+          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
         </div>
         <Heatmap logs={logs} />
       </Panel>

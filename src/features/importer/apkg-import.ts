@@ -1,13 +1,29 @@
 import JSZip from 'jszip';
+import { decompress } from 'fzstd';
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
 import { stripHtml } from '../../lib/text';
 import { mimeFromName } from './mime';
 import { loadSqlJs } from './sqljs';
-import type { Card } from '../../db/types';
+import type { Card, CardState, FsrsFields, Sm2Fields } from '../../db/types';
 
 // Anki separates note fields with the Unit Separator control char (0x1f).
 const FIELD_SEP = String.fromCharCode(0x1f);
+const DAY = 86_400_000;
+
+// Anki package v3 stores the real collection (collection.anki21b) and the media
+// (manifest + blobs) zstd-compressed. Detect by the zstd magic bytes.
+function isZstd(b: Uint8Array): boolean {
+  return b.length >= 4 && b[0] === 0x28 && b[1] === 0xb5 && b[2] === 0x2f && b[3] === 0xfd;
+}
+
+/** Read a zip member as bytes, transparently zstd-decompressing if needed. */
+async function memberBytes(zip: JSZip, name: string): Promise<Uint8Array | null> {
+  const entry = zip.file(name);
+  if (!entry) return null;
+  const raw = await entry.async('uint8array');
+  return isZstd(raw) ? decompress(raw) : raw;
+}
 
 /**
  * Downscale an image blob to <= `max` px on its longest side and return a
@@ -60,6 +76,77 @@ export function cleanAnkiMarkup(html: string): string {
     .trim();
 }
 
+interface MappedScheduling {
+  state: CardState;
+  due: number;
+  sm2: Sm2Fields;
+  fsrs?: FsrsFields; // override only when Anki carried FSRS memory state
+}
+
+/**
+ * Translate one Anki card's scheduling (cards table row) into Kioku fields, so
+ * the user keeps studying where they left off. Best-effort.
+ */
+function mapScheduling(
+  type: number,
+  queue: number,
+  due: number,
+  ivl: number,
+  factor: number,
+  reps: number,
+  lapses: number,
+  data: string,
+  colCrtMs: number,
+  nowMs: number,
+): MappedScheduling {
+  // state: type 0=new, 1=learning, 2=review, 3=relearning. queue<0 = suspended/
+  // buried -> treat as new (inactive).
+  let state: CardState;
+  if (queue < 0) state = 'new';
+  else if (type === 1) state = 'learning';
+  else if (type === 2) state = 'review';
+  else if (type === 3) state = 'relearning';
+  else state = 'new';
+
+  // Real due datetime. Review due is a day number relative to col.crt; learning
+  // due is an epoch timestamp (seconds); new cards are due now.
+  let dueMs: number;
+  if (type === 2) dueMs = colCrtMs + due * DAY;
+  else if (type === 1 || type === 3) dueMs = due > 1e9 ? due * 1000 : colCrtMs + due * DAY;
+  else dueMs = nowMs;
+
+  // SM-2 fields (Anki factor is e.g. 2500 -> ease 2.5; ivl in days, <0 = seconds).
+  const sm2: Sm2Fields = {
+    ease: factor > 0 ? factor / 1000 : 2.5,
+    intervalDays: Math.max(0, ivl),
+    reps,
+    lapses,
+    step: 0,
+    isLeech: false,
+  };
+
+  // FSRS memory state lives in the card "data" JSON ({"s":stability,"d":difficulty}).
+  let fsrs: FsrsFields | undefined;
+  try {
+    const d = JSON.parse(data || '{}') as { s?: number; d?: number };
+    if (typeof d.s === 'number' && typeof d.d === 'number') {
+      fsrs = {
+        stability: d.s,
+        difficulty: d.d,
+        elapsedDays: 0,
+        scheduledDays: Math.max(0, ivl),
+        reps,
+        lapses,
+        lastReview: state === 'new' ? null : nowMs,
+      };
+    }
+  } catch {
+    /* no FSRS data -> initialize normally */
+  }
+
+  return { state, due: dueMs, sm2, fsrs };
+}
+
 export interface ImportResult {
   deckId: string;
   deckName: string;
@@ -68,43 +155,66 @@ export interface ImportResult {
   warnings: string[];
 }
 
+/** True if the collection is the legacy "Please update..." placeholder (v3). */
+function looksLikePlaceholder(db: { exec: (sql: string) => Array<{ values: unknown[][] }> }): boolean {
+  try {
+    const vals = db.exec('SELECT flds FROM notes')[0]?.values ?? [];
+    return (
+      vals.length === 1 &&
+      String(vals[0][0] ?? '').includes('Please update to the latest Anki version')
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Import an Anki `.apkg` (zip of a SQLite collection + media map). Parses notes,
- * creates one Kioku deck of `new` cards, and rewrites `<img src>` media to
- * imported MediaBlobs. Scheduling is reset to `new` (Anki scheduling is not
- * translated).
+ * Import an Anki `.apkg` (zip of a SQLite collection + media). Supports both the
+ * legacy raw-SQLite format and the new v3 format (zstd-compressed
+ * collection.anki21b). Notes/cards are translated to a Kioku deck, Anki
+ * scheduling is preserved best-effort, `<img>` media is embedded inline.
+ * Audio/compressed media is intentionally skipped for now.
  */
 export async function importApkg(file: File): Promise<ImportResult> {
   const warnings: string[] = [];
   const zip = await JSZip.loadAsync(file);
 
-  const collEntry =
-    zip.file('collection.anki21') ?? zip.file('collection.anki2');
-  if (!collEntry) {
-    if (zip.file('collection.anki21b')) {
-      throw new Error(
-        'Este .apkg usa o formato novo comprimido (anki21b). No Anki, exporte ' +
-          'marcando “Support older Anki versions (slower/larger files)”.',
-      );
+  // ---- pick + load the real collection (prefer the v3 anki21b) --------------
+  const SQL = await loadSqlJs();
+  let dbBytes: Uint8Array | null = null;
+  let loadedName = '';
+  for (const name of ['collection.anki21b', 'collection.anki21', 'collection.anki2']) {
+    const bytes = await memberBytes(zip, name);
+    if (bytes) {
+      dbBytes = bytes;
+      loadedName = name;
+      break;
     }
-    throw new Error('Coleção (collection.anki2) não encontrada no arquivo.');
+  }
+  if (!dbBytes) throw new Error('Coleção não encontrada no arquivo .apkg.');
+
+  let db = new SQL.Database(dbBytes);
+  // Safety net: if we somehow loaded the legacy placeholder, switch to anki21b.
+  if (looksLikePlaceholder(db) && loadedName !== 'collection.anki21b') {
+    const realBytes = await memberBytes(zip, 'collection.anki21b');
+    if (realBytes) {
+      db.close();
+      db = new SQL.Database(realBytes);
+    }
   }
 
-  const dbBytes = await collEntry.async('uint8array');
-  const SQL = await loadSqlJs();
-  const db = new SQL.Database(dbBytes);
-
   try {
-    // ---- media map: { "0": "image.jpg", ... } -> filename -> zip entry key ---
+    // ---- media map (manifest may itself be zstd-compressed in v3) -----------
     const fileByName = new Map<string, string>();
-    const mediaEntry = zip.file('media');
-    if (mediaEntry) {
-      try {
-        const map = JSON.parse(await mediaEntry.async('string')) as Record<string, string>;
+    try {
+      const mediaBytes = await memberBytes(zip, 'media');
+      if (mediaBytes) {
+        const map = JSON.parse(new TextDecoder().decode(mediaBytes)) as Record<string, string>;
         for (const [num, name] of Object.entries(map)) fileByName.set(name, num);
-      } catch {
-        warnings.push('Mapa de mídia inválido — imagens podem não aparecer.');
       }
+    } catch {
+      // v3 manifest can be protobuf, not JSON — media is deferred anyway.
+      warnings.push('Mídia não importada (formato novo). Texto e agendamento foram importados.');
     }
 
     const mediaCache = new Map<string, string | null>(); // filename -> data: URL
@@ -112,19 +222,23 @@ export async function importApkg(file: File): Promise<ImportResult> {
 
     async function mediaDataUrl(filename: string): Promise<string | null> {
       if (mediaCache.has(filename)) return mediaCache.get(filename) ?? null;
-      const key =
-        fileByName.get(filename) ?? fileByName.get(decodeURIComponent(filename));
+      const key = fileByName.get(filename) ?? fileByName.get(decodeURIComponent(filename));
       const entry = key ? zip.file(key) : null;
       if (!entry) {
+        mediaCache.set(filename, null);
+        return null;
+      }
+      const bytes = await entry.async('uint8array');
+      if (isZstd(bytes)) {
+        // Compressed media (v3) — deferred. Skip gracefully, don't crash.
         mediaCache.set(filename, null);
         return null;
       }
       const mime = mimeFromName(filename);
       let url: string;
       try {
-        url = await resizedDataUrl(await entry.async('blob'), mime);
+        url = await resizedDataUrl(new Blob([new Uint8Array(bytes)]), mime);
       } catch {
-        // Fallback: embed the original bytes if it can't be decoded/resized.
         url = `data:${mime};base64,${await entry.async('base64')}`;
       }
       mediaCache.set(filename, url);
@@ -147,16 +261,23 @@ export async function importApkg(file: File): Promise<ImportResult> {
       return doc.body.innerHTML;
     }
 
+    // ---- collection creation day (for review-due conversion) ----------------
+    const nowMs = Date.now();
+    let colCrtMs = nowMs;
+    try {
+      const crt = Number(db.exec('SELECT crt FROM col LIMIT 1')[0]?.values[0]?.[0] ?? 0);
+      if (crt > 0) colCrtMs = crt * 1000;
+    } catch {
+      /* keep now */
+    }
+
     // ---- deck name from col.decks JSON (fallback: filename) -----------------
     let deckName =
-      file.name.replace(/\.apkg$/i, '').replace(/\.colpkg$/i, '') ||
-      'Deck importado';
+      file.name.replace(/\.apkg$/i, '').replace(/\.colpkg$/i, '') || 'Deck importado';
     try {
-      const colRes = db.exec('SELECT decks FROM col LIMIT 1');
-      const raw = colRes[0]?.values[0]?.[0];
+      const raw = db.exec('SELECT decks FROM col LIMIT 1')[0]?.values[0]?.[0];
       if (typeof raw === 'string') {
-        const decks = JSON.parse(raw) as Record<string, { name?: string }>;
-        const names = Object.values(decks)
+        const names = Object.values(JSON.parse(raw) as Record<string, { name?: string }>)
           .map((d) => d.name)
           .filter((n): n is string => !!n && n !== 'Default');
         if (names.length === 1) deckName = names[0];
@@ -165,10 +286,23 @@ export async function importApkg(file: File): Promise<ImportResult> {
       /* keep filename fallback */
     }
 
-    // ---- notes -------------------------------------------------------------
-    const notesRes = db.exec('SELECT flds FROM notes');
-    const rows = notesRes[0]?.values ?? [];
-    if (rows.length === 0) throw new Error('Nenhuma nota encontrada no arquivo.');
+    // ---- cards (joined to their note) with scheduling -----------------------
+    let cardRows: unknown[][] = [];
+    try {
+      cardRows =
+        db.exec(
+          'SELECT c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data, n.flds ' +
+            'FROM cards c JOIN notes n ON c.nid = n.id',
+        )[0]?.values ?? [];
+    } catch {
+      /* fall through to notes-only */
+    }
+    if (cardRows.length === 0) {
+      // No cards table (or query failed) — import notes as fresh "new" cards.
+      const noteVals = db.exec('SELECT flds FROM notes')[0]?.values ?? [];
+      cardRows = noteVals.map((v) => [0, 0, 0, 0, 0, 0, 0, '', v[0]]);
+    }
+    if (cardRows.length === 0) throw new Error('Nenhuma nota encontrada no arquivo.');
 
     const settings = await repo.getSettings();
     const color = DECK_COLORS[Math.floor(Math.random() * DECK_COLORS.length)];
@@ -180,38 +314,52 @@ export async function importApkg(file: File): Promise<ImportResult> {
       newPerDay: settings.newPerDay,
       reviewsPerDay: settings.reviewsPerDay,
       desiredRetention: settings.defaultDesiredRetention,
-      buttonCount: settings.defaultButtonCount,
+      buttonCount: 4,
     });
 
+    // Imported decks start with audio OFF (no speaker / pronunciation).
+    await repo.saveSettings({ deckAudio: { ...(settings.deckAudio ?? {}), [deck.id]: false } });
+
     const cards: Card[] = [];
-    for (const row of rows) {
-      const flds = String(row[0] ?? '');
-      // Clean each field first so a field that was only [sound:...] becomes
-      // empty and is dropped (no stray <hr> separators left behind).
+    for (const row of cardRows) {
+      const flds = String(row[8] ?? '');
       const fields = flds.split(FIELD_SEP).map((f) => cleanAnkiMarkup(f));
-      // Belt-and-suspenders: clean again on the EXACT strings we save, after any
-      // media rewrite, so no [sound:...] / Anki markup can survive to the card.
       const front = cleanAnkiMarkup(await rewriteMedia(fields[0] ?? ''));
       const rest = fields.slice(1).filter((f) => f.trim().length > 0);
       const back = cleanAnkiMarkup(await rewriteMedia(rest.join('<hr>')));
       if (!stripHtml(front) && !stripHtml(back)) continue;
-      cards.push(makeCard({ deckId: deck.id, front, back }));
+
+      const sched = mapScheduling(
+        Number(row[0] ?? 0),
+        Number(row[1] ?? 0),
+        Number(row[2] ?? 0),
+        Number(row[3] ?? 0),
+        Number(row[4] ?? 0),
+        Number(row[5] ?? 0),
+        Number(row[6] ?? 0),
+        String(row[7] ?? ''),
+        colCrtMs,
+        nowMs,
+      );
+      const base = makeCard({ deckId: deck.id, front, back });
+      cards.push({
+        ...base,
+        state: sched.state,
+        due: sched.due,
+        sm2: sched.sm2,
+        fsrs: sched.fsrs ?? base.fsrs,
+      });
     }
 
-    // TEMP (verification): confirm the sanitize ran on the strings being saved.
-    // Remove once you've checked the console during an import.
-    if (cards[0]) {
-      const leaked = cards.filter(
-        (c) => /\[sound:/i.test(c.front) || /\[sound:/i.test(c.back),
-      ).length;
+    // TEMP (verification): mapped scheduling for the first few cards. Remove
+    // once the dates/intervals look right.
+    cards.slice(0, 3).forEach((c, i) => {
       // eslint-disable-next-line no-console
       console.log(
-        '[apkg import] sample front at save:',
-        JSON.stringify(cards[0].front),
-        '| cards still containing [sound:]:',
-        leaked,
+        `[apkg import] card ${i}: state=${c.state} due=${new Date(c.due).toISOString()} ` +
+          `ivl=${c.sm2.intervalDays}d ease=${c.sm2.ease} reps=${c.sm2.reps} lapses=${c.sm2.lapses}`,
       );
-    }
+    });
 
     if (cards.length === 0) {
       await repo.deleteDeck(deck.id);
@@ -220,13 +368,7 @@ export async function importApkg(file: File): Promise<ImportResult> {
 
     await repo.bulkInsertCards(cards);
 
-    return {
-      deckId: deck.id,
-      deckName,
-      cardCount: cards.length,
-      mediaCount,
-      warnings,
-    };
+    return { deckId: deck.id, deckName, cardCount: cards.length, mediaCount, warnings };
   } finally {
     db.close();
   }

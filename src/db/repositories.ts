@@ -36,6 +36,8 @@ export interface KiokuRepository {
 
   // review
   saveReview(card: Card, log: ReviewLog): Promise<void>;
+  /** Undo a review: restore the card's pre-review state and delete its log. */
+  undoReview(card: Card, logId: string): Promise<void>;
   dailyProgress(deckId: string, dayStart: number): Promise<DailyProgress>;
   allLogs(): Promise<ReviewLog[]>;
   logsSince(ts: number): Promise<ReviewLog[]>;

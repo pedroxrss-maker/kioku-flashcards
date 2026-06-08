@@ -1,14 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, RotateCcw, X, Zap } from 'lucide-react';
+import { ArrowLeft, Check, Pencil, RotateCcw, X, Zap } from 'lucide-react';
 import { useReviewSession } from '../features/review/useReviewSession';
 import { AnswerButtons } from '../features/review/AnswerButtons';
 import { buttonsFor } from '../features/review/buttons';
 import { FlipCard } from '../features/review/FlipCard';
+import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { useSettings } from '../db/hooks';
+import { repo } from '../db/repositories';
 import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
+import { deckAudioEnabled } from '../lib/deckAudio';
 
 // All decks use 4 answer buttons (the King of Buttons option was removed).
 const REVIEW_BUTTONS = 4 as const;
@@ -25,7 +28,8 @@ export function ReviewSession() {
   const nav = useNavigate();
   const settings = useSettings();
   const session = useReviewSession(deckId);
-  const { deck, current, flipped, preview, counters, flip, rate } = session;
+  const { deck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
+  const [editOpen, setEditOpen] = useState(false);
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
 
@@ -34,11 +38,25 @@ export function ReviewSession() {
   // Keyboard: space/enter flip; 1..N rate after reveal; Esc exit.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (editOpen) return; // the editor handles its own keys while open
       if (e.key === 'Escape') {
         nav(exitTo);
         return;
       }
+      // "U" undoes the last rating and brings the previous card back, even after
+      // it was reviewed (and even on the completion screen).
+      if (e.key === 'u' || e.key === 'U') {
+        e.preventDefault();
+        undo();
+        return;
+      }
       if (!current) return;
+      // "E" edits the current card inline, without leaving the session.
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        setEditOpen(true);
+        return;
+      }
       if (!flipped) {
         if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
@@ -61,7 +79,7 @@ export function ReviewSession() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, flipped, deck, flip, rate, nav, exitTo]);
+  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen]);
 
   // Pronounce the front as soon as a card appears. Cards with a stored audio
   // chip (e.g. ElevenLabs) play it offline with no key; text-only cards fall back
@@ -69,7 +87,9 @@ export function ReviewSession() {
   // audio cards we poll briefly until the <audio> element is in the DOM.
   useEffect(() => {
     if (!current || !deck) return;
+    if (!deckAudioEnabled(settings, deck.id)) return; // deck has audio disabled
     if (!settings?.tts.autoPronounceFront) return;
+    if (settings.mutedCards?.[current.id]) return; // card opted out of pronunciation
 
     const hasAudio = current.front.includes('kioku-audio://');
 
@@ -198,24 +218,55 @@ export function ReviewSession() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <motion.div
+      className="min-h-screen flex flex-col"
+      // Slow, modern page build-in when the session opens (first card no longer
+      // appears abruptly).
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduce ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
+    >
       {/* Top bar */}
       <header
         className="flex items-center justify-between gap-3 px-4 md:px-6 h-14 border-b shrink-0"
         style={{ borderColor: 'var(--line)' }}
       >
-        <button
-          onClick={() => nav(exitTo)}
-          className="mono text-xs text-muted hover:text-fg inline-flex items-center gap-1.5 transition-colors"
-        >
-          <ArrowLeft size={15} /> Sair
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => nav(exitTo)}
+            className="mono text-xs text-muted hover:text-fg inline-flex items-center gap-1.5 transition-colors"
+          >
+            <ArrowLeft size={15} /> Sair
+          </button>
+          {canUndo && (
+            <button
+              onClick={undo}
+              aria-label="Voltar ao card anterior (U)"
+              title="Voltar ao card anterior (U)"
+              className="p-1.5 rounded-[var(--r-sm)] text-muted hover:text-fg hover:bg-[color:var(--surface-2)] transition-colors"
+            >
+              <RotateCcw size={15} />
+            </button>
+          )}
+          {current && (
+            <button
+              onClick={() => setEditOpen(true)}
+              aria-label="Editar este card (E)"
+              title="Editar este card (E)"
+              className="p-1.5 rounded-[var(--r-sm)] text-muted hover:text-fg hover:bg-[color:var(--surface-2)] transition-colors"
+            >
+              <Pencil size={15} />
+            </button>
+          )}
+        </div>
         <div className="text-center min-w-0">
           <p className="font-bold truncate text-sm" style={{ maxWidth: '50vw' }}>
             {deck.name}
           </p>
           <p className="mono text-[10px] text-muted">
-            Card {session.position} de {session.total}
+            {settings?.showRemainingCount !== false
+              ? `Card ${session.position} de ${session.total}`
+              : `Card ${session.position}`}
           </p>
         </div>
         {counterChips}
@@ -238,6 +289,7 @@ export function ReviewSession() {
             ttsLang={deck.ttsLang}
             flipped={flipped}
             onFlip={flip}
+            audioEnabled={deckAudioEnabled(settings, deck.id)}
           />
         )}
       </div>
@@ -270,12 +322,28 @@ export function ReviewSession() {
                   buttonCount={REVIEW_BUTTONS}
                   preview={preview}
                   onRate={rate}
+                  showIntervals={settings?.showAnswerIntervals !== false}
                 />
               </motion.div>
             )
           )}
         </AnimatePresence>
       </div>
-    </div>
+
+      {/* Inline editor for the current card ("E"), without leaving the session */}
+      {current && (
+        <CardEditorModal
+          open={editOpen}
+          onClose={async () => {
+            setEditOpen(false);
+            const fresh = await repo.getCard(current.id);
+            if (fresh) updateCurrentCard({ front: fresh.front, back: fresh.back });
+          }}
+          deckId={deck.id}
+          card={current}
+          ttsLang={deck.ttsLang}
+        />
+      )}
+    </motion.div>
   );
 }

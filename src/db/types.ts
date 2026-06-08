@@ -100,6 +100,16 @@ export interface AppSettings {
   seededAt: number | null; // first-run seed marker
   /** Per-deck logo: deckId -> preset icon id OR a data: URL (custom image). */
   deckIcons?: Record<string, string>;
+  /** Show the interval preview (e.g. "1 min", "6 d") under each answer button. */
+  showAnswerIntervals?: boolean;
+  /** Show how many reviews remain ("Card X de Y") during a study session. */
+  showRemainingCount?: boolean;
+  /** Card ids that should NOT be auto-pronounced (cardId -> true). Stored here
+   *  (settings jsonb) so no card-table column / migration is needed. */
+  mutedCards?: Record<string, boolean>;
+  /** Per-deck audio/pronunciation switch (deckId -> enabled). Unset = enabled
+   *  (existing decks); new/imported decks store false. No migration needed. */
+  deckAudio?: Record<string, boolean>;
 }
 
 /* --------------------------------------------------------- creation inputs */

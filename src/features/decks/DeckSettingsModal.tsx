@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
+import { Trash2, VolumeX } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
@@ -8,6 +8,7 @@ import { cn } from '../../lib/cn';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
+import { stripAudioHtml } from '../media/media';
 import { DeckIconPicker, defaultIconFor } from './deckIcons';
 import { UNLIMITED_PER_DAY } from '../../db/types';
 import type { Algorithm, Deck } from '../../db/types';
@@ -42,6 +43,8 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
   const [retention, setRetention] = useState(deck.desiredRetention);
   const [ttsLang, setTtsLang] = useState(deck.ttsLang);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [stripping, setStripping] = useState(false);
+  const audioOn = settings?.deckAudio?.[deck.id] !== false;
 
   useEffect(() => {
     if (open) {
@@ -85,6 +88,34 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
     await repo.deleteDeck(deck.id);
     onClose();
     nav('/decks');
+  }
+
+  function setAudio(enabled: boolean) {
+    void repo.saveSettings({
+      deckAudio: { ...(settings?.deckAudio ?? {}), [deck.id]: enabled },
+    });
+  }
+
+  /** Permanently strip attached-audio tokens from every card in this deck. */
+  async function stripAllAudio() {
+    if (stripping) return;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm('Isto vai remover o áudio de todos os cards deste deck. Esta ação não pode ser desfeita. Continuar?')) {
+      return;
+    }
+    setStripping(true);
+    try {
+      const cards = await repo.listCards(deck.id);
+      for (const card of cards) {
+        const front = stripAudioHtml(card.front);
+        const back = stripAudioHtml(card.back);
+        if (front !== card.front || back !== card.back) {
+          await repo.updateCard(card.id, { front, back });
+        }
+      }
+    } finally {
+      setStripping(false);
+    }
   }
 
   return (
@@ -208,7 +239,29 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
           </div>
         )}
 
-        <div className="pt-2 border-t" style={{ borderColor: 'var(--line)' }}>
+        <div className="pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Áudio</p>
+              <p className="text-xs text-muted mt-0.5" style={{ lineHeight: 1.5 }}>
+                Mostra o ícone de pronúncia e toca os áudios deste deck. Vem desligado em decks
+                novos e importados.
+              </p>
+            </div>
+            <Toggle checked={audioOn} onChange={setAudio} />
+          </div>
+          <button
+            type="button"
+            onClick={stripAllAudio}
+            disabled={stripping}
+            className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors mt-3 disabled:opacity-50"
+          >
+            <VolumeX size={15} />
+            {stripping ? 'Removendo…' : 'Remover todos os áudios deste deck'}
+          </button>
+        </div>
+
+        <div className="pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
           {confirmDelete ? (
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted">Excluir o deck e todos os cards?</span>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CardEditorModal } from './CardEditorModal';
 import { makeCard } from '../../db/factories';
 
@@ -19,12 +19,13 @@ describe('CardEditorModal preview', () => {
     fireEvent.click(screen.getByText('Pré-visualizar'));
     expect(await screen.findByText('FrontText')).toBeTruthy();
     expect(screen.getByText('BackText')).toBeTruthy();
-    expect(screen.queryByText('Frente')).toBeNull();
+    // The edit fields fade out (AnimatePresence) before they unmount.
+    await waitFor(() => expect(screen.queryByText('Frente')).toBeNull());
     expect(screen.getByText('Voltar a editar')).toBeTruthy();
 
     // Back to editing -> fields return (unsaved edits preserved by construction).
     fireEvent.click(screen.getByText('Voltar a editar'));
-    expect(screen.getByText('Frente')).toBeTruthy();
+    expect(await screen.findByText('Frente')).toBeTruthy();
     expect(screen.queryByText('Voltar a editar')).toBeNull();
   });
 });

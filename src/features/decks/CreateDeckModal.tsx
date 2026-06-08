@@ -52,9 +52,12 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
           algorithm === 'fsrs' ? retention : settings?.defaultDesiredRetention ?? 0.9,
         buttonCount: 4,
       });
-      if (icon) {
-        await repo.saveSettings({ deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon } });
-      }
+      // New decks start with audio OFF (no speaker / pronunciation until the
+      // user enables it in deck settings).
+      await repo.saveSettings({
+        deckAudio: { ...(settings?.deckAudio ?? {}), [deck.id]: false },
+        ...(icon ? { deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon } } : {}),
+      });
       onClose();
       nav(`/decks/${deck.id}`);
     } finally {

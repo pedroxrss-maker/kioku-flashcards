@@ -16,7 +16,7 @@ export function Features() {
     <section id="recursos" className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28" style={{ scrollMarginTop: 76 }}>
       <Reveal>
         <div className="max-w-2xl">
-          <h2 className="display" style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 600 }}>Recursos</h2>
+          <h2 className="display" style={{ fontSize: 'clamp(31px, 4.8vw, 48px)', fontWeight: 600 }}>Recursos</h2>
           <p className="text-muted mt-3" style={{ lineHeight: 1.6 }}>
             Tudo que você precisa para transformar estudo em memória de longo prazo. Disponível agora.
           </p>

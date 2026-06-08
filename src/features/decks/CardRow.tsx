@@ -4,8 +4,10 @@ import { Panel } from '../../components/Panel';
 import { CardHtml } from '../media/CardHtml';
 import { SpeakerButton } from '../tts/SpeakerButton';
 import { repo } from '../../db/repositories';
+import { useSettings } from '../../db/hooks';
 import { cn } from '../../lib/cn';
 import { stripHtml } from '../../lib/text';
+import { deckAudioEnabled } from '../../lib/deckAudio';
 import type { Card, CardState, Deck } from '../../db/types';
 
 const STATE_LABEL: Record<CardState, string> = {
@@ -29,16 +31,31 @@ interface CardRowProps {
 
 export function CardRow({ card, deck, onEdit }: CardRowProps) {
   const [confirm, setConfirm] = useState(false);
+  const settings = useSettings();
+  const audioOn = deckAudioEnabled(settings, deck.id);
 
   return (
-    <Panel className="p-4 flex gap-3 items-start">
-      <div className="flex-1 min-w-0 grid sm:grid-cols-2 gap-4">
+    <Panel className="p-4 flex gap-3 items-start card-hover-ring">
+      <div
+        className="flex-1 min-w-0 grid sm:grid-cols-2 gap-4 cursor-pointer"
+        onClick={onEdit}
+        role="button"
+        tabIndex={0}
+        title="Editar card"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onEdit();
+        }}
+      >
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="mono text-[10px] text-muted">Frente</span>
-            <SpeakerButton text={stripHtml(card.front)} lang={deck.ttsLang} size={13} />
+            {audioOn && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <SpeakerButton text={stripHtml(card.front)} lang={deck.ttsLang} size={13} />
+              </span>
+            )}
           </div>
-          <CardHtml html={card.front} className="card-content-sm" />
+          <CardHtml html={card.front} className="card-content-sm" audioEnabled={audioOn} />
         </div>
         <div
           className="min-w-0 sm:border-l sm:pl-4"
@@ -46,9 +63,13 @@ export function CardRow({ card, deck, onEdit }: CardRowProps) {
         >
           <div className="flex items-center gap-2 mb-1.5">
             <span className="mono text-[10px] text-muted">Verso</span>
-            <SpeakerButton text={stripHtml(card.back)} lang={deck.ttsLang} size={13} />
+            {audioOn && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <SpeakerButton text={stripHtml(card.back)} lang={deck.ttsLang} size={13} />
+              </span>
+            )}
           </div>
-          <CardHtml html={card.back} className="card-content-sm" />
+          <CardHtml html={card.back} className="card-content-sm" audioEnabled={audioOn} />
         </div>
       </div>
 

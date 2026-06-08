@@ -81,19 +81,21 @@ export function DeckBrowser() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         >
-          {filtered.map((deck) => (
-            <DeckCard key={deck.id} deck={deck} cards={byDeck.get(deck.id) ?? []} />
-          ))}
-
+          {/* Create-deck tile sits FIRST. On mobile it's half a deck's height;
+              on desktop the grid stretches it to match the other blocks. */}
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="hover-lift flex flex-col items-center justify-center gap-2 p-8 text-muted hover:text-fg min-h-[150px] transition-colors"
+            className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[90px] sm:min-h-[150px] transition-colors"
             style={{ border: '1px dashed var(--line-strong)', borderRadius: 'var(--r-md)' }}
           >
             <Plus size={26} />
             <span className="mono text-xs">Criar novo deck</span>
           </button>
+
+          {filtered.map((deck) => (
+            <DeckCard key={deck.id} deck={deck} cards={byDeck.get(deck.id) ?? []} />
+          ))}
         </motion.div>
       </AnimatePresence>
 

@@ -33,6 +33,7 @@ export function Button({
       type={type}
       className={cn(
         VARIANT_CLASS[variant],
+        'whitespace-nowrap',
         size === 'sm' && variant !== 'mega' && 'btn-sm',
         className,
       )}

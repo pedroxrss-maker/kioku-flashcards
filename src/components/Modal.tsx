@@ -74,7 +74,11 @@ export function Modal({
               </h2>
             )}
             {children}
-            {footer && <div className="mt-6 flex justify-end gap-3">{footer}</div>}
+            {footer && (
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+                {footer}
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}

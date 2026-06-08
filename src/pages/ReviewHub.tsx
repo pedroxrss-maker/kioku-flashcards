@@ -36,18 +36,23 @@ export function ReviewHub() {
               accentStrip={deck.color}
               className="flex items-center gap-4 p-4 pr-5"
             >
-              <span
-                className="shrink-0 rounded-full"
-                style={{ width: 12, height: 12, background: deck.color }}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="font-bold truncate">{deck.name}</p>
-                <p className="mono text-[11px] text-muted mt-0.5">
-                  {counts.due > 0
-                    ? `${counts.due} a revisar · ${counts.newCount} novos`
-                    : 'Em dia'}
-                </p>
-              </div>
+              <Link
+                to={`/decks/${deck.id}`}
+                className="flex items-center gap-4 min-w-0 flex-1 group"
+              >
+                <span
+                  className="shrink-0 rounded-full"
+                  style={{ width: 12, height: 12, background: deck.color }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold truncate group-hover:text-accent transition-colors">{deck.name}</p>
+                  <p className="mono text-[11px] text-muted mt-0.5">
+                    {counts.due > 0
+                      ? `${counts.due} a revisar · ${counts.newCount} novos`
+                      : 'Em dia'}
+                  </p>
+                </div>
+              </Link>
               {counts.due > 0 ? (
                 <Link to={`/review/${deck.id}`} className="btn btn-accent btn-sm">
                   <Zap size={15} /> Revisar

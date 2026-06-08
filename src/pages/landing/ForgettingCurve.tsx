@@ -215,7 +215,7 @@ export function ForgettingCurve() {
     <section className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28">
       <Reveal>
         <div className="max-w-2xl mx-auto text-center">
-          <h2 className="display" style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 600 }}>
+          <h2 className="display" style={{ fontSize: 'clamp(31px, 4.8vw, 48px)', fontWeight: 600 }}>
             Por que você esquece
           </h2>
           <p className="text-muted mt-4" style={{ lineHeight: 1.65 }}>

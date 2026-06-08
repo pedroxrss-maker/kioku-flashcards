@@ -33,6 +33,21 @@ function refId(src: string): { id: string; isAudio: boolean } | null {
   return null;
 }
 
+/**
+ * Remove attached-audio chips and leftover `[sound:...]` tokens from card HTML.
+ * Used both to hide audio at render time when a deck has audio disabled and for
+ * the permanent "remove all audio" bulk action.
+ */
+export function stripAudioHtml(html: string): string {
+  if (!html) return '';
+  if (!html.includes('kioku-audio') && !html.includes('<audio') && !/\[sound:/i.test(html)) {
+    return html;
+  }
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  doc.querySelectorAll('.kioku-audio-chip, audio').forEach((el) => el.remove());
+  return doc.body.innerHTML.replace(/\[sound:[^\]]*\]/gi, '').trim();
+}
+
 /** Storage HTML (kioku-media / kioku-audio refs) -> display HTML (object URLs). */
 export async function resolveMediaHtml(html: string): Promise<string> {
   if (!html.includes(MEDIA_PROTOCOL) && !html.includes(AUDIO_PROTOCOL)) return html;

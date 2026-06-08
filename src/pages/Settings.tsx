@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Brain, Check, Database, Palette, SlidersHorizontal, User } from 'lucide-react';
+import { Brain, Check, Database, Eye, Palette, SlidersHorizontal, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { Toggle } from '../components/Toggle';
@@ -239,6 +239,37 @@ export function Settings() {
 
       {/* TTS */}
       <TtsSettings />
+
+      {/* Study session */}
+      <Section icon={<Eye size={16} />} title="Sessão de estudos">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Mostrar intervalos nos botões</p>
+            <p className="text-xs text-muted mt-0.5" style={{ lineHeight: 1.5 }}>
+              Exibe a previsão (ex.: "1 min", "6 d") embaixo de cada botão de resposta.
+            </p>
+          </div>
+          <Toggle
+            checked={settings.showAnswerIntervals !== false}
+            onChange={(v) => repo.saveSettings({ showAnswerIntervals: v })}
+          />
+        </div>
+        <div
+          className="flex items-center justify-between gap-4 mt-4 pt-4 border-t"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Mostrar revisões restantes</p>
+            <p className="text-xs text-muted mt-0.5" style={{ lineHeight: 1.5 }}>
+              Exibe quantos cards faltam ("Card X de Y") durante a sessão de estudos.
+            </p>
+          </div>
+          <Toggle
+            checked={settings.showRemainingCount !== false}
+            onChange={(v) => repo.saveSettings({ showRemainingCount: v })}
+          />
+        </div>
+      </Section>
 
       {/* Appearance */}
       <Section icon={<Palette size={16} />} title="Aparência">

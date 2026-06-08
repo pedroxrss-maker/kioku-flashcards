@@ -153,21 +153,21 @@ function DeckStudyRow({
   const nav = useNavigate();
   return (
     <div
-      className="flex items-center gap-3 p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)]"
+      className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)] min-w-0"
     >
-      <DeckAvatar deck={deck} size={44} />
+      <DeckAvatar deck={deck} size={40} />
 
       <div className="min-w-0 flex-1">
         <p className="font-semibold truncate leading-tight">{deck.name}</p>
-        <div className="flex items-center gap-2 mb-1.5">
-          <p className="text-xs text-muted">{count} cards</p>
+        <div className="flex items-center gap-2 mb-1.5 min-w-0">
+          <p className="text-xs text-muted truncate">{count} cards</p>
           <AlgoBadge algorithm={deck.algorithm} className="shrink-0" />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 flex-1 rounded-full" style={{ background: 'var(--surface-2)' }}>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-1.5 flex-1 min-w-0 rounded-full" style={{ background: 'var(--surface-2)' }}>
             <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 999 }} />
           </div>
-          <span className="text-[11px] text-muted w-9 text-right">{pct}%</span>
+          <span className="text-[11px] text-muted shrink-0 w-9 text-right">{pct}%</span>
         </div>
       </div>
 
@@ -404,10 +404,8 @@ export function Home() {
         <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="#b14cff" />
       </section>
 
-      {/* Main two-column */}
-      <section className="grid lg:grid-cols-3 gap-4 md:gap-5 items-start">
-        {/* LEFT — continue studying */}
-        <Panel className="lg:col-span-2 p-4 md:p-5">
+      {/* Continue studying — full width */}
+      <Panel className="p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="display truncate" style={{ fontSize: 19, fontWeight: 600 }}>
               Continuar estudando
@@ -450,12 +448,12 @@ export function Home() {
               ))}
             </div>
           )}
-        </Panel>
+      </Panel>
 
-        {/* RIGHT column */}
-        <div className="flex flex-col gap-4 md:gap-5">
-          {/* Daily progress */}
-          <Panel className="p-4 md:p-5">
+      {/* Daily progress + recent activity — balanced 2-column row */}
+      <section className="grid lg:grid-cols-2 gap-4 md:gap-5 items-start">
+        {/* Daily progress */}
+        <Panel className="p-4 md:p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="display" style={{ fontSize: 17, fontWeight: 600 }}>
                 Progresso diário
@@ -521,14 +519,13 @@ export function Home() {
               Ver toda atividade
             </Link>
           </Panel>
-        </div>
       </section>
 
       {/* Review heatmap */}
       <Panel className="p-5 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           <CalendarDays size={16} className="text-muted" />
-          <h2 className="mono text-sm text-muted">Mapa de revisões · 16 semanas</h2>
+          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
         </div>
         <Heatmap logs={logs} />
       </Panel>

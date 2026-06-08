@@ -33,7 +33,7 @@ function NeuroBand() {
           <div className="mb-3 flex justify-center">
             <NeuroLockup size={18} onLight />
           </div>
-          <p className="display" style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 600, lineHeight: 1.2, color: '#17171b' }}>
+          <p className="display" style={{ fontSize: 'clamp(24px, 3.6vw, 36px)', fontWeight: 600, lineHeight: 1.2, color: '#17171b' }}>
             O Kioku é o app de flashcards do{' '}
             <span style={{ fontFamily: 'var(--body)', fontWeight: 800 }}>
               neuro<span style={{ color: 'var(--accent)' }}>fluency</span>
@@ -64,7 +64,7 @@ function FinalCta() {
             boxShadow: 'var(--shadow-card)',
           }}
         >
-          <h2 className="display mx-auto" style={{ fontSize: 'clamp(28px, 4.5vw, 48px)', fontWeight: 600, maxWidth: 760, lineHeight: 1.08 }}>
+          <h2 className="display mx-auto" style={{ fontSize: 'clamp(34px, 5.4vw, 58px)', fontWeight: 600, maxWidth: 760, lineHeight: 1.08 }}>
             Comece a vencer o esquecimento hoje<span style={{ color: 'var(--accent)' }}>.</span>
           </h2>
           <div className="mt-7 flex justify-center">
@@ -81,7 +81,7 @@ function FinalCta() {
 
 export function Landing() {
   return (
-    <div style={{ background: 'var(--bg)', color: 'var(--fg)', minHeight: '100vh', overflowX: 'clip' }}>
+    <div className="landing-root" style={{ background: 'var(--bg)', color: 'var(--fg)', minHeight: '100vh', overflowX: 'clip' }}>
       <LandingNav />
       <main>
         <Hero />

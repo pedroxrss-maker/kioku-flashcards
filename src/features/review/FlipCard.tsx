@@ -11,6 +11,8 @@ interface FlipCardProps {
   flipped: boolean;
   onFlip: () => void;
   height?: string;
+  /** When false, no speaker icon and attached audio is hidden. */
+  audioEnabled?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function FlipCard({
   flipped,
   onFlip,
   height = 'clamp(280px, 46vh, 440px)',
+  audioEnabled = true,
 }: FlipCardProps) {
   const [animate, setAnimate] = useState(false);
 
@@ -47,20 +50,24 @@ export function FlipCard({
       >
         {/* Front face */}
         <div className="review-face flip-face">
-          <div className="absolute top-3 right-3">
-            <SpeakerButton text={stripHtml(front)} lang={ttsLang} size={18} onLight />
-          </div>
-          <CardHtml html={front} className="card-content" />
+          {audioEnabled && (
+            <div className="absolute top-3 right-3">
+              <SpeakerButton text={stripHtml(front)} lang={ttsLang} size={18} onLight />
+            </div>
+          )}
+          <CardHtml html={front} className="card-content" audioEnabled={audioEnabled} />
         </div>
         {/* Back face */}
         <div className="review-face flip-face flip-face-back">
-          <div className="absolute top-3 right-3 flex gap-2">
-            <SpeakerButton text={stripHtml(back)} lang={ttsLang} size={18} onLight />
-          </div>
+          {audioEnabled && (
+            <div className="absolute top-3 right-3 flex gap-2">
+              <SpeakerButton text={stripHtml(back)} lang={ttsLang} size={18} onLight />
+            </div>
+          )}
           <div className="w-full max-w-xl">
-            <CardHtml html={front} className="card-content-sm" />
+            <CardHtml html={front} className="card-content-sm" audioEnabled={audioEnabled} />
             <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
-            <CardHtml html={back} className="card-content" />
+            <CardHtml html={back} className="card-content" audioEnabled={audioEnabled} />
           </div>
         </div>
       </div>

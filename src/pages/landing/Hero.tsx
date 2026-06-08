@@ -27,7 +27,7 @@ export function Hero() {
           </Reveal>
 
           <Reveal delay={0.06}>
-            <h1 className="display mt-5" style={{ fontSize: 'clamp(34px, 6vw, 58px)', fontWeight: 600, lineHeight: 1.04 }}>
+            <h1 className="display mt-5" style={{ fontSize: 'clamp(41px, 7.2vw, 70px)', fontWeight: 600, lineHeight: 1.04 }}>
               A cura para o esquecimento<span style={{ color: 'var(--accent)' }}>.</span>
             </h1>
           </Reveal>

@@ -27,8 +27,19 @@ export interface ReviewSession {
   total: number;
   done: boolean;
   startedAt: number;
+  canUndo: boolean;
   flip: () => void;
   rate: (rating: Rating) => void;
+  undo: () => void;
+  /** Patch the current (front-of-queue) card in place, e.g. after an inline edit. */
+  updateCurrentCard: (patch: Partial<Card>) => void;
+}
+
+interface HistoryEntry {
+  prevQueue: Card[]; // the exact queue before the rating (rated card at front)
+  prevCard: Card; // pre-review card, to restore in the DB
+  rating: Rating;
+  logId: string;
 }
 
 /** Drives a full review session for one deck. */
@@ -43,6 +54,8 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
   const schedulerRef = useRef<Scheduler | null>(null);
   const queueRef = useRef<Card[]>([]);
   const cardStartRef = useRef<number>(0);
+  const historyRef = useRef<HistoryEntry[]>([]);
+  const [historyLen, setHistoryLen] = useState(0);
 
   const setQueueSynced = useCallback((next: Card[]) => {
     queueRef.current = next;
@@ -77,6 +90,8 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
       });
       if (!alive) return;
       schedulerRef.current = schedulerForDeck(d);
+      historyRef.current = [];
+      setHistoryLen(0);
       setDeck(d);
       setQueueSynced(q);
       setFlipped(false);
@@ -106,6 +121,9 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
       const now = Date.now();
       const durationMs = Math.max(0, Math.round(performance.now() - cardStartRef.current));
       const { card: updated, log } = s.apply(cur, rating, now, durationMs);
+      // Snapshot the exact pre-rating queue so "U" can restore it verbatim.
+      historyRef.current.push({ prevQueue: queueRef.current, prevCard: cur, rating, logId: log.id });
+      setHistoryLen(historyRef.current.length);
       void repo.saveReview(updated, log);
 
       setCounters((c) => ({ ...c, [rating]: c[rating] + 1, total: c.total + 1 }));
@@ -118,6 +136,32 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
       setQueueSynced(next);
       setFlipped(false);
       cardStartRef.current = performance.now();
+    },
+    [setQueueSynced],
+  );
+
+  /** Undo the last rating: bring the previous card back (even if it graduated),
+   *  restore its pre-review state in the DB and roll back the counters. */
+  const undo = useCallback(() => {
+    const h = historyRef.current.pop();
+    setHistoryLen(historyRef.current.length);
+    if (!h) return;
+    setQueueSynced(h.prevQueue);
+    setCounters((c) => ({
+      ...c,
+      [h.rating]: Math.max(0, c[h.rating] - 1),
+      total: Math.max(0, c.total - 1),
+    }));
+    void repo.undoReview(h.prevCard, h.logId);
+    setFlipped(false);
+    cardStartRef.current = performance.now();
+  }, [setQueueSynced]);
+
+  const updateCurrentCard = useCallback(
+    (patch: Partial<Card>) => {
+      const q = queueRef.current;
+      if (!q.length) return;
+      setQueueSynced([{ ...q[0], ...patch }, ...q.slice(1)]);
     },
     [setQueueSynced],
   );
@@ -137,7 +181,10 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
     total,
     done,
     startedAt,
+    canUndo: historyLen > 0,
     flip,
     rate,
+    undo,
+    updateCurrentCard,
   };
 }

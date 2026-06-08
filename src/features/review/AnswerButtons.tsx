@@ -7,10 +7,12 @@ interface AnswerButtonsProps {
   buttonCount: ButtonCount;
   preview: Record<Rating, RatingPreview>;
   onRate: (rating: Rating) => void;
+  /** Show the interval preview under each button (Settings toggle). */
+  showIntervals?: boolean;
 }
 
 /** The configurable answer-button row, each showing its interval preview. */
-export function AnswerButtons({ buttonCount, preview, onRate }: AnswerButtonsProps) {
+export function AnswerButtons({ buttonCount, preview, onRate, showIntervals = true }: AnswerButtonsProps) {
   const defs = buttonsFor(buttonCount);
   return (
     <div className="flex gap-2 md:gap-3 w-full">
@@ -24,7 +26,9 @@ export function AnswerButtons({ buttonCount, preview, onRate }: AnswerButtonsPro
         >
           <span className="answer-key">{i + 1}</span>
           <span className="answer-label">{b.label}</span>
-          <span className="answer-int">{preview[b.rating].intervalLabel}</span>
+          {showIntervals && (
+            <span className="answer-int">{preview[b.rating].intervalLabel}</span>
+          )}
         </button>
       ))}
     </div>
