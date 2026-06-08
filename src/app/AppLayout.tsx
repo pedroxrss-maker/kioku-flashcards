@@ -80,10 +80,10 @@ export function AppLayout() {
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={loc.pathname}
-                initial={reduce ? false : { opacity: 0, x: 24 }}
+                initial={reduce ? false : { opacity: 0, x: 12 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={reduce ? { opacity: 0 } : { opacity: 0, x: -24 }}
-                transition={{ duration: reduce ? 0 : 0.25, ease: 'easeOut' }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, x: -12 }}
+                transition={{ duration: reduce ? 0 : 0.12, ease: 'easeOut' }}
               >
                 {outlet}
               </motion.div>

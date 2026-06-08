@@ -10,6 +10,8 @@ import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
 import { stripAudioHtml } from '../media/media';
 import { DeckIconPicker, defaultIconFor } from './deckIcons';
+import { deckPathOf, memberDeckIdsForPath } from '../../lib/deckTree';
+import { pushToast } from '../../lib/toast';
 import { UNLIMITED_PER_DAY } from '../../db/types';
 import type { Algorithm, Deck } from '../../db/types';
 
@@ -90,29 +92,52 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
     nav('/decks');
   }
 
-  function setAudio(enabled: boolean) {
-    void repo.saveSettings({
-      deckAudio: { ...(settings?.deckAudio ?? {}), [deck.id]: enabled },
-    });
+  /** Toggle pronunciation/audio for this deck — and, when it's a parent, for all
+   *  of its subdecks too, so silencing a parent really mutes the whole subtree
+   *  (a parent review pronounces each card with its own subdeck's setting). */
+  async function setAudio(enabled: boolean) {
+    const allDecks = await repo.listDecks();
+    const path = deckPathOf(deck, settings?.deckPaths);
+    const memberIds = new Set(memberDeckIdsForPath(path, allDecks, settings?.deckPaths));
+    memberIds.add(deck.id);
+    const deckAudio = { ...(settings?.deckAudio ?? {}) };
+    for (const id of memberIds) deckAudio[id] = enabled;
+    void repo.saveSettings({ deckAudio });
   }
 
-  /** Permanently strip attached-audio tokens from every card in this deck. */
+  /** Permanently strip attached-audio tokens from every card in this deck — and,
+   *  when it's a parent, from every card in its subdecks too (so "todos os
+   *  áudios deste deck" really clears the whole subtree). */
   async function stripAllAudio() {
     if (stripping) return;
     // eslint-disable-next-line no-alert
-    if (!window.confirm('Isto vai remover o áudio de todos os cards deste deck. Esta ação não pode ser desfeita. Continuar?')) {
+    if (!window.confirm('Isto vai remover o áudio de todos os cards deste deck (e dos subdecks). Esta ação não pode ser desfeita. Continuar?')) {
       return;
     }
     setStripping(true);
     try {
-      const cards = await repo.listCards(deck.id);
-      for (const card of cards) {
-        const front = stripAudioHtml(card.front);
-        const back = stripAudioHtml(card.back);
-        if (front !== card.front || back !== card.back) {
-          await repo.updateCard(card.id, { front, back });
+      const allDecks = await repo.listDecks();
+      const path = deckPathOf(deck, settings?.deckPaths);
+      const memberIds = new Set(memberDeckIdsForPath(path, allDecks, settings?.deckPaths));
+      memberIds.add(deck.id); // always include the deck itself
+      let cleaned = 0;
+      for (const did of memberIds) {
+        const cards = await repo.listCards(did);
+        for (const card of cards) {
+          const front = stripAudioHtml(card.front);
+          const back = stripAudioHtml(card.back);
+          if (front !== card.front || back !== card.back) {
+            await repo.updateCard(card.id, { front, back });
+            cleaned += 1;
+          }
         }
       }
+      pushToast(
+        cleaned > 0 ? 'success' : 'info',
+        cleaned > 0
+          ? `Áudio removido de ${cleaned} ${cleaned === 1 ? 'card' : 'cards'}.`
+          : 'Nenhum áudio anexado encontrado neste deck.',
+      );
     } finally {
       setStripping(false);
     }
@@ -242,10 +267,11 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
         <div className="pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-semibold">Áudio</p>
+              <p className="text-sm font-semibold">Pronúncia e áudio</p>
               <p className="text-xs text-muted mt-0.5" style={{ lineHeight: 1.5 }}>
-                Mostra o ícone de pronúncia e toca os áudios deste deck. Vem desligado em decks
-                novos e importados.
+                Liga/desliga a <b>pronúncia automática por voz (TTS)</b> e os áudios anexados
+                deste deck{' '}(e dos subdecks). Desligue aqui para silenciar a voz. Vem desligado
+                em decks novos e importados.
               </p>
             </div>
             <Toggle checked={audioOn} onChange={setAudio} />
@@ -255,9 +281,10 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
             onClick={stripAllAudio}
             disabled={stripping}
             className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors mt-3 disabled:opacity-50"
+            title="Apaga arquivos de áudio anexados aos cards. Não afeta a voz (TTS) — para isso use o botão acima."
           >
             <VolumeX size={15} />
-            {stripping ? 'Removendo…' : 'Remover todos os áudios deste deck'}
+            {stripping ? 'Removendo…' : 'Remover áudios anexados (arquivos)'}
           </button>
         </div>
 

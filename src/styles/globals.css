@@ -834,7 +834,7 @@ button.pill.pill-active:hover {
   }
 }
 .rise {
-  animation: kioku-rise 0.3s ease-out both;
+  animation: kioku-rise 0.18s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
