@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Settings2, Zap } from 'lucide-react';
-import { useCards, useDeckResource } from '../db/hooks';
+import { ArrowLeft, Folder, Play, Plus, Settings2, Zap } from 'lucide-react';
+import { useAllCards, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
 import { CardRow } from '../features/decks/CardRow';
@@ -10,13 +10,23 @@ import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { DeckAvatar } from '../features/decks/deckIcons';
 import { ExportButton } from '../features/importer/ExportButton';
-import { countCards } from '../lib/deckStats';
+import { countCards, groupCardsByDeck } from '../lib/deckStats';
+import {
+  aggregateCounts,
+  buildDeckTree,
+  deckPathOf,
+  groupReviewToken,
+} from '../lib/deckTree';
+import type { DeckTreeNode } from '../lib/deckTree';
 import type { Card } from '../db/types';
 
 export function DeckDetail() {
   const { id } = useParams();
   const { data: deck, loading, error, reload } = useDeckResource(id);
   const cards = useCards(id);
+  const decks = useDecks();
+  const allCards = useAllCards();
+  const settings = useSettings();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -26,6 +36,22 @@ export function DeckDetail() {
     () => countCards(cards, Date.now(), deck),
     [cards, deck],
   );
+
+  // Direct subdecks of this deck (one level down), for parent decks.
+  const subNodes = useMemo<DeckTreeNode[]>(() => {
+    if (!deck) return [];
+    const tree = buildDeckTree(decks, settings?.deckPaths, groupCardsByDeck(allCards));
+    const path = deckPathOf(deck, settings?.deckPaths);
+    const find = (nodes: DeckTreeNode[]): DeckTreeNode | null => {
+      for (const n of nodes) {
+        if (n.path === path) return n;
+        const hit = find(n.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return find(tree)?.children ?? [];
+  }, [deck, decks, allCards, settings?.deckPaths]);
 
   if (loading) {
     return (
@@ -156,6 +182,60 @@ export function DeckDetail() {
           </div>
         </div>
       </section>
+
+      {/* Subdecks (parent decks only) */}
+      {subNodes.length > 0 && (
+        <section>
+          <h2 className="mono text-sm text-muted mb-4">Subdecks · {subNodes.length}</h2>
+          <div className="flex flex-col gap-2">
+            {subNodes.map((n) => {
+              const c = aggregateCounts(n, Date.now());
+              const target = n.deck ? n.deck.id : groupReviewToken(n.path);
+              const accent = n.deck?.color ?? 'var(--accent)';
+              return (
+                <div
+                  key={n.path}
+                  className="flex items-center gap-3 surface p-3 transition-colors hover:bg-[color:var(--surface-2)]"
+                >
+                  {n.deck ? (
+                    <DeckAvatar deck={n.deck} size={36} />
+                  ) : (
+                    <span
+                      className="flex items-center justify-center rounded-[var(--r-sm)] shrink-0"
+                      style={{ width: 36, height: 36, background: 'var(--surface-2)', color: 'var(--muted)' }}
+                    >
+                      <Folder size={18} />
+                    </span>
+                  )}
+                  {n.deck ? (
+                    <Link to={`/decks/${n.deck.id}`} className="min-w-0 flex-1">
+                      <p className="font-semibold truncate leading-tight">{n.name}</p>
+                      <p className="text-xs text-muted truncate">
+                        {c.total} cards
+                        {c.due > 0 && <span style={{ color: accent }}> · {c.due} a revisar</span>}
+                      </p>
+                    </Link>
+                  ) : (
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold truncate leading-tight">{n.name}</p>
+                      <p className="text-xs text-muted truncate">
+                        {c.total} cards
+                        {c.due > 0 && <span style={{ color: accent }}> · {c.due} a revisar</span>}
+                      </p>
+                    </div>
+                  )}
+                  <Link
+                    to={`/review/${encodeURIComponent(target)}`}
+                    className="btn btn-accent btn-sm shrink-0"
+                  >
+                    <Play size={14} /> <span className="hidden sm:inline">Estudar</span>
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Card list */}
       <section>

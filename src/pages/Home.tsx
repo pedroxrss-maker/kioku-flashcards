@@ -29,6 +29,8 @@ import { DeckAvatar } from '../features/decks/deckIcons';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
+import { hasHierarchy } from '../lib/deckTree';
+import { DeckTree } from '../features/decks/DeckTree';
 import { computeStreak } from '../lib/greeting';
 import { dayKey } from '../lib/date';
 import {
@@ -280,6 +282,7 @@ export function Home() {
   );
 
   const mostDue = deckRows.find((r) => r.due > 0) ?? deckRows[0];
+  const hierarchical = hasHierarchy(decks, settings?.deckPaths);
 
   const stats = useMemo(() => {
     const keys = new Set(logs.map((l) => dayKey(l.reviewedAt)));
@@ -424,6 +427,21 @@ export function Home() {
                 <Plus size={16} /> Criar deck
               </button>
             </div>
+          ) : hierarchical ? (
+            /* Nested, collapsible tree when subdecks exist. */
+            <DeckTree
+              decks={decks}
+              cardsByDeck={byDeck}
+              query={query}
+              maxRows={8}
+              onConfig={(d) => setSettingsDeck(d)}
+              onDelete={(d) => {
+                // eslint-disable-next-line no-alert
+                if (window.confirm(`Excluir o deck "${d.name}" e todos os cards?`)) {
+                  void repo.deleteDeck(d.id);
+                }
+              }}
+            />
           ) : (
             <div className="flex flex-col gap-1">
               {filteredRows.slice(0, 5).map((r) => (

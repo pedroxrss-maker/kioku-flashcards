@@ -90,6 +90,8 @@ export function defaultSettings(): AppSettings {
     showRemainingCount: true,
     mutedCards: {},
     deckAudio: {},
+    deckPaths: {},
+    deckTreeCollapsed: [],
   };
 }
 

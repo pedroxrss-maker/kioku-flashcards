@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { decompress } from 'fzstd';
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
+import { leafName } from '../../lib/deckTree';
 import { stripHtml } from '../../lib/text';
 import { mimeFromName } from './mime';
 import { loadSqlJs } from './sqljs';
@@ -148,8 +149,11 @@ function mapScheduling(
 }
 
 export interface ImportResult {
+  /** Primary deck to open from the "Ver deck" button (the largest one). */
   deckId: string;
   deckName: string;
+  /** How many Kioku decks were created (one per non-empty Anki subdeck). */
+  deckCount: number;
   cardCount: number;
   mediaCount: number;
   warnings: string[];
@@ -271,27 +275,32 @@ export async function importApkg(file: File): Promise<ImportResult> {
       /* keep now */
     }
 
-    // ---- deck name from col.decks JSON (fallback: filename) -----------------
-    let deckName =
-      file.name.replace(/\.apkg$/i, '').replace(/\.colpkg$/i, '') || 'Deck importado';
+    // ---- Anki deck names (id -> full "::"-path name) ------------------------
+    // Each card's `did` points to an Anki deck; col.decks maps those ids to full
+    // hierarchical names. One Kioku deck is created per non-empty Anki (sub)deck,
+    // carrying its full path so the UI can nest it. Parent decks with no cards of
+    // their own become grouping nodes in the tree (derived from the paths).
+    const deckNameById = new Map<string, string>();
     try {
       const raw = db.exec('SELECT decks FROM col LIMIT 1')[0]?.values[0]?.[0];
       if (typeof raw === 'string') {
-        const names = Object.values(JSON.parse(raw) as Record<string, { name?: string }>)
-          .map((d) => d.name)
-          .filter((n): n is string => !!n && n !== 'Default');
-        if (names.length === 1) deckName = names[0];
+        const obj = JSON.parse(raw) as Record<string, { name?: string }>;
+        for (const [id, d] of Object.entries(obj)) {
+          if (d?.name) deckNameById.set(id, d.name);
+        }
       }
     } catch {
-      /* keep filename fallback */
+      /* fall back to the filename below */
     }
+    const fallbackName =
+      file.name.replace(/\.apkg$/i, '').replace(/\.colpkg$/i, '') || 'Deck importado';
 
-    // ---- cards (joined to their note) with scheduling -----------------------
+    // ---- cards (joined to their note + Anki deck id) with scheduling --------
     let cardRows: unknown[][] = [];
     try {
       cardRows =
         db.exec(
-          'SELECT c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data, n.flds ' +
+          'SELECT c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data, n.flds, c.did ' +
             'FROM cards c JOIN notes n ON c.nid = n.id',
         )[0]?.values ?? [];
     } catch {
@@ -300,75 +309,114 @@ export async function importApkg(file: File): Promise<ImportResult> {
     if (cardRows.length === 0) {
       // No cards table (or query failed) — import notes as fresh "new" cards.
       const noteVals = db.exec('SELECT flds FROM notes')[0]?.values ?? [];
-      cardRows = noteVals.map((v) => [0, 0, 0, 0, 0, 0, 0, '', v[0]]);
+      cardRows = noteVals.map((v) => [0, 0, 0, 0, 0, 0, 0, '', v[0], '']);
     }
     if (cardRows.length === 0) throw new Error('Nenhuma nota encontrada no arquivo.');
 
-    const settings = await repo.getSettings();
-    const color = DECK_COLORS[Math.floor(Math.random() * DECK_COLORS.length)];
-    const deck = await repo.createDeck({
-      name: deckName,
-      color,
-      category: 'Importado',
-      algorithm: settings.defaultAlgorithm,
-      newPerDay: settings.newPerDay,
-      reviewsPerDay: settings.reviewsPerDay,
-      desiredRetention: settings.defaultDesiredRetention,
-      buttonCount: 4,
-    });
-
-    // Imported decks start with audio OFF (no speaker / pronunciation).
-    await repo.saveSettings({ deckAudio: { ...(settings.deckAudio ?? {}), [deck.id]: false } });
-
-    const cards: Card[] = [];
+    // Group rows by their Anki deck id so each (sub)deck becomes its own deck.
+    const rowsByDid = new Map<string, unknown[][]>();
     for (const row of cardRows) {
-      const flds = String(row[8] ?? '');
-      const fields = flds.split(FIELD_SEP).map((f) => cleanAnkiMarkup(f));
-      const front = cleanAnkiMarkup(await rewriteMedia(fields[0] ?? ''));
-      const rest = fields.slice(1).filter((f) => f.trim().length > 0);
-      const back = cleanAnkiMarkup(await rewriteMedia(rest.join('<hr>')));
-      if (!stripHtml(front) && !stripHtml(back)) continue;
-
-      const sched = mapScheduling(
-        Number(row[0] ?? 0),
-        Number(row[1] ?? 0),
-        Number(row[2] ?? 0),
-        Number(row[3] ?? 0),
-        Number(row[4] ?? 0),
-        Number(row[5] ?? 0),
-        Number(row[6] ?? 0),
-        String(row[7] ?? ''),
-        colCrtMs,
-        nowMs,
-      );
-      const base = makeCard({ deckId: deck.id, front, back });
-      cards.push({
-        ...base,
-        state: sched.state,
-        due: sched.due,
-        sm2: sched.sm2,
-        fsrs: sched.fsrs ?? base.fsrs,
-      });
+      const did = String(row[9] ?? '');
+      const arr = rowsByDid.get(did);
+      if (arr) arr.push(row);
+      else rowsByDid.set(did, [row]);
     }
 
-    // TEMP (verification): mapped scheduling for the first few cards. Remove
-    // once the dates/intervals look right.
-    cards.slice(0, 3).forEach((c, i) => {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[apkg import] card ${i}: state=${c.state} due=${new Date(c.due).toISOString()} ` +
-          `ivl=${c.sm2.intervalDays}d ease=${c.sm2.ease} reps=${c.sm2.reps} lapses=${c.sm2.lapses}`,
-      );
-    });
+    const settings = await repo.getSettings();
+    const created: Array<{ id: string; path: string; cards: Card[] }> = [];
+    let colorIdx = Math.floor(Math.random() * DECK_COLORS.length);
+    let mappedFirst = false;
 
-    if (cards.length === 0) {
-      await repo.deleteDeck(deck.id);
+    for (const [did, rows] of rowsByDid) {
+      // Build the card content first; only create a deck if it has real cards.
+      const prepared: Array<{ front: string; back: string; sched: MappedScheduling }> = [];
+      for (const row of rows) {
+        const flds = String(row[8] ?? '');
+        const fields = flds.split(FIELD_SEP).map((f) => cleanAnkiMarkup(f));
+        const front = cleanAnkiMarkup(await rewriteMedia(fields[0] ?? ''));
+        const rest = fields.slice(1).filter((f) => f.trim().length > 0);
+        const back = cleanAnkiMarkup(await rewriteMedia(rest.join('<hr>')));
+        if (!stripHtml(front) && !stripHtml(back)) continue;
+        const sched = mapScheduling(
+          Number(row[0] ?? 0),
+          Number(row[1] ?? 0),
+          Number(row[2] ?? 0),
+          Number(row[3] ?? 0),
+          Number(row[4] ?? 0),
+          Number(row[5] ?? 0),
+          Number(row[6] ?? 0),
+          String(row[7] ?? ''),
+          colCrtMs,
+          nowMs,
+        );
+        prepared.push({ front, back, sched });
+      }
+      if (prepared.length === 0) continue; // empty Anki (sub)deck -> grouping node only
+
+      const fullName = deckNameById.get(did) || fallbackName;
+      const color = DECK_COLORS[colorIdx++ % DECK_COLORS.length];
+      const deck = await repo.createDeck({
+        name: leafName(fullName), // clean leaf label; full path lives in settings
+        color,
+        category: 'Importado',
+        algorithm: settings.defaultAlgorithm,
+        newPerDay: settings.newPerDay,
+        reviewsPerDay: settings.reviewsPerDay,
+        desiredRetention: settings.defaultDesiredRetention,
+        buttonCount: 4,
+      });
+      const cards = prepared.map((p) => {
+        const base = makeCard({ deckId: deck.id, front: p.front, back: p.back });
+        return {
+          ...base,
+          state: p.sched.state,
+          due: p.sched.due,
+          sm2: p.sched.sm2,
+          fsrs: p.sched.fsrs ?? base.fsrs,
+        };
+      });
+
+      // TEMP (verification): scheduling of the first imported card overall.
+      if (!mappedFirst && cards[0]) {
+        mappedFirst = true;
+        const c = cards[0];
+        // eslint-disable-next-line no-console
+        console.log(
+          `[apkg import] "${fullName}" first card: state=${c.state} ` +
+            `due=${new Date(c.due).toISOString()} ivl=${c.sm2.intervalDays}d ease=${c.sm2.ease}`,
+        );
+      }
+
+      created.push({ id: deck.id, path: fullName, cards });
+    }
+
+    if (created.length === 0) {
       throw new Error('As notas não tinham conteúdo de texto reconhecível.');
     }
 
-    await repo.bulkInsertCards(cards);
+    await repo.bulkInsertCards(created.flatMap((d) => d.cards));
 
-    return { deckId: deck.id, deckName, cardCount: cards.length, mediaCount, warnings };
+    // Persist the hierarchical paths + start imported decks with audio OFF, in a
+    // single settings write (deckPaths drives the nested tree at runtime).
+    const deckPaths = { ...(settings.deckPaths ?? {}) };
+    const deckAudio = { ...(settings.deckAudio ?? {}) };
+    for (const d of created) {
+      deckPaths[d.id] = d.path;
+      deckAudio[d.id] = false;
+    }
+    await repo.saveSettings({ deckPaths, deckAudio });
+
+    const totalCards = created.reduce((n, d) => n + d.cards.length, 0);
+    // Open the biggest deck from the success dialog.
+    const primary = created.reduce((a, b) => (b.cards.length > a.cards.length ? b : a));
+    return {
+      deckId: primary.id,
+      deckName: leafName(primary.path),
+      deckCount: created.length,
+      cardCount: totalCards,
+      mediaCount,
+      warnings,
+    };
   } finally {
     db.close();
   }

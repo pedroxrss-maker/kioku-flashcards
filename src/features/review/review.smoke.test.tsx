@@ -81,4 +81,28 @@ describe('Review session (integration)', () => {
     await screen.findByText(/Mostrar resposta/);
     expect(container.querySelector('.flip-inner')?.classList.contains('is-flipped')).toBe(false);
   });
+
+  it('studying a parent deck reviews the union of its descendant subdecks', async () => {
+    // Parent "Inglês" (1 card) with child "Inglês::Gramática" (1 card).
+    const parent = await repo.createDeck({ name: 'Inglês', color: '#ff3b1f', algorithm: 'sm2', buttonCount: 4 });
+    const child = await repo.createDeck({ name: 'Gramática', color: '#1f6dff', algorithm: 'sm2', buttonCount: 4 });
+    await repo.saveSettings({
+      deckPaths: { [parent.id]: 'Inglês', [child.id]: 'Inglês::Gramática' },
+    });
+    await repo.createCard({ deckId: parent.id, front: 'PAI', back: 'a' });
+    await repo.createCard({ deckId: child.id, front: 'FILHO', back: 'b' });
+
+    render(
+      <MemoryRouter initialEntries={[`/review/${parent.id}`]}>
+        <Routes>
+          <Route path="/review/:deckId" element={<ReviewSession />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // The session header counts BOTH cards (parent + descendant) = "de 2".
+    expect(await screen.findByText(/de 2/)).toBeTruthy();
+    // Header still shows the launched parent deck's name.
+    expect(screen.getAllByText('Inglês').length).toBeGreaterThan(0);
+  });
 });

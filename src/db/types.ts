@@ -110,6 +110,14 @@ export interface AppSettings {
   /** Per-deck audio/pronunciation switch (deckId -> enabled). Unset = enabled
    *  (existing decks); new/imported decks store false. No migration needed. */
   deckAudio?: Record<string, boolean>;
+  /** Hierarchical deck paths (deckId -> full "A::B::C" path), used to nest decks
+   *  into a tree at runtime. Unset / no "::" = a flat top-level deck (default).
+   *  Stored here (settings jsonb) so no decks-table migration is needed; the
+   *  deck's own `name` stays the clean leaf label. */
+  deckPaths?: Record<string, string>;
+  /** Collapsed nodes in the deck tree (full paths), persisted so expand/collapse
+   *  survives reload. A path absent from this list renders expanded. */
+  deckTreeCollapsed?: string[];
 }
 
 /* --------------------------------------------------------- creation inputs */

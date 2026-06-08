@@ -28,12 +28,17 @@ export function ReviewSession() {
   const nav = useNavigate();
   const settings = useSettings();
   const session = useReviewSession(deckId);
-  const { deck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
+  const { deck, currentDeck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
   const [editOpen, setEditOpen] = useState(false);
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
 
-  const exitTo = deckId ? `/decks/${deckId}` : '/';
+  // The current card's own deck drives audio + TTS language (in a parent session
+  // each subdeck card keeps its own settings); falls back to the display deck.
+  const audioDeck = currentDeck ?? deck;
+  // Grouping-parent sessions use a synthetic "group:" id that isn't a real deck
+  // route — return to the deck list instead of a non-existent detail page.
+  const exitTo = deckId && !deckId.startsWith('group:') ? `/decks/${deckId}` : '/decks';
 
   // Keyboard: space/enter flip; 1..N rate after reveal; Esc exit.
   useEffect(() => {
@@ -86,8 +91,8 @@ export function ReviewSession() {
   // to Web Speech. The audio chip's object URL resolves asynchronously, so for
   // audio cards we poll briefly until the <audio> element is in the DOM.
   useEffect(() => {
-    if (!current || !deck) return;
-    if (!deckAudioEnabled(settings, deck.id)) return; // deck has audio disabled
+    if (!current || !audioDeck) return;
+    if (!deckAudioEnabled(settings, audioDeck.id)) return; // deck has audio disabled
     if (!settings?.tts.autoPronounceFront) return;
     if (settings.mutedCards?.[current.id]) return; // card opted out of pronunciation
 
@@ -98,7 +103,7 @@ export function ReviewSession() {
         const text = stripHtml(current.front);
         if (text) {
           void tts.speak(text, {
-            lang: deck.ttsLang,
+            lang: audioDeck.ttsLang,
             voiceURI: settings.tts.voiceURI,
             rate: settings.tts.rate,
           });
@@ -286,10 +291,10 @@ export function ReviewSession() {
             key={`${current.id}:${counters.total}`}
             front={current.front}
             back={current.back}
-            ttsLang={deck.ttsLang}
+            ttsLang={(audioDeck ?? deck).ttsLang}
             flipped={flipped}
             onFlip={flip}
-            audioEnabled={deckAudioEnabled(settings, deck.id)}
+            audioEnabled={deckAudioEnabled(settings, (audioDeck ?? deck).id)}
           />
         )}
       </div>
@@ -339,9 +344,9 @@ export function ReviewSession() {
             const fresh = await repo.getCard(current.id);
             if (fresh) updateCurrentCard({ front: fresh.front, back: fresh.back });
           }}
-          deckId={deck.id}
+          deckId={current.deckId}
           card={current}
-          ttsLang={deck.ttsLang}
+          ttsLang={(audioDeck ?? deck).ttsLang}
         />
       )}
     </motion.div>

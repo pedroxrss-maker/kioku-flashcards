@@ -82,7 +82,15 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
         {result && (
           <div className="text-sm">
             <p>
-              Deck <b>{result.deckName}</b> importado com{' '}
+              {result.deckCount > 1 ? (
+                <>
+                  <b>{result.deckCount}</b> decks importados com{' '}
+                </>
+              ) : (
+                <>
+                  Deck <b>{result.deckName}</b> importado com{' '}
+                </>
+              )}
               <b>{result.cardCount}</b> cards
               {result.mediaCount > 0 && <> e <b>{result.mediaCount}</b> mídias</>}.
             </p>
