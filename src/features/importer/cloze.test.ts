@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clozeKeepActive, clozeNumbers, renderClozeText } from './apkg-import';
+import { clozeNumbers, renderClozeText } from './apkg-import';
+import { clozeKeepActive } from '../../lib/cloze';
 
 describe('cloze rendering', () => {
   it('lists cloze numbers sorted and deduped', () => {

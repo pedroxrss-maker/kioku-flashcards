@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, ReactNode } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { Bold, Braces, Image as ImageIcon, Italic, List, Underline, Volume2 } from 'lucide-react';
 import {
   audioChipHtml,
@@ -20,6 +20,14 @@ interface RichTextFieldProps {
   ttsLang?: string;
   /** Show the "Cloze" button (lights up when text is selected). */
   showCloze?: boolean;
+  /** Tab (without Shift) jumps to the next field instead of the toolbar. */
+  onTab?: () => void;
+  /** Ctrl/Cmd+Enter submits (e.g. adds the card). */
+  onCtrlEnter?: () => void;
+}
+
+export interface RichTextFieldHandle {
+  focus: () => void;
 }
 
 function ToolbarBtn({
@@ -56,15 +64,13 @@ function ToolbarBtn({
 }
 
 /** contentEditable rich-text field with a formatting + image + audio toolbar. */
-export function RichTextField({
-  label,
-  valueHtml,
-  onChange,
-  autoFocus,
-  ttsLang = 'en-US',
-  showCloze = false,
-}: RichTextFieldProps) {
+export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>(
+  function RichTextField(
+    { label, valueHtml, onChange, autoFocus, ttsLang = 'en-US', showCloze = false, onTab, onCtrlEnter },
+    fwdRef,
+  ) {
   const ref = useRef<HTMLDivElement>(null);
+  useImperativeHandle(fwdRef, () => ({ focus: () => ref.current?.focus() }), []);
   const imageRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const [audioMenu, setAudioMenu] = useState(false);
@@ -237,6 +243,15 @@ export function RichTextField({
         contentEditable
         suppressContentEditableWarning
         onInput={emit}
+        onKeyDown={(e: ReactKeyboardEvent<HTMLDivElement>) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onCtrlEnter) {
+            e.preventDefault();
+            onCtrlEnter();
+          } else if (e.key === 'Tab' && !e.shiftKey && onTab) {
+            e.preventDefault();
+            onTab();
+          }
+        }}
         role="textbox"
         aria-multiline
         aria-label={label}
@@ -255,4 +270,5 @@ export function RichTextField({
       />
     </div>
   );
-}
+  },
+);

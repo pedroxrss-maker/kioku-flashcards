@@ -6,29 +6,40 @@ import { SpeakerButton } from '../tts/SpeakerButton';
 import { stripTypeInMark, normalizeAnswer } from '../../lib/cardType';
 import { stripHtml } from '../../lib/text';
 import { cn } from '../../lib/cn';
+import type { Rating } from '../../db/types';
 
 interface TypeInCardProps {
   front: string;
   back: string;
   ttsLang: string;
-  /** Whether the answer has been revealed/checked. */
+  /** Whether the answer is revealed (drives the grade buttons in the parent). */
   revealed: boolean;
+  /** Reveal the answer (first Enter). */
   onReveal: () => void;
+  /** Grade the card and advance (Enter auto-grades; 1–4 grade manually). */
+  onResolve: (rating: Rating) => void;
   height?: string;
   audioEnabled?: boolean;
 }
 
 /**
- * "Type in the answer" review card. The user types the answer into an input and
- * presses Enter (or "Mostrar resposta") to check it; the expected answer is then
- * revealed with a correct/incorrect indicator and their typed text for compare.
+ * "Type in the answer" card:
+ *   - Type the answer; pressing Enter at any point ALWAYS reveals the answer
+ *     first (with a correct/incorrect indicator), which surfaces the
+ *     again/hard/good/easy buttons.
+ *   - Once revealed, Enter advances (auto-graded: correct → "good", wrong →
+ *     "again"); 1–4 grade manually; or click a grade button.
+ * The input keeps focus throughout, so the global review shortcuts never fire
+ * here — this card owns its keyboard entirely.
  */
+const KEY_RATINGS: Rating[] = ['again', 'hard', 'good', 'easy'];
 export function TypeInCard({
   front,
   back,
   ttsLang,
   revealed,
   onReveal,
+  onResolve,
   height = 'clamp(280px, 46vh, 440px)',
   audioEnabled = true,
 }: TypeInCardProps) {
@@ -37,18 +48,33 @@ export function TypeInCard({
   const [typed, setTyped] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus the input when a fresh card appears (component is remounted per card).
+  // Keep the input focused so it owns Enter on every fresh card.
   useEffect(() => {
     const id = window.setTimeout(() => inputRef.current?.focus(), 60);
     return () => window.clearTimeout(id);
   }, []);
 
-  // Once revealed, release focus so the global keys can rate the card.
-  useEffect(() => {
-    if (revealed) inputRef.current?.blur();
-  }, [revealed]);
+  const correct = normalizeAnswer(typed) === normalizeAnswer(expected);
 
-  const correct = revealed && normalizeAnswer(typed) === normalizeAnswer(expected);
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // First Enter reveals; once revealed, Enter is the "Bom" (good) shortcut.
+      // It is a fixed shortcut — never auto-graded by correctness — so it can't
+      // silently mark a card "again".
+      if (!revealed) onReveal();
+      else onResolve('good');
+      return;
+    }
+    // After revealing, 1–4 grade the card manually.
+    if (revealed) {
+      const n = Number(e.key);
+      if (n >= 1 && n <= 4) {
+        e.preventDefault();
+        onResolve(KEY_RATINGS[n - 1]);
+      }
+    }
+  }
 
   return (
     <div className="flip-scene w-full max-w-2xl">
@@ -64,14 +90,9 @@ export function TypeInCard({
           <input
             ref={inputRef}
             value={typed}
-            disabled={revealed}
+            readOnly={revealed}
             onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !revealed) {
-                e.preventDefault();
-                onReveal();
-              }
-            }}
+            onKeyDown={onKeyDown}
             placeholder="Digite a resposta e pressione Enter…"
             className="typein-input"
             aria-label="Resposta"
@@ -88,20 +109,17 @@ export function TypeInCard({
                 style={{ overflow: 'hidden' }}
               >
                 <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
-                <div
-                  className={cn('typein-result', correct ? 'typein-ok' : 'typein-bad')}
-                >
+                <div className={cn('typein-result', correct ? 'typein-ok' : 'typein-bad')}>
                   {correct ? <Check size={16} /> : <X size={16} />}
                   <span>{correct ? 'Correto!' : 'Resposta esperada:'}</span>
                 </div>
-                {!correct && (
-                  <p className="typein-expected">{expected}</p>
-                )}
+                <p className="typein-expected">{expected}</p>
                 {!correct && typed.trim() && (
                   <p className="typein-yours">
                     Você digitou: <span>{typed}</span>
                   </p>
                 )}
+                <p className="typein-hint">Enter = Bom · 1–4 para avaliar</p>
               </motion.div>
             )}
           </AnimatePresence>

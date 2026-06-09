@@ -8,6 +8,7 @@ import { buttonsFor } from '../features/review/buttons';
 import { FlipCard } from '../features/review/FlipCard';
 import { ClozeCard } from '../features/review/ClozeCard';
 import { TypeInCard } from '../features/review/TypeInCard';
+import { Confetti } from '../features/review/Confetti';
 import { cardTypeOf } from '../lib/cardType';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { useSettings } from '../db/hooks';
@@ -39,6 +40,9 @@ export function ReviewSession() {
   // The current card's own deck drives audio + TTS language (in a parent session
   // each subdeck card keeps its own settings); falls back to the display deck.
   const audioDeck = currentDeck ?? deck;
+  // Type-in cards own their UI (input + Enter), so the global reveal/grade bar is
+  // hidden for them.
+  const isTypeIn = !!current && cardTypeOf(current.front) === 'typein';
   // Grouping-parent sessions use a synthetic "group:" id that isn't a real deck
   // route — return to the deck list instead of a non-existent detail page.
   const exitTo = deckId && !deckId.startsWith('group:') ? `/decks/${deckId}` : '/decks';
@@ -63,9 +67,9 @@ export function ReviewSession() {
       if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) {
         return;
       }
-      // "U" undoes the last rating and brings the previous card back, even after
-      // it was reviewed (and even on the completion screen).
-      if (e.key === 'u' || e.key === 'U') {
+      // "U" or Ctrl/Cmd+Z undoes the last rating and brings the previous card
+      // back, even after it was reviewed (and even on the completion screen).
+      if (e.key === 'u' || e.key === 'U' || ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z'))) {
         e.preventDefault();
         undo();
         return;
@@ -77,6 +81,9 @@ export function ReviewSession() {
         setEditOpen(true);
         return;
       }
+      // Type-in cards own their keyboard (the focused input handles Enter); the
+      // global flip/rate shortcuts must not reveal or rate them.
+      if (cardTypeOf(current.front) === 'typein') return;
       if (!flipped) {
         if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
@@ -179,6 +186,7 @@ export function ReviewSession() {
       : 0;
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-5 rise">
+        {reviewed > 0 && <Confetti />}
         <div className="text-center">
           <Check size={40} className="mx-auto text-accent-green mb-3" style={{ color: 'var(--accent-green)' }} />
           <h1 className="display text-3xl">
@@ -343,6 +351,7 @@ export function ReviewSession() {
                       ttsLang={ttsL}
                       revealed={flipped}
                       onReveal={flip}
+                      onResolve={rate}
                       audioEnabled={audioOn}
                     />
                   );
@@ -365,6 +374,20 @@ export function ReviewSession() {
 
       {/* Bottom */}
       <div className="px-4 md:px-6 pb-6 pt-2 shrink-0 w-full max-w-2xl mx-auto">
+        {isTypeIn ? (
+          flipped && preview ? (
+            <AnswerButtons
+              buttonCount={REVIEW_BUTTONS}
+              preview={preview}
+              onRate={rate}
+              showIntervals={settings?.showAnswerIntervals !== false}
+            />
+          ) : (
+            <p className="mono text-[11px] text-muted text-center py-3">
+              Digite a resposta e pressione Enter
+            </p>
+          )
+        ) : (
         <AnimatePresence mode="wait" initial={false}>
           {!flipped ? (
             <motion.button
@@ -397,6 +420,7 @@ export function ReviewSession() {
             )
           )}
         </AnimatePresence>
+        )}
       </div>
 
       {/* Inline editor for the current card ("E"), without leaving the session */}

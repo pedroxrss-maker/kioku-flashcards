@@ -645,6 +645,12 @@ button.pill.pill-active:hover {
   text-decoration: line-through;
   color: var(--accent);
 }
+.typein-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #9a9a96;
+  font-family: var(--mono);
+}
 
 /* ----------------------------------------------------- review answer btns - */
 .answer-btn {

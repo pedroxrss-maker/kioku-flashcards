@@ -4,6 +4,7 @@ import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
 import { leafName } from '../../lib/deckTree';
 import { markTypeIn } from '../../lib/cardType';
+import { clozeKeepActive } from '../../lib/cloze';
 import { stripHtml } from '../../lib/text';
 import { mimeFromName } from './mime';
 import { loadSqlJs } from './sqljs';
@@ -169,18 +170,6 @@ export function renderClozeText(text: string, active: number, isAnswer: boolean)
   });
 }
 
-/**
- * Prepare a cloze card's stored front: keep ONLY the active cloze's marker
- * (so the review screen can reveal it in place) and reveal every other cloze as
- * plain text. Runtime rendering then blanks/fades just the active word.
- */
-export function clozeKeepActive(text: string, active: number): string {
-  return text.replace(/\{\{c(\d+)::(.*?)\}\}/gs, (full, n: string, inner: string) => {
-    if (Number(n) === active) return full; // keep the active marker verbatim
-    const sep = inner.indexOf('::');
-    return sep >= 0 ? inner.slice(0, sep) : inner; // reveal the others
-  });
-}
 
 interface MappedScheduling {
   state: CardState;

@@ -22,6 +22,8 @@ export interface KiokuRepository {
   createDeck(input: DeckInput): Promise<Deck>;
   updateDeck(id: string, patch: Partial<Deck>): Promise<void>;
   deleteDeck(id: string): Promise<void>;
+  /** Reset all scheduling in a deck: every card back to "new", history cleared. */
+  resetDeck(id: string): Promise<void>;
 
   // cards
   listCards(deckId: string): Promise<Card[]>;

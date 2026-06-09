@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Flame } from 'lucide-react';
 import { buildMonth, buildYear, dailyAverage, monthLabels } from './compute';
@@ -266,8 +267,9 @@ export function Heatmap({ logs }: HeatmapProps) {
         </div>
       </div>
 
-      {/* Hover tooltip — date + cards reviewed that day. */}
-      {tip && (
+      {/* Hover tooltip — date + cards reviewed that day. Portaled to <body> so
+          it anchors to the hovered cell regardless of ancestor transforms. */}
+      {tip && createPortal(
         <div
           role="tooltip"
           style={{
@@ -301,7 +303,8 @@ export function Heatmap({ logs }: HeatmapProps) {
               Nenhuma revisão · {cap(fmtFull.format(new Date(tip.date)))}
             </span>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

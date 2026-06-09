@@ -18,18 +18,22 @@ function reviewCard(overrides: Partial<Card['sm2']>): Card {
 describe('SM-2 adapter', () => {
   const sched = makeSm2Scheduler(DEFAULT_SM2);
 
-  it('a new card rated good through both learning steps reaches review @ interval 1', () => {
+  it('a new card rated good graduates to review in one pass (single learning step)', () => {
     const fresh = makeCard({ deckId: 'deck-1', front: 'a', back: 'b' });
 
-    // First good -> still learning, advance to step 1.
-    const first = sched.apply(fresh, 'good', NOW, 1000).card;
-    expect(first.state).toBe('learning');
-    expect(first.sm2.step).toBe(1);
+    // One good -> straight to review @ the 1-day graduating interval (no in-session
+    // re-show), so a deck of N new cards never inflates past N "good" reviews.
+    const out = sched.apply(fresh, 'good', NOW, 1000).card;
+    expect(out.state).toBe('review');
+    expect(out.sm2.intervalDays).toBe(1);
+  });
 
-    // Second good -> graduates to review with the graduating interval (1 day).
-    const second = sched.apply(first, 'good', NOW, 1000).card;
-    expect(second.state).toBe('review');
-    expect(second.sm2.intervalDays).toBe(1);
+  it('a new card rated again relearns, then one good graduates it', () => {
+    const fresh = makeCard({ deckId: 'deck-1', front: 'a', back: 'b' });
+    const lapsed = sched.apply(fresh, 'again', NOW, 1000).card;
+    expect(lapsed.state).toBe('learning');
+    const graduated = sched.apply(lapsed, 'good', NOW, 1000).card;
+    expect(graduated.state).toBe('review');
   });
 
   it('a fresh card rated easy jumps straight to review @ interval 4', () => {

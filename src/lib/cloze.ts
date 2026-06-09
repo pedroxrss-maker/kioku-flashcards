@@ -18,6 +18,20 @@ export function clozeNumbers(text: string): number[] {
   return [...set].sort((a, b) => a - b);
 }
 
+/**
+ * Prepare one cloze card's stored front: keep ONLY the active cloze number's
+ * marker (revealed in place at review) and reveal every other cloze as plain
+ * text. A note with c1 + c2 produces two cards (active 1, then active 2);
+ * repeating the same number blanks both of those words in a single card.
+ */
+export function clozeKeepActive(text: string, active: number): string {
+  return text.replace(/\{\{c(\d+)::(.*?)\}\}/gs, (full, n: string, inner: string) => {
+    if (Number(n) === active) return full; // keep the active marker verbatim
+    const sep = inner.indexOf('::');
+    return sep >= 0 ? inner.slice(0, sep) : inner; // reveal the others
+  });
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')

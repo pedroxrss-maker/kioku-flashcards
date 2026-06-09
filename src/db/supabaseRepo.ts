@@ -15,7 +15,7 @@
  */
 import { supabase } from '../lib/supabase';
 import { db } from './db';
-import { defaultSettings, makeCard, makeDeck } from './factories';
+import { defaultSettings, makeCard, makeDeck, newFsrsFields, newSm2Fields } from './factories';
 import { getQueryData, invalidate, setQueryData } from './store';
 import { pushToast } from '../lib/toast';
 import type { KiokuRepository } from './repositories';
@@ -253,6 +253,23 @@ export class SupabaseRepository implements KiokuRepository {
     await del('review_logs', 'deck_id');
     await del('cards', 'deck_id');
     await del('decks', 'id');
+    invalidate();
+  }
+  async resetDeck(id: string): Promise<void> {
+    const now = Date.now();
+    // Every card becomes "new" with fresh SM-2/FSRS memory state…
+    const row = {
+      state: 'new' as CardState,
+      due: toIso(now),
+      sm2: newSm2Fields(),
+      fsrs: newFsrsFields(),
+      updated_at: toIso(now),
+    };
+    const cardRes = await supabase.from('cards').update(row).eq('deck_id', id);
+    if (cardRes.error) writeFail(cardRes.error, 'Não foi possível reiniciar o deck. Tente novamente.');
+    // …and the review history for this deck is cleared (daily counts + stats).
+    const logRes = await supabase.from('review_logs').delete().eq('deck_id', id);
+    if (logRes.error) writeFail(logRes.error, 'Não foi possível reiniciar o deck. Tente novamente.');
     invalidate();
   }
 

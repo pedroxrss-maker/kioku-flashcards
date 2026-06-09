@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Eye, Pencil, Volume2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
 import { RichTextField } from './RichTextField';
+import type { RichTextFieldHandle } from './RichTextField';
 import { CardHtml } from '../media/CardHtml';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
-import { buildClozeHtml, isClozeHtml } from '../../lib/cloze';
+import { buildClozeHtml, clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
 import { cardTypeOf, markTypeIn, stripTypeInMark } from '../../lib/cardType';
+import { pushToast } from '../../lib/toast';
 import type { CardType } from '../../lib/cardType';
 import type { Card } from '../../db/types';
 
@@ -50,6 +52,10 @@ export function CardEditorModal({
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [pronounce, setPronounce] = useState(true);
+  // Tab from the front jumps here; both also submit on Ctrl/Cmd+Enter.
+  const backRef = useRef<RichTextFieldHandle>(null);
+  const answerRef = useRef<HTMLInputElement>(null);
+  const focusNext = () => (type === 'typein' ? answerRef.current?.focus() : backRef.current?.focus());
 
   useEffect(() => {
     if (open) {
@@ -74,6 +80,19 @@ export function CardEditorModal({
   function stored(): { f: string; b: string } {
     if (type === 'typein') return { f: markTypeIn(front), b: back };
     return { f: front, b: back };
+  }
+
+  /** Cards to CREATE from the current input. A cloze note with c1 + c2 yields one
+   *  card per distinct cloze number (each blanking that word); a repeated number
+   *  blanks both of those words in a single card. */
+  function cardsToCreate(): Array<{ f: string; b: string }> {
+    if (type === 'cloze') {
+      const nums = clozeNumbers(front);
+      if (nums.length === 0) return [{ f: front, b: back }];
+      return nums.map((n) => ({ f: clozeKeepActive(front, n), b: back }));
+    }
+    if (type === 'typein') return [{ f: markTypeIn(front), b: back }];
+    return [{ f: front, b: back }];
   }
 
   const canSave =
@@ -107,29 +126,42 @@ export function CardEditorModal({
     }
   }
 
-  async function save() {
+  /** Add a new card but KEEP the modal open + cleared, so several cards can be
+   *  added in a row. The user closes the modal themselves when done. */
+  async function addAnother() {
     if (!canSave) return;
     setSaving(true);
     try {
-      await persist();
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveAndNew() {
-    if (!canSave) return;
-    setSaving(true);
-    try {
-      const { f, b } = stored();
-      const created = await repo.createCard({ deckId, front: f, back: b });
-      await applyPronounce(created.id);
+      const cards = cardsToCreate();
+      for (const { f, b } of cards) {
+        const created = await repo.createCard({ deckId, front: f, back: b });
+        await applyPronounce(created.id);
+      }
+      pushToast(
+        'success',
+        cards.length > 1 ? `${cards.length} cards adicionados.` : 'Card adicionado.',
+      );
       setFront('');
       setBack('');
       setNonce((n) => n + 1);
       setPreviewing(false);
       setPronounce(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function save() {
+    if (!canSave) return;
+    // Creating: stay open so the user can keep adding cards. Editing: close.
+    if (!editing) {
+      await addAnother();
+      return;
+    }
+    setSaving(true);
+    try {
+      await persist();
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -152,13 +184,8 @@ export function CardEditorModal({
             {previewing ? 'Voltar a editar' : 'Pré-visualizar'}
           </Button>
           <Button variant="ghost" onClick={onClose}>
-            Cancelar
+            {editing ? 'Cancelar' : 'Fechar'}
           </Button>
-          {!editing && (
-            <Button variant="default" onClick={saveAndNew} disabled={!canSave}>
-              Salvar e adicionar
-            </Button>
-          )}
           <Button variant="accent" onClick={save} disabled={!canSave}>
             {editing ? 'Salvar' : 'Adicionar'}
           </Button>
@@ -261,17 +288,21 @@ export function CardEditorModal({
                   autoFocus
                   ttsLang={ttsLang}
                   showCloze
+                  onTab={focusNext}
+                  onCtrlEnter={save}
                 />
                 <p className="text-xs text-muted -mt-2" style={{ lineHeight: 1.5 }}>
                   Selecione a palavra a ocultar e clique no botão{' '}
                   <span style={{ color: 'var(--accent)' }}>{'{ }'}</span> que acende na barra.
                 </p>
                 <RichTextField
+                  ref={backRef}
                   key={`clozeextra-${nonce}`}
                   label="Extra (verso, opcional)"
                   valueHtml={back}
                   onChange={setBack}
                   ttsLang={ttsLang}
+                  onCtrlEnter={save}
                 />
               </>
             ) : type === 'typein' ? (
@@ -283,13 +314,22 @@ export function CardEditorModal({
                   onChange={setFront}
                   autoFocus
                   ttsLang={ttsLang}
+                  onTab={focusNext}
+                  onCtrlEnter={save}
                 />
                 <div>
                   <span className="field-label">Resposta (o usuário digita)</span>
                   <input
+                    ref={answerRef}
                     className="field"
                     value={back.replace(/<[^>]*>/g, '')}
                     onChange={(e) => setBack(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        e.preventDefault();
+                        void save();
+                      }
+                    }}
                     placeholder="Resposta exata esperada"
                   />
                 </div>
@@ -303,13 +343,17 @@ export function CardEditorModal({
                   onChange={setFront}
                   autoFocus
                   ttsLang={ttsLang}
+                  onTab={focusNext}
+                  onCtrlEnter={save}
                 />
                 <RichTextField
+                  ref={backRef}
                   key={`back-${nonce}`}
                   label="Verso"
                   valueHtml={back}
                   onChange={setBack}
                   ttsLang={ttsLang}
+                  onCtrlEnter={save}
                 />
               </>
             )}

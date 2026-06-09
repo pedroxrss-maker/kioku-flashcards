@@ -18,7 +18,11 @@ export interface Sm2Config {
 }
 
 export const DEFAULT_SM2: Sm2Config = {
-  learningStepsMin: [1, 10],
+  // A SINGLE learning step so "Good" graduates a new card in one pass (to a
+  // 1-day Review interval) instead of re-showing it intraday. Multiple steps
+  // made the session queue reinsert each new card again and again — matching
+  // the FSRS adapter's `enable_short_term: false` fix.
+  learningStepsMin: [1],
   relearningStepsMin: [10],
   graduatingIntervalDays: 1,
   easyIntervalDays: 4,

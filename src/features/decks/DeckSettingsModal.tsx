@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, VolumeX } from 'lucide-react';
+import { RotateCcw, Trash2, VolumeX } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
@@ -46,6 +46,8 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
   const [ttsLang, setTtsLang] = useState(deck.ttsLang);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [stripping, setStripping] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const audioOn = settings?.deckAudio?.[deck.id] !== false;
 
   useEffect(() => {
@@ -90,6 +92,18 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
     await repo.deleteDeck(deck.id);
     onClose();
     nav('/decks');
+  }
+
+  async function doReset() {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      await repo.resetDeck(deck.id);
+      pushToast('success', 'Deck reiniciado. Todos os cards voltaram a ser novos.');
+      setResetOpen(false);
+    } finally {
+      setResetting(false);
+    }
   }
 
   /** Toggle pronunciation/audio for this deck — and, when it's a parent, for all
@@ -144,6 +158,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
   }
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -289,6 +304,16 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
         </div>
 
         <div className="pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
+          <button
+            type="button"
+            onClick={() => setResetOpen(true)}
+            className="flex items-center gap-2 text-sm text-muted hover:text-fg transition-colors"
+          >
+            <RotateCcw size={15} /> Reiniciar deck
+          </button>
+        </div>
+
+        <div className="pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
           {confirmDelete ? (
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted">Excluir o deck e todos os cards?</span>
@@ -318,5 +343,43 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
         </div>
       </div>
     </Modal>
+
+      {/* Reset confirmation — smaller warning dialog. */}
+      <Modal
+        open={resetOpen}
+        onClose={() => !resetting && setResetOpen(false)}
+        title="Reiniciar deck?"
+        width={420}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={resetting}>
+              Cancelar
+            </Button>
+            <button
+              type="button"
+              onClick={doReset}
+              disabled={resetting}
+              className="btn disabled:opacity-50"
+              style={{ borderColor: 'var(--accent)', background: 'var(--accent)', color: '#fff' }}
+            >
+              {resetting ? 'Reiniciando…' : 'Sim, reiniciar'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted" style={{ lineHeight: 1.6 }}>
+          Isto vai <b className="text-fg">zerar todo o agendamento</b> de{' '}
+          <b className="text-fg">{deck.name}</b>:
+        </p>
+        <ul className="text-sm text-muted mt-2 space-y-1 list-disc pl-5" style={{ lineHeight: 1.6 }}>
+          <li>todos os cards voltam a ser <b className="text-fg">novos</b>;</li>
+          <li>os intervalos, facilidade e memória (SM-2/FSRS) são apagados;</li>
+          <li>o histórico de revisões deste deck é removido.</li>
+        </ul>
+        <p className="text-sm mt-3" style={{ color: 'var(--accent)' }}>
+          Esta ação não pode ser desfeita. O conteúdo dos cards (frente/verso) é mantido.
+        </p>
+      </Modal>
+    </>
   );
 }
