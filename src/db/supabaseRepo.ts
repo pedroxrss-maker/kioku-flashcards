@@ -283,8 +283,15 @@ export class SupabaseRepository implements KiokuRepository {
   async bulkInsertCards(cards: Card[]): Promise<void> {
     if (cards.length === 0) return;
     const userId = await currentUserId();
-    const { error } = await supabase.from('cards').insert(cards.map((c) => cardToRow(c, userId)));
-    if (error) writeFail(error);
+    // Insert in batches so a large import (100MB+ collections -> thousands of
+    // cards, some carrying inline image data URLs) never sends one oversized
+    // request that the API/proxy could reject or time out on.
+    const BATCH = 250;
+    for (let i = 0; i < cards.length; i += BATCH) {
+      const slice = cards.slice(i, i + BATCH).map((c) => cardToRow(c, userId));
+      const { error } = await supabase.from('cards').insert(slice);
+      if (error) writeFail(error);
+    }
     invalidate();
   }
   async updateCard(id: string, patch: Partial<Card>): Promise<void> {

@@ -14,15 +14,14 @@ function tierBg(tier: number): string {
   return `color-mix(in srgb, var(--accent) ${TIER_PCT[tier]}%, transparent)`;
 }
 
-const fmtDay = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const fmtMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
-
-function cellTitle(date: number, count: number): string {
-  const d = fmtDay.format(new Date(date));
-  return count > 0
-    ? `${count} ${count === 1 ? 'card revisado' : 'cards revisados'} · ${d}`
-    : `Nenhuma revisão · ${d}`;
-}
+const fmtFull = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function motivation(streak: number): string {
   if (streak === 0) return 'Vamos recomeçar. Você consegue!';
@@ -44,6 +43,14 @@ export function Heatmap({ logs }: HeatmapProps) {
   const [view, setView] = useState<'year' | 'month'>('year');
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
   const [dir, setDir] = useState(1); // slide direction for transitions
+
+  // Anki-style hover tooltip: which day + how many cards were reviewed.
+  const [tip, setTip] = useState<{ x: number; y: number; date: number; count: number } | null>(null);
+  const showTip = (e: React.MouseEvent, date: number, count: number) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ x: r.left + r.width / 2, y: r.top, date, count });
+  };
+  const hideTip = () => setTip(null);
 
   const year = new Date().getFullYear();
   const columns = useMemo(() => buildYear(logs, year), [logs, year]);
@@ -167,7 +174,8 @@ export function Heatmap({ logs }: HeatmapProps) {
                         {col.map((cell) => (
                           <div
                             key={cell.key}
-                            title={cellTitle(cell.date, cell.count)}
+                            onMouseEnter={cell.future ? undefined : (e) => showTip(e, cell.date, cell.count)}
+                            onMouseLeave={hideTip}
                             style={{
                               width: 11,
                               height: 11,
@@ -195,7 +203,8 @@ export function Heatmap({ logs }: HeatmapProps) {
                     cell ? (
                       <div
                         key={cell.key}
-                        title={cellTitle(cell.date, cell.count)}
+                        onMouseEnter={cell.future ? undefined : (e) => showTip(e, cell.date, cell.count)}
+                        onMouseLeave={hideTip}
                         className="relative rounded-[var(--r-sm)]"
                         style={{
                           aspectRatio: '1',
@@ -256,6 +265,44 @@ export function Heatmap({ logs }: HeatmapProps) {
           <p className="text-sm text-muted mt-1" style={{ lineHeight: 1.4 }}>{motivation(streak)}</p>
         </div>
       </div>
+
+      {/* Hover tooltip — date + cards reviewed that day. */}
+      {tip && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'fixed',
+            left: tip.x,
+            top: tip.y - 8,
+            transform: 'translate(-50%, -100%)',
+            background: 'var(--surface)',
+            border: '1px solid var(--line-strong)',
+            borderRadius: 'var(--r-sm)',
+            boxShadow: 'var(--shadow-pop)',
+            padding: '6px 10px',
+            fontSize: 12,
+            lineHeight: 1.45,
+            color: 'var(--fg)',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            zIndex: 60,
+          }}
+        >
+          {tip.count > 0 ? (
+            <>
+              <span>
+                <b>{tip.count}</b> {tip.count === 1 ? 'card revisado' : 'cards revisados'}
+              </span>
+              <br />
+              <span style={{ color: 'var(--muted)' }}>{cap(fmtFull.format(new Date(tip.date)))}</span>
+            </>
+          ) : (
+            <span style={{ color: 'var(--muted)' }}>
+              Nenhuma revisão · {cap(fmtFull.format(new Date(tip.date)))}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

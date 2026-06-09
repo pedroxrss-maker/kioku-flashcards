@@ -35,7 +35,7 @@ export function CardRow({ card, deck, onEdit }: CardRowProps) {
   const audioOn = deckAudioEnabled(settings, deck.id);
 
   return (
-    <Panel className="p-4 flex gap-3 items-start card-hover-ring">
+    <Panel className="p-4 flex gap-3 items-start">
       <div
         className="flex-1 min-w-0 grid sm:grid-cols-2 gap-4 cursor-pointer"
         onClick={onEdit}

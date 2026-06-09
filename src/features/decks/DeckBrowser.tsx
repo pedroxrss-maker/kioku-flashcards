@@ -97,7 +97,7 @@ export function DeckBrowser() {
             type="button"
             onClick={() => setCreateOpen(true)}
             className="hover-lift flex items-center justify-center gap-2 p-3 text-muted hover:text-fg transition-colors w-full"
-            style={{ border: '1px dashed var(--line-strong)', borderRadius: 'var(--r-md)' }}
+            style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
           >
             <Plus size={18} />
             <span className="mono text-xs">Criar novo deck</span>
@@ -133,7 +133,7 @@ export function DeckBrowser() {
                 type="button"
                 onClick={() => setCreateOpen(true)}
                 className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[90px] sm:min-h-[150px] transition-colors"
-                style={{ border: '1px dashed var(--line-strong)', borderRadius: 'var(--r-md)' }}
+                style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
               >
                 <Plus size={26} />
                 <span className="mono text-xs">Criar novo deck</span>

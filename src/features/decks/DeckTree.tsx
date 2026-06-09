@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Folder, MoreVertical, Pencil, Play, Settings2, Trash2 } from 'lucide-react';
@@ -91,37 +92,55 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
     );
   }
 
-  // Pre-order flatten honoring collapse, so a single map renders the indented
-  // tree and respects an optional row cap.
-  const rows: DeckTreeNode[] = [];
-  const walk = (nodes: DeckTreeNode[]) => {
-    for (const n of nodes) {
-      rows.push(n);
-      if (n.children.length && !collapsed.has(n.path)) walk(n.children);
-    }
-  };
-  walk(roots);
-  const shown = maxRows ? rows.slice(0, maxRows) : rows;
+  // Render recursively so each node's children live in their own collapsible
+  // container that slides down/up on expand/collapse. A shared budget caps the
+  // visible rows (used on Home); collapsed children don't consume it.
+  const budget = { left: maxRows ?? Infinity };
 
-  return (
-    <div className="flex flex-col gap-1">
-      {shown.map((node) => (
-        <DeckTreeRow
-          key={node.path}
-          node={node}
-          counts={aggregateCounts(node, Date.now())}
-          expanded={!collapsed.has(node.path)}
-          fullPath={node.path}
-          onToggle={() => toggle(node.path)}
-          menuOpen={menuPath === node.path}
-          onMenu={() => setMenuPath((p) => (p === node.path ? null : node.path))}
-          onCloseMenu={() => setMenuPath(null)}
-          onConfig={onConfig}
-          onDelete={onDelete}
-        />
-      ))}
-    </div>
-  );
+  const renderNodes = (nodes: DeckTreeNode[]): ReactNode[] => {
+    const out: ReactNode[] = [];
+    for (const node of nodes) {
+      if (budget.left <= 0) break;
+      budget.left -= 1;
+      const expanded = !collapsed.has(node.path);
+      out.push(
+        <div key={node.path} className="flex flex-col gap-1">
+          <DeckTreeRow
+            node={node}
+            counts={aggregateCounts(node, Date.now())}
+            expanded={expanded}
+            fullPath={node.path}
+            onToggle={() => toggle(node.path)}
+            menuOpen={menuPath === node.path}
+            onMenu={() => setMenuPath((p) => (p === node.path ? null : node.path))}
+            onCloseMenu={() => setMenuPath(null)}
+            onConfig={onConfig}
+            onDelete={onDelete}
+          />
+          {node.children.length > 0 && (
+            <AnimatePresence initial={false}>
+              {expanded && (
+                <motion.div
+                  key="children"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ overflow: 'hidden' }}
+                  className="flex flex-col gap-1"
+                >
+                  {renderNodes(node.children)}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
+        </div>,
+      );
+    }
+    return out;
+  };
+
+  return <div className="flex flex-col gap-1">{renderNodes(roots)}</div>;
 }
 
 /* ------------------------------------------------------------------- row --- */
@@ -151,8 +170,6 @@ function DeckTreeRow({
   const nav = useNavigate();
   const hasChildren = node.children.length > 0;
   const studiable = isStudiable(node);
-  const accent = node.deck?.color ?? 'var(--accent)';
-  const pct = counts.total ? Math.round((counts.mastered / counts.total) * 100) : 0;
 
   return (
     <div
@@ -199,24 +216,21 @@ function DeckTreeRow({
         onClick={() => (node.deck ? nav(`/decks/${node.deck.id}`) : onToggle())}
         className="min-w-0 flex-1 text-left"
       >
-        <p className="font-semibold truncate leading-tight">{node.name}</p>
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs text-muted truncate">
-            {counts.total} cards
-            {counts.due > 0 && (
-              <span style={{ color: accent }}> · {counts.due} a revisar</span>
-            )}
-          </span>
-          {node.deck && <AlgoBadge algorithm={node.deck.algorithm} className="shrink-0" />}
+          <p className="font-semibold truncate leading-tight">{node.name}</p>
+          {node.deck && (
+            <AlgoBadge algorithm={node.deck.algorithm} className="shrink-0 hidden sm:inline-flex" />
+          )}
         </div>
-        {node.deck && (
-          <div className="flex items-center gap-2 min-w-0 mt-1">
-            <div className="h-1 flex-1 min-w-0 rounded-full" style={{ background: 'var(--surface-2)' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: accent, borderRadius: 999 }} />
-            </div>
-          </div>
-        )}
       </button>
+
+      {/* Three aligned count columns (Anki layout): new · learning · due.
+          On a parent these are the aggregate sums across all descendants. */}
+      <div className="flex items-center gap-1 sm:gap-2.5 shrink-0 mono">
+        <CountCell value={counts.newCount} color="var(--accent-blue)" label="novos" />
+        <CountCell value={counts.learning} color="var(--accent)" label="aprendendo" />
+        <CountCell value={counts.reviewDue} color="var(--accent-green)" label="a revisar" />
+      </div>
 
       {studiable && (
         <Link
@@ -299,5 +313,19 @@ function DeckTreeRow({
         <span className="w-[34px] shrink-0" aria-hidden />
       )}
     </div>
+  );
+}
+
+/** One right-aligned, fixed-width count column. Fixed widths keep the three
+ *  columns aligned across every row; zero is dimmed so non-zero counts pop. */
+function CountCell({ value, color, label }: { value: number; color: string; label: string }) {
+  return (
+    <span
+      className="w-7 sm:w-9 text-right text-xs sm:text-sm tabular-nums"
+      style={{ color: value > 0 ? color : 'var(--line-strong)' }}
+      title={`${value} ${label}`}
+    >
+      {value}
+    </span>
   );
 }

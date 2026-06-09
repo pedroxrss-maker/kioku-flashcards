@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Pencil, RotateCcw, X, Zap } from 'lucide-react';
 import { useReviewSession } from '../features/review/useReviewSession';
 import { AnswerButtons } from '../features/review/AnswerButtons';
 import { buttonsFor } from '../features/review/buttons';
 import { FlipCard } from '../features/review/FlipCard';
+import { ClozeCard } from '../features/review/ClozeCard';
+import { TypeInCard } from '../features/review/TypeInCard';
+import { cardTypeOf } from '../lib/cardType';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
@@ -39,13 +42,25 @@ export function ReviewSession() {
   // Grouping-parent sessions use a synthetic "group:" id that isn't a real deck
   // route — return to the deck list instead of a non-existent detail page.
   const exitTo = deckId && !deckId.startsWith('group:') ? `/decks/${deckId}` : '/decks';
+  const location = useLocation();
+  // "Sair" returns to exactly the screen the user came from (history back). Falls
+  // back to the deck page when the session was opened directly (no history).
+  const goBack = () => {
+    if (location.key && location.key !== 'default') nav(-1);
+    else nav(exitTo);
+  };
 
   // Keyboard: space/enter flip; 1..N rate after reveal; Esc exit.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (editOpen) return; // the editor handles its own keys while open
       if (e.key === 'Escape') {
-        nav(exitTo);
+        goBack();
+        return;
+      }
+      // While typing an answer (type-in card), let the input own the keys.
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) {
         return;
       }
       // "U" undoes the last rating and brings the previous card back, even after
@@ -238,7 +253,7 @@ export function ReviewSession() {
       >
         <div className="flex items-center gap-1">
           <button
-            onClick={() => nav(exitTo)}
+            onClick={goBack}
             className="mono text-xs text-muted hover:text-fg inline-flex items-center gap-1.5 transition-colors"
           >
             <ArrowLeft size={15} /> Sair
@@ -279,24 +294,73 @@ export function ReviewSession() {
 
       {/* Card */}
       <div ref={cardWrapRef} className="flex-1 flex flex-col items-center justify-center px-4 py-6">
-        {!flipped && (
+        {!flipped && current && cardTypeOf(current.front) !== 'typein' && (
           <p className="mono text-[11px] text-muted mb-4 animate-pulse">
             Clique ou pressione espaço para revelar
           </p>
         )}
-        {current && (
-          <FlipCard
-            // Remount on every advance (incl. same card recurring after a lapse)
-            // so the incoming card always starts on its front, no back-flash.
-            key={`${current.id}:${counters.total}`}
-            front={current.front}
-            back={current.back}
-            ttsLang={(audioDeck ?? deck).ttsLang}
-            flipped={flipped}
-            onFlip={flip}
-            audioEnabled={deckAudioEnabled(settings, (audioDeck ?? deck).id)}
-          />
-        )}
+        {/* Animate card hand-off: the answered card eases out (up + fade) and the
+            next one rises in, so advancing never feels abrupt. mode="wait" keeps a
+            single card on screen; the queue itself advances instantly (queueRef),
+            so rapid keyboard rating is never blocked by the animation. */}
+        <AnimatePresence mode="wait">
+          {current && (
+            <motion.div
+              // Remount on every advance (incl. same card recurring after a lapse)
+              // so the incoming card always starts on its front, no back-flash.
+              key={`${current.id}:${counters.total}`}
+              className="w-full flex justify-center"
+              initial={reduce ? false : { opacity: 0, y: 26, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={
+                reduce
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: -26, scale: 0.94, transition: { duration: 0.15, ease: [0.4, 0, 1, 1] } }
+              }
+              transition={{ duration: reduce ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {(() => {
+                const type = cardTypeOf(current.front);
+                const ttsL = (audioDeck ?? deck).ttsLang;
+                const audioOn = deckAudioEnabled(settings, (audioDeck ?? deck).id);
+                if (type === 'cloze') {
+                  return (
+                    <ClozeCard
+                      front={current.front}
+                      back={current.back}
+                      ttsLang={ttsL}
+                      revealed={flipped}
+                      onReveal={flip}
+                      audioEnabled={audioOn}
+                    />
+                  );
+                }
+                if (type === 'typein') {
+                  return (
+                    <TypeInCard
+                      front={current.front}
+                      back={current.back}
+                      ttsLang={ttsL}
+                      revealed={flipped}
+                      onReveal={flip}
+                      audioEnabled={audioOn}
+                    />
+                  );
+                }
+                return (
+                  <FlipCard
+                    front={current.front}
+                    back={current.back}
+                    ttsLang={ttsL}
+                    flipped={flipped}
+                    onFlip={flip}
+                    audioEnabled={audioOn}
+                  />
+                );
+              })()}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Bottom */}

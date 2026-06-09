@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import { Bold, Image as ImageIcon, Italic, List, Underline, Volume2 } from 'lucide-react';
+import { Bold, Braces, Image as ImageIcon, Italic, List, Underline, Volume2 } from 'lucide-react';
 import {
   audioChipHtml,
   fromEditorHtml,
@@ -8,6 +8,7 @@ import {
   storeImage,
   toEditorHtml,
 } from '../media/media';
+import { clozeNumbers } from '../../lib/cloze';
 import { ElevenLabsDialog } from '../tts/ElevenLabsDialog';
 
 interface RichTextFieldProps {
@@ -17,26 +18,37 @@ interface RichTextFieldProps {
   autoFocus?: boolean;
   /** Deck language (e.g. 'en-US'), used to seed the ElevenLabs dialog. */
   ttsLang?: string;
+  /** Show the "Cloze" button (lights up when text is selected). */
+  showCloze?: boolean;
 }
 
 function ToolbarBtn({
   onClick,
   title,
   children,
+  disabled,
+  active,
 }: {
   onClick: () => void;
   title: string;
   children: ReactNode;
+  disabled?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       title={title}
+      disabled={disabled}
       // Keep focus in the editable area so execCommand targets the selection.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className="p-1.5 text-muted hover:text-fg transition-colors"
-      style={{ border: '1px solid var(--line)' }}
+      className="p-1.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      style={{
+        border: '1px solid var(--line)',
+        color: active ? 'var(--accent)' : 'var(--muted)',
+        borderColor: active ? 'var(--accent)' : 'var(--line)',
+      }}
     >
       {children}
     </button>
@@ -50,6 +62,7 @@ export function RichTextField({
   onChange,
   autoFocus,
   ttsLang = 'en-US',
+  showCloze = false,
 }: RichTextFieldProps) {
   const ref = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -57,6 +70,39 @@ export function RichTextField({
   const [audioMenu, setAudioMenu] = useState(false);
   const [elOpen, setElOpen] = useState(false);
   const [dialogText, setDialogText] = useState('');
+  const [canCloze, setCanCloze] = useState(false);
+
+  // The Cloze button lights up only while text is selected inside THIS field.
+  useEffect(() => {
+    if (!showCloze) return;
+    const onSel = () => {
+      const sel = window.getSelection();
+      const el = ref.current;
+      if (!sel || sel.isCollapsed || !el || sel.toString().trim().length === 0) {
+        setCanCloze(false);
+        return;
+      }
+      setCanCloze(el.contains(sel.anchorNode) && el.contains(sel.focusNode));
+    };
+    document.addEventListener('selectionchange', onSel);
+    return () => document.removeEventListener('selectionchange', onSel);
+  }, [showCloze]);
+
+  /** Wrap the current selection in the next `{{cN::...}}` cloze marker. */
+  function wrapCloze() {
+    const el = ref.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const text = sel.toString();
+    if (!text.trim()) return;
+    const nums = clozeNumbers(el.innerText);
+    const n = (nums[nums.length - 1] ?? 0) + 1;
+    el.focus();
+    document.execCommand('insertText', false, `{{c${n}::${text}}}`);
+    setCanCloze(false);
+    emit();
+  }
 
   useEffect(() => {
     let alive = true;
@@ -134,6 +180,16 @@ export function RichTextField({
           <ToolbarBtn onClick={() => exec('insertUnorderedList')} title="Lista">
             <List size={14} />
           </ToolbarBtn>
+          {showCloze && (
+            <ToolbarBtn
+              onClick={wrapCloze}
+              disabled={!canCloze}
+              active={canCloze}
+              title={canCloze ? 'Transformar seleção em cloze' : 'Selecione uma palavra para criar um cloze'}
+            >
+              <Braces size={14} />
+            </ToolbarBtn>
+          )}
           <ToolbarBtn onClick={() => imageRef.current?.click()} title="Inserir imagem">
             <ImageIcon size={14} />
           </ToolbarBtn>

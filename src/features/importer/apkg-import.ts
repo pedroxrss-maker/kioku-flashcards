@@ -3,6 +3,7 @@ import { decompress } from 'fzstd';
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
 import { leafName } from '../../lib/deckTree';
+import { markTypeIn } from '../../lib/cardType';
 import { stripHtml } from '../../lib/text';
 import { mimeFromName } from './mime';
 import { loadSqlJs } from './sqljs';
@@ -24,6 +25,71 @@ async function memberBytes(zip: JSZip, name: string): Promise<Uint8Array | null>
   if (!entry) return null;
   const raw = await entry.async('uint8array');
   return isZstd(raw) ? decompress(raw) : raw;
+}
+
+/**
+ * Minimal parser for the v3 `media` manifest (protobuf `MediaEntries`). We only
+ * need the ordered filenames: entry i corresponds to the zip member named "i".
+ * Each `MediaEntry` is field 1 (length-delimited) of MediaEntries; its `name` is
+ * field 1 (length-delimited string) of the entry. Everything else is skipped.
+ */
+export function parseMediaEntries(buf: Uint8Array): string[] {
+  let p = 0;
+  const varint = (): number => {
+    let shift = 0;
+    let result = 0;
+    while (p < buf.length) {
+      const b = buf[p++];
+      result += (b & 0x7f) * 2 ** shift;
+      if ((b & 0x80) === 0) break;
+      shift += 7;
+    }
+    return result;
+  };
+  const skip = (wt: number) => {
+    if (wt === 0) varint();
+    else if (wt === 2) p += varint();
+    else if (wt === 5) p += 4;
+    else if (wt === 1) p += 8;
+  };
+  const names: string[] = [];
+  while (p < buf.length) {
+    const tag = varint();
+    const field = tag >> 3;
+    const wt = tag & 7;
+    if (field === 1 && wt === 2) {
+      const msgLen = varint();
+      const end = p + msgLen; // MediaEntry message bounds (read len first!)
+      let name = '';
+      while (p < end) {
+        const t2 = varint();
+        const f2 = t2 >> 3;
+        const w2 = t2 & 7;
+        if (f2 === 1 && w2 === 2) {
+          const len = varint();
+          name = new TextDecoder().decode(buf.subarray(p, p + len));
+          p += len;
+        } else {
+          skip(w2);
+        }
+      }
+      p = end;
+      names.push(name);
+    } else {
+      skip(wt);
+    }
+  }
+  return names;
+}
+
+/** Base64-encode raw bytes (used as a fallback for non-resizable media). */
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
 }
 
 /**
@@ -75,6 +141,45 @@ export function cleanAnkiMarkup(html: string): string {
     .replace(/(?:\s*<br\s*\/?>\s*)+$/i, '') // drop trailing <br>
     .replace(/\n{3,}/g, '\n\n') // collapse blank lines
     .trim();
+}
+
+/** Cloze numbers present in a field, sorted ascending & deduped. An Anki cloze
+ *  card's ordinal indexes into this list (ord 0 -> the first cloze number). */
+export function clozeNumbers(text: string): number[] {
+  const set = new Set<number>();
+  for (const m of text.matchAll(/\{\{c(\d+)::/g)) set.add(Number(m[1]));
+  return [...set].sort((a, b) => a - b);
+}
+
+/**
+ * Render Anki cloze markup for one card. The `active` cloze is blanked on the
+ * question (`[...]`, or `[hint]` when a hint is given) and revealed in bold on
+ * the answer; every other cloze is shown as its plain text on both sides —
+ * exactly how Anki presents a cloze card.
+ */
+export function renderClozeText(text: string, active: number, isAnswer: boolean): string {
+  return text.replace(/\{\{c(\d+)::(.*?)\}\}/gs, (_full, n: string, inner: string) => {
+    const sep = inner.indexOf('::');
+    const answer = sep >= 0 ? inner.slice(0, sep) : inner;
+    const hint = sep >= 0 ? inner.slice(sep + 2) : '';
+    if (Number(n) === active) {
+      return isAnswer ? `<b>${answer}</b>` : `[${hint || '...'}]`;
+    }
+    return answer;
+  });
+}
+
+/**
+ * Prepare a cloze card's stored front: keep ONLY the active cloze's marker
+ * (so the review screen can reveal it in place) and reveal every other cloze as
+ * plain text. Runtime rendering then blanks/fades just the active word.
+ */
+export function clozeKeepActive(text: string, active: number): string {
+  return text.replace(/\{\{c(\d+)::(.*?)\}\}/gs, (full, n: string, inner: string) => {
+    if (Number(n) === active) return full; // keep the active marker verbatim
+    const sep = inner.indexOf('::');
+    return sep >= 0 ? inner.slice(0, sep) : inner; // reveal the others
+  });
 }
 
 interface MappedScheduling {
@@ -179,9 +284,14 @@ function looksLikePlaceholder(db: { exec: (sql: string) => Array<{ values: unkno
  * scheduling is preserved best-effort, `<img>` media is embedded inline.
  * Audio/compressed media is intentionally skipped for now.
  */
-export async function importApkg(file: File): Promise<ImportResult> {
+export async function importApkg(
+  data: ArrayBuffer | Uint8Array,
+  fileName: string,
+): Promise<ImportResult> {
   const warnings: string[] = [];
-  const zip = await JSZip.loadAsync(file);
+  // Parse from the in-memory buffer the caller already read (never from a File
+  // reference, which can go stale for large/cloud-synced files mid-read).
+  const zip = await JSZip.loadAsync(data);
 
   // ---- pick + load the real collection (prefer the v3 anki21b) --------------
   const SQL = await loadSqlJs();
@@ -208,17 +318,25 @@ export async function importApkg(file: File): Promise<ImportResult> {
   }
 
   try {
-    // ---- media map (manifest may itself be zstd-compressed in v3) -----------
+    // ---- media map (filename -> zip member). The manifest may be zstd-compressed
+    //      and is JSON in the legacy format or protobuf in the v3 format. ------
     const fileByName = new Map<string, string>();
     try {
       const mediaBytes = await memberBytes(zip, 'media');
       if (mediaBytes) {
-        const map = JSON.parse(new TextDecoder().decode(mediaBytes)) as Record<string, string>;
-        for (const [num, name] of Object.entries(map)) fileByName.set(name, num);
+        try {
+          // Legacy: a JSON map { "0": "filename", ... }.
+          const map = JSON.parse(new TextDecoder().decode(mediaBytes)) as Record<string, string>;
+          for (const [num, name] of Object.entries(map)) fileByName.set(name, num);
+        } catch {
+          // New v3: protobuf MediaEntries; entry index i -> zip member "i".
+          parseMediaEntries(mediaBytes).forEach((name, i) => {
+            if (name) fileByName.set(name, String(i));
+          });
+        }
       }
     } catch {
-      // v3 manifest can be protobuf, not JSON — media is deferred anyway.
-      warnings.push('Mídia não importada (formato novo). Texto e agendamento foram importados.');
+      warnings.push('Não foi possível ler a lista de mídias do arquivo.');
     }
 
     const mediaCache = new Map<string, string | null>(); // filename -> data: URL
@@ -232,18 +350,15 @@ export async function importApkg(file: File): Promise<ImportResult> {
         mediaCache.set(filename, null);
         return null;
       }
-      const bytes = await entry.async('uint8array');
-      if (isZstd(bytes)) {
-        // Compressed media (v3) — deferred. Skip gracefully, don't crash.
-        mediaCache.set(filename, null);
-        return null;
-      }
+      const raw = await entry.async('uint8array');
+      // v3 stores each media file zstd-compressed — decompress before embedding.
+      const bytes = isZstd(raw) ? decompress(raw) : raw;
       const mime = mimeFromName(filename);
       let url: string;
       try {
         url = await resizedDataUrl(new Blob([new Uint8Array(bytes)]), mime);
       } catch {
-        url = `data:${mime};base64,${await entry.async('base64')}`;
+        url = `data:${mime};base64,${bytesToBase64(bytes)}`;
       }
       mediaCache.set(filename, url);
       mediaCount += 1;
@@ -281,26 +396,42 @@ export async function importApkg(file: File): Promise<ImportResult> {
     // carrying its full path so the UI can nest it. Parent decks with no cards of
     // their own become grouping nodes in the tree (derived from the paths).
     const deckNameById = new Map<string, string>();
+    // New schema (collection.anki21b): decks live in a `decks` table and the
+    // name column uses the 0x1f unit separator between hierarchy levels — we
+    // normalize it to "::" so subdecks nest in the tree.
     try {
-      const raw = db.exec('SELECT decks FROM col LIMIT 1')[0]?.values[0]?.[0];
-      if (typeof raw === 'string') {
-        const obj = JSON.parse(raw) as Record<string, { name?: string }>;
-        for (const [id, d] of Object.entries(obj)) {
-          if (d?.name) deckNameById.set(id, d.name);
+      const rows = db.exec('SELECT id, name FROM decks')[0]?.values ?? [];
+      for (const [id, name] of rows) {
+        if (typeof name === 'string' && name) {
+          deckNameById.set(String(id), name.replace(/\x1f/g, '::'));
         }
       }
     } catch {
-      /* fall back to the filename below */
+      /* no decks table -> legacy col.decks JSON below */
+    }
+    // Legacy schema (anki2/anki21): decks are a JSON blob on col, names use "::".
+    if (deckNameById.size === 0) {
+      try {
+        const raw = db.exec('SELECT decks FROM col LIMIT 1')[0]?.values[0]?.[0];
+        if (typeof raw === 'string') {
+          const obj = JSON.parse(raw) as Record<string, { name?: string }>;
+          for (const [id, d] of Object.entries(obj)) {
+            if (d?.name) deckNameById.set(id, d.name);
+          }
+        }
+      } catch {
+        /* fall back to the filename below */
+      }
     }
     const fallbackName =
-      file.name.replace(/\.apkg$/i, '').replace(/\.colpkg$/i, '') || 'Deck importado';
+      fileName.replace(/\.apkg$/i, '').replace(/\.colpkg$/i, '') || 'Deck importado';
 
     // ---- cards (joined to their note + Anki deck id) with scheduling --------
     let cardRows: unknown[][] = [];
     try {
       cardRows =
         db.exec(
-          'SELECT c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data, n.flds, c.did ' +
+          'SELECT c.type, c.queue, c.due, c.ivl, c.factor, c.reps, c.lapses, c.data, n.flds, c.did, c.ord, n.mid ' +
             'FROM cards c JOIN notes n ON c.nid = n.id',
         )[0]?.values ?? [];
     } catch {
@@ -309,7 +440,41 @@ export async function importApkg(file: File): Promise<ImportResult> {
     if (cardRows.length === 0) {
       // No cards table (or query failed) — import notes as fresh "new" cards.
       const noteVals = db.exec('SELECT flds FROM notes')[0]?.values ?? [];
-      cardRows = noteVals.map((v) => [0, 0, 0, 0, 0, 0, 0, '', v[0], '']);
+      cardRows = noteVals.map((v) => [0, 0, 0, 0, 0, 0, 0, '', v[0], '', 0, '']);
+    }
+
+    // "Type in the answer" templates: their question uses {{type:Field}}. Collect
+    // the (notetype id, template ord) pairs so we can tag those cards on import.
+    const typeInKeys = new Set<string>();
+    try {
+      // New schema: the qfmt lives in a protobuf `config` blob, but the literal
+      // "{{type:" survives as UTF-8 bytes we can scan for.
+      const rows = db.exec('SELECT ntid, ord, config FROM templates')[0]?.values ?? [];
+      for (const [ntid, ord, config] of rows) {
+        const bytes = config instanceof Uint8Array ? config : new Uint8Array();
+        if (new TextDecoder('utf-8', { fatal: false }).decode(bytes).includes('{{type:')) {
+          typeInKeys.add(`${ntid}:${ord}`);
+        }
+      }
+    } catch {
+      /* legacy col.models below */
+    }
+    if (typeInKeys.size === 0) {
+      try {
+        const raw = db.exec('SELECT models FROM col LIMIT 1')[0]?.values[0]?.[0];
+        if (typeof raw === 'string') {
+          const models = JSON.parse(raw) as Record<string, { tmpls?: Array<{ qfmt?: string }> }>;
+          for (const [mid, model] of Object.entries(models)) {
+            (model.tmpls ?? []).forEach((t, ord) => {
+              if (typeof t.qfmt === 'string' && t.qfmt.includes('{{type:')) {
+                typeInKeys.add(`${mid}:${ord}`);
+              }
+            });
+          }
+        }
+      } catch {
+        /* no type-in templates detected */
+      }
     }
     if (cardRows.length === 0) throw new Error('Nenhuma nota encontrada no arquivo.');
 
@@ -326,16 +491,46 @@ export async function importApkg(file: File): Promise<ImportResult> {
     const created: Array<{ id: string; path: string; cards: Card[] }> = [];
     let colorIdx = Math.floor(Math.random() * DECK_COLORS.length);
     let mappedFirst = false;
+    let audioSeen = false;
 
     for (const [did, rows] of rowsByDid) {
       // Build the card content first; only create a deck if it has real cards.
       const prepared: Array<{ front: string; back: string; sched: MappedScheduling }> = [];
       for (const row of rows) {
         const flds = String(row[8] ?? '');
-        const fields = flds.split(FIELD_SEP).map((f) => cleanAnkiMarkup(f));
-        const front = cleanAnkiMarkup(await rewriteMedia(fields[0] ?? ''));
-        const rest = fields.slice(1).filter((f) => f.trim().length > 0);
-        const back = cleanAnkiMarkup(await rewriteMedia(rest.join('<hr>')));
+        if (!audioSeen && /\[sound:/i.test(flds)) audioSeen = true;
+        const rawFields = flds.split(FIELD_SEP);
+
+        let front: string;
+        let back: string;
+        // Cloze note: a field carries {{cN::...}} markers. Render the card for
+        // its ordinal — blank the active cloze on the front, reveal on the back.
+        const clozeIdx = rawFields.findIndex((f) => /\{\{c\d+::/.test(f));
+        if (clozeIdx >= 0) {
+          const nums = clozeNumbers(rawFields[clozeIdx]);
+          const ord = Number(row[10] ?? 0);
+          const active = nums[ord] ?? nums[0] ?? 1;
+          const clozeHtml = await rewriteMedia(rawFields[clozeIdx]);
+          const extras = rawFields
+            .filter((_, i) => i !== clozeIdx)
+            .filter((f) => f.trim().length > 0);
+          const extraHtml = extras.length ? await rewriteMedia(extras.join('<hr>')) : '';
+          // Front keeps the active cloze marker (revealed in place at review);
+          // the back holds only the extra fields, shown below on reveal.
+          front = cleanAnkiMarkup(clozeKeepActive(clozeHtml, active));
+          back = extraHtml ? cleanAnkiMarkup(extraHtml) : '';
+        } else {
+          const fields = rawFields.map((f) => cleanAnkiMarkup(f));
+          front = cleanAnkiMarkup(await rewriteMedia(fields[0] ?? ''));
+          const rest = fields.slice(1).filter((f) => f.trim().length > 0);
+          back = cleanAnkiMarkup(await rewriteMedia(rest.join('<hr>')));
+          // Tag "type in the answer" cards (need a back to type against).
+          const mid = String(row[11] ?? '');
+          const ord = Number(row[10] ?? 0);
+          if (typeInKeys.has(`${mid}:${ord}`) && rest.length > 0) {
+            front = markTypeIn(front);
+          }
+        }
         if (!stripHtml(front) && !stripHtml(back)) continue;
         const sched = mapScheduling(
           Number(row[0] ?? 0),
@@ -405,6 +600,12 @@ export async function importApkg(file: File): Promise<ImportResult> {
       deckAudio[d.id] = false;
     }
     await repo.saveSettings({ deckPaths, deckAudio });
+
+    // Images are embedded inline; audio import is still pending (needs the
+    // Supabase Storage media step), so flag it instead of failing silently.
+    if (audioSeen) {
+      warnings.push('Áudio ainda não é importado (em desenvolvimento). Imagens e texto foram importados.');
+    }
 
     const totalCards = created.reduce((n, d) => n + d.cards.length, 0);
     // Open the biggest deck from the success dialog.

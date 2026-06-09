@@ -21,6 +21,8 @@ export interface DeckCounts {
   review: number;
   /** Cards whose `due` has arrived (ungated raw count). */
   due: number;
+  /** Review-state cards whose `due` has arrived (the Anki "due"/green column). */
+  reviewDue: number;
   /** Mature review cards. */
   mastered: number;
 }
@@ -73,6 +75,7 @@ export function countCards(
     learning: 0,
     review: 0,
     due: 0,
+    reviewDue: 0,
     mastered: 0,
   };
   for (const c of cards) {
@@ -82,6 +85,7 @@ export function countCards(
     else if (c.state === 'review') {
       counts.review += 1;
       if (effectiveIntervalDays(c, deck) >= MATURE_DAYS) counts.mastered += 1;
+      if (c.due <= now) counts.reviewDue += 1;
     }
     if (c.due <= now) counts.due += 1;
   }

@@ -284,7 +284,7 @@ export interface ActivityItem {
   color: string;
 }
 
-/** Recent-activity feed: completed study sessions + created decks, newest first. */
+/** Recent-activity feed: completed study sessions only (reviews), newest first. */
 export function recentActivity(
   logs: ReviewLog[],
   decks: Deck[],
@@ -299,9 +299,6 @@ export function recentActivity(
       time: s.end,
       color: s.color,
     });
-  }
-  for (const d of decks) {
-    items.push({ kind: 'deck', main: 'Novo deck criado', sub: d.name, time: d.createdAt, color: d.color });
   }
   return items.sort((a, b) => b.time - a.time).slice(0, limit);
 }

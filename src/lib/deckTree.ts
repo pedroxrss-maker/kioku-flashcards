@@ -115,7 +115,15 @@ export function subtreeDeckIds(node: DeckTreeNode): string[] {
  * the maturity split stays correct even when subdecks differ.
  */
 export function aggregateCounts(node: DeckTreeNode, now: number = Date.now()): DeckCounts {
-  const acc: DeckCounts = { total: 0, newCount: 0, learning: 0, review: 0, due: 0, mastered: 0 };
+  const acc: DeckCounts = {
+    total: 0,
+    newCount: 0,
+    learning: 0,
+    review: 0,
+    due: 0,
+    reviewDue: 0,
+    mastered: 0,
+  };
   const visit = (n: DeckTreeNode) => {
     if (n.ownCards.length) {
       const c = countCards(n.ownCards, now, n.deck ?? undefined);
@@ -124,6 +132,7 @@ export function aggregateCounts(node: DeckTreeNode, now: number = Date.now()): D
       acc.learning += c.learning;
       acc.review += c.review;
       acc.due += c.due;
+      acc.reviewDue += c.reviewDue;
       acc.mastered += c.mastered;
     }
     n.children.forEach(visit);

@@ -1,16 +1,21 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Zap } from 'lucide-react';
-import { useAllCards, useDecks } from '../db/hooks';
+import { useAllCards, useDecks, useSettings } from '../db/hooks';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
+import { hasHierarchy } from '../lib/deckTree';
+import { DeckTree } from '../features/decks/DeckTree';
 
 export function ReviewHub() {
   const decks = useDecks();
   const allCards = useAllCards();
+  const settings = useSettings();
   const byDeck = useMemo(() => groupCardsByDeck(allCards), [allCards]);
   const now = Date.now();
+
+  const tree = hasHierarchy(decks, settings?.deckPaths);
 
   const rows = decks
     .map((deck) => ({
@@ -28,6 +33,11 @@ export function ReviewHub() {
 
       {decks.length === 0 ? (
         <p className="text-muted">Crie um deck primeiro em “Meus Decks”.</p>
+      ) : tree ? (
+        /* Nested deck tree (subdecks) — studying a parent reviews all descendants. */
+        <Panel className="p-2 sm:p-3">
+          <DeckTree decks={decks} cardsByDeck={byDeck} />
+        </Panel>
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map(({ deck, counts }) => (
