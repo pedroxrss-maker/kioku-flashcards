@@ -75,7 +75,7 @@ function newDemoCard(): Card {
     state: 'new',
     due: t,
     sm2: { ease: 2.5, intervalDays: 0, reps: 0, lapses: 0, step: 0, isLeech: false },
-    fsrs: { stability: 0, difficulty: 0, elapsedDays: 0, scheduledDays: 0, reps: 0, lapses: 0, lastReview: null },
+    fsrs: { stability: 0, difficulty: 0, elapsedDays: 0, scheduledDays: 0, learningSteps: 0, reps: 0, lapses: 0, lastReview: null },
     createdAt: t,
     updatedAt: t,
   };

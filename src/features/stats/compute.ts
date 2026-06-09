@@ -50,76 +50,88 @@ export function buildHeatmap(logs: ReviewLog[], weeks = 16): HeatCell[][] {
   return columns;
 }
 
-/** Full calendar year (Jan 1 -> Dec 31 of `year`), Sunday-aligned columns.
- *  Days after today are flagged `future`. */
-export function buildYear(logs: ReviewLog[], year: number): HeatCell[][] {
-  const byDay = reviewsByDay(logs);
-  const todayKey = dayKey(startOfLocalDay());
-  const start = new Date(year, 0, 1);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - start.getDay()); // back to the Sunday on/before Jan 1
-  const end = new Date(year, 11, 31).getTime();
-
-  const cells: HeatCell[] = [];
-  for (let t = start.getTime(); t <= end; t += DAY_MS) {
-    const key = dayKey(t);
-    const count = byDay.get(key) ?? 0;
-    cells.push({ date: t, key, count, tier: tierFor(count), future: key > todayKey });
-  }
-  const columns: HeatCell[][] = [];
-  for (let i = 0; i < cells.length; i += 7) columns.push(cells.slice(i, i + 7));
-  return columns;
+export interface YearMonth {
+  month: number; // 0-11
+  label: string; // short localized label, e.g. "jan"
+  /** Monday-first week columns; `null` pads days outside the month so every
+   *  block is a clean 7-row grid. */
+  weeks: (HeatCell | null)[][];
 }
 
-/** Short month label for each heatmap column (only where a new month begins). */
-export function monthLabels(columns: HeatCell[][]): string[] {
+/** The calendar year split into 12 month blocks (Jan -> Dec), each a
+ *  Monday-first grid of week columns (GitHub-by-month style). Days after today
+ *  are flagged `future`. */
+export function buildYearMonths(logs: ReviewLog[], year: number): YearMonth[] {
+  const byDay = reviewsByDay(logs);
+  const todayKey = dayKey(startOfLocalDay());
   const fmt = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
-  let last = -1;
-  return columns.map((col) => {
-    const d = col[0]?.date;
-    if (d == null) return '';
-    const m = new Date(d).getMonth();
-    if (m !== last) {
-      last = m;
-      return fmt.format(new Date(d)).replace('.', '');
+  const out: YearMonth[] = [];
+  for (let month = 0; month < 12; month += 1) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // Monday-first leading pad (JS getDay(): Sun=0 .. Sat=6).
+    const lead = (new Date(year, month, 1).getDay() + 6) % 7;
+    const cells: (HeatCell | null)[] = [];
+    for (let i = 0; i < lead; i += 1) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d += 1) {
+      const date = new Date(year, month, d).getTime();
+      const key = dayKey(date);
+      const count = byDay.get(key) ?? 0;
+      cells.push({ date, key, count, tier: tierFor(count), future: key > todayKey });
     }
-    return '';
-  });
-}
-
-export interface MonthCell extends HeatCell {
-  day: number;
-}
-
-/** A single calendar month as day cells, padded with leading nulls to a Sunday. */
-export function buildMonth(logs: ReviewLog[], year: number, month: number): (MonthCell | null)[] {
-  const byDay = reviewsByDay(logs);
-  const startPad = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayKey = dayKey(startOfLocalDay());
-  const cells: (MonthCell | null)[] = [];
-  for (let i = 0; i < startPad; i += 1) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d += 1) {
-    const date = new Date(year, month, d).getTime();
-    const key = dayKey(date);
-    const count = byDay.get(key) ?? 0;
-    cells.push({ date, key, count, tier: tierFor(count), future: key > todayKey, day: d });
+    while (cells.length % 7 !== 0) cells.push(null); // trailing pad to full weeks
+    const weeks: (HeatCell | null)[][] = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+    out.push({ month, label: fmt.format(new Date(year, month, 1)).replace('.', ''), weeks });
   }
-  return cells;
+  return out;
 }
 
-/** Mean cards/day over the day cells that aren't in the future. */
-export function dailyAverage(columns: HeatCell[][]): number {
-  let sum = 0;
-  let days = 0;
-  for (const col of columns) {
-    for (const cell of col) {
-      if (cell.future) continue;
-      sum += cell.count;
-      days += 1;
-    }
+export interface ProgressPoint {
+  key: string;
+  label: string; // "dd/mm"
+  value: number; // cards reviewed that day
+}
+
+export interface ProgressStats {
+  points: ProgressPoint[];
+  reviewed: number;
+  accuracyPct: number;
+  decks: number;
+  timeMs: number;
+}
+
+/** Per-day reviewed-card series for the last `days` days (ending today), plus
+ *  window totals: cards reviewed, accuracy %, distinct decks studied, time. */
+export function progressStats(logs: ReviewLog[], days: number): ProgressStats {
+  const today = startOfLocalDay();
+  const since = today - (days - 1) * DAY_MS;
+  const fmt = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+  const buckets = new Map<string, ProgressPoint>();
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const t = today - i * DAY_MS;
+    const key = dayKey(t);
+    buckets.set(key, { key, label: fmt.format(new Date(t)), value: 0 });
   }
-  return days ? sum / days : 0;
+  let reviewed = 0;
+  let ok = 0;
+  let timeMs = 0;
+  const deckSet = new Set<string>();
+  for (const l of logs) {
+    if (l.reviewedAt < since) continue;
+    const b = buckets.get(dayKey(l.reviewedAt));
+    if (b) b.value += 1;
+    reviewed += 1;
+    if (l.rating === 'good' || l.rating === 'easy') ok += 1;
+    timeMs += l.durationMs;
+    deckSet.add(l.deckId);
+  }
+  return {
+    points: [...buckets.values()],
+    reviewed,
+    accuracyPct: reviewed ? Math.round((ok / reviewed) * 100) : 0,
+    decks: deckSet.size,
+    timeMs,
+  };
 }
 
 /* ----------------------------------------------------- daily performance -- */

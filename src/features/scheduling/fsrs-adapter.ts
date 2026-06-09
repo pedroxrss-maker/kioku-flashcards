@@ -9,6 +9,8 @@ import {
 import type { Card, CardState, Rating, ReviewLog } from '../../db/types';
 import { labelInterval } from './sm2-adapter';
 
+const DAY = 86_400_000;
+
 // `as const` keeps each value as its literal enum member so the union narrows to
 // ts-fsrs's `Grade` (Rating minus Manual), which `repeat`/`next` require.
 const RATING = {
@@ -37,11 +39,18 @@ function buildScheduler(desiredRetention: number) {
       request_retention: desiredRetention, // e.g. 0.9
       maximum_interval: 36500,
       enable_fuzz: true,
-      // Long-term scheduler: "Good" on a new/learning card jumps straight to a
-      // multi-day Review interval in ONE pass instead of a sub-day learning
-      // step. Without this, FSRS keeps short-term learning cards intraday and
-      // the session queue reinserts them forever (only "Easy" graduated them).
-      enable_short_term: false,
+      // Short-term steps ON so a LAPSE actually relearns. "Errei" drops the card
+      // into a ~10 min step (state learning/relearning) and the session queue
+      // reinserts it until it's answered correctly — instead of the old
+      // long-term mode that pushed a failed card a full day out (way too loose).
+      enable_short_term: true,
+      // A SINGLE learning step is the crux: with the default two-step list
+      // ["1m","10m"], "Good" only advances one step, so new cards looped in the
+      // session forever and only "Easy" graduated. With one step, "Good"/"Fácil"
+      // graduate straight to a multi-day Review in ONE pass, while "Errei"/
+      // "Difícil" still get a short in-session step.
+      learning_steps: ['10m'],
+      relearning_steps: ['10m'],
     }),
   );
 }
@@ -57,6 +66,8 @@ function toFsrs(card: Card, now: number): FsrsCard {
     difficulty: f.difficulty,
     elapsed_days: f.elapsedDays,
     scheduled_days: f.scheduledDays,
+    // Pass the persisted step in (?? 0 covers cards saved before this field).
+    learning_steps: f.learningSteps ?? 0,
     reps: f.reps,
     lapses: f.lapses,
     state: STATE_FROM_KIOKU[card.state],
@@ -76,6 +87,7 @@ function fromFsrs(card: Card, fc: FsrsCard): Card {
       difficulty: fc.difficulty,
       elapsedDays: fc.elapsed_days,
       scheduledDays: fc.scheduled_days,
+      learningSteps: fc.learning_steps,
       reps: fc.reps,
       lapses: fc.lapses,
       lastReview: fc.last_review ? fc.last_review.getTime() : null,
@@ -93,7 +105,9 @@ export function makeFsrsScheduler(desiredRetention: number) {
         const next = rec[RATING[r]].card;
         out[r] = {
           card: fromFsrs(card, next),
-          intervalLabel: labelInterval(next.scheduled_days),
+          // From the real due, not scheduled_days — which rounds a sub-day
+          // relearning step down to 0 and would mislabel "Errei" as "1 d".
+          intervalLabel: labelInterval((next.due.getTime() - now) / DAY),
         };
       });
       return out;

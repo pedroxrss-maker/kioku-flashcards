@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Deck, Rating, ReviewLog } from '../../db/types';
-import { dailyPerformance, sessionsFromLogs, statsSummary } from './compute';
+import { dailyPerformance, progressStats, sessionsFromLogs, statsSummary } from './compute';
 
 let seq = 0;
 function log(deckId: string, reviewedAt: number, rating: Rating, durationMs = 1000): ReviewLog {
@@ -48,6 +48,22 @@ describe('stats compute', () => {
     const data = dailyPerformance([], 14);
     expect(data).toHaveLength(14);
     expect(data.every((d) => d.total === 0)).toBe(true);
+  });
+
+  it('progressStats totals the window and buckets today', () => {
+    const now = Date.now();
+    const logs = [
+      log('a', now, 'good', 1000),
+      log('a', now, 'easy', 2000),
+      log('b', now, 'again', 3000),
+    ];
+    const s = progressStats(logs, 7);
+    expect(s.points).toHaveLength(7);
+    expect(s.reviewed).toBe(3);
+    expect(s.accuracyPct).toBe(67); // 2 of 3 good/easy
+    expect(s.decks).toBe(2);
+    expect(s.timeMs).toBe(6000);
+    expect(s.points[s.points.length - 1].value).toBe(3); // all landed today
   });
 
   it('sessionsFromLogs splits on deck change and >30min gaps', () => {

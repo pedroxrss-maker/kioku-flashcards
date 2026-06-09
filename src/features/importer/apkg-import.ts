@@ -234,6 +234,7 @@ export function mapScheduling(
         difficulty: d.d,
         elapsedDays: ivlDays,
         scheduledDays: ivlDays,
+        learningSteps: 0,
         reps,
         lapses,
         // Back-date the last review to when Anki actually scheduled this card

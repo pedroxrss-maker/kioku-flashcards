@@ -27,6 +27,7 @@ export function newFsrsFields(): FsrsFields {
     difficulty: 0,
     elapsedDays: 0,
     scheduledDays: 0,
+    learningSteps: 0,
     reps: 0,
     lapses: 0,
     lastReview: null,

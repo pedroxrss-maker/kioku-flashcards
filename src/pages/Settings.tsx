@@ -40,7 +40,7 @@ export function Settings() {
 
   if (!settings) {
     return (
-      <div className="rise">
+      <div className="rise max-w-3xl mx-auto">
         <PageHeader title="Configurações" />
         <p className="mono text-muted text-sm">Carregando…</p>
       </div>
@@ -56,7 +56,7 @@ export function Settings() {
   const reviewsUnlimited = settings.reviewsPerDay >= UNLIMITED_PER_DAY;
 
   return (
-    <div className="rise flex flex-col gap-6 max-w-3xl">
+    <div className="rise flex flex-col gap-6 max-w-3xl mx-auto">
       <PageHeader title="Configurações" subtitle="Padrões globais do Kioku." />
 
       {/* Profile */}

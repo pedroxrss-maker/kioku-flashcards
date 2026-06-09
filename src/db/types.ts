@@ -41,6 +41,10 @@ export interface FsrsFields {
   difficulty: number;
   elapsedDays: number;
   scheduledDays: number;
+  /** ts-fsrs `learning_steps`: current step index within the learning/relearning
+   *  queue. Persisted so multi-step learning survives reloads (camelCase here to
+   *  match elapsedDays/scheduledDays/lastReview). */
+  learningSteps: number;
   reps: number;
   lapses: number;
   lastReview: number | null;

@@ -23,6 +23,7 @@ import { useAllCards, useAllLogs, useDecks, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
 import { Heatmap } from '../features/stats/Heatmap';
+import { ProgressChart } from '../features/stats/ProgressChart';
 import { CreateDeckModal } from '../features/decks/CreateDeckModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { DeckAvatar } from '../features/decks/deckIcons';
@@ -77,18 +78,20 @@ function StatCard({
   iconClassName?: string;
 }) {
   return (
-    <Panel className="p-4 md:p-5">
+    <Panel className="p-3 md:p-4 flex items-center gap-3">
       <span
-        className="icon-tile mb-3"
+        className="icon-tile shrink-0"
         style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}
       >
-        <Icon size={20} className={iconClassName} />
+        <Icon size={18} className={iconClassName} />
       </span>
-      <p className="text-sm text-muted">{label}</p>
-      <p className="display" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1 }}>
-        {value}
-      </p>
-      <p className="text-xs mt-0.5" style={{ color }}>{sub}</p>
+      <div className="min-w-0">
+        <p className="text-xs text-muted truncate">{label}</p>
+        <p className="display" style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
+          {value}
+        </p>
+        <p className="text-[11px] mt-0.5 truncate" style={{ color }}>{sub}</p>
+      </div>
     </Panel>
   );
 }
@@ -407,6 +410,25 @@ export function Home() {
         <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="#b14cff" />
       </section>
 
+      {/* Review heatmap */}
+      <Panel className="p-4 md:p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={16} className="text-muted" />
+          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
+        </div>
+        <div className="flex flex-col lg:flex-row lg:items-start gap-5">
+          <div className="min-w-0 lg:flex-1">
+            <Heatmap logs={logs} />
+          </div>
+          <div
+            className="border-t pt-5 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-5 lg:flex-1 min-w-0"
+            style={{ borderColor: 'var(--line)' }}
+          >
+            <ProgressChart logs={logs} />
+          </div>
+        </div>
+      </Panel>
+
       {/* Continue studying — full width */}
       <Panel className="p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -538,15 +560,6 @@ export function Home() {
             </Link>
           </Panel>
       </section>
-
-      {/* Review heatmap */}
-      <Panel className="p-5 md:p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <CalendarDays size={16} className="text-muted" />
-          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
-        </div>
-        <Heatmap logs={logs} />
-      </Panel>
 
       <CreateDeckModal open={createOpen} onClose={() => setCreateOpen(false)} />
       {settingsDeck && (

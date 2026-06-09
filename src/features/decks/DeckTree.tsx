@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Folder, MoreVertical, Pencil, Play, Settings2, Trash2 } from 'lucide-react';
 import { repo } from '../../db/repositories';
@@ -32,6 +32,54 @@ interface DeckTreeProps {
  *  pure grouping parent (no own deck). Studying either pulls all descendants. */
 function reviewTarget(node: DeckTreeNode): string {
   return node.deck ? node.deck.id : groupReviewToken(node.path);
+}
+
+/**
+ * Smooth, flicker-free height collapse via the CSS grid 0fr→1fr trick: the
+ * browser interpolates the row track itself, so there is NO per-frame JS height
+ * measurement — the cause of the old `height:auto` animation blinking the
+ * subtree out mid-slide whenever the tree re-rendered. Children stay mounted
+ * through the close (from a cached snapshot, since the parent stops handing them
+ * over once collapsed so the row budget stays honest) and unmount after.
+ */
+function Collapse({
+  open,
+  className,
+  children,
+}: {
+  open: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const reduce = useReducedMotion();
+  const durationMs = reduce ? 0 : 240;
+  const [mounted, setMounted] = useState(open);
+  const cached = useRef<ReactNode>(null);
+  if (open) cached.current = children; // keep the latest content while expanded
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    // Hold the content for one transition, then drop it once fully collapsed.
+    const t = setTimeout(() => setMounted(false), durationMs);
+    return () => clearTimeout(t);
+  }, [open, durationMs]);
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: `grid-template-rows ${durationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+      }}
+    >
+      <div style={{ overflow: 'hidden', minHeight: 0 }} className={className}>
+        {open ? children : mounted ? cached.current : null}
+      </div>
+    </div>
+  );
 }
 
 export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelete }: DeckTreeProps) {
@@ -104,7 +152,7 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
       budget.left -= 1;
       const expanded = !collapsed.has(node.path);
       out.push(
-        <div key={node.path} className="flex flex-col gap-1">
+        <div key={node.path}>
           <DeckTreeRow
             node={node}
             counts={aggregateCounts(node, Date.now())}
@@ -118,21 +166,12 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
             onDelete={onDelete}
           />
           {node.children.length > 0 && (
-            <AnimatePresence initial={false}>
-              {expanded && (
-                <motion.div
-                  key="children"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                  style={{ overflow: 'hidden' }}
-                  className="flex flex-col gap-1"
-                >
-                  {renderNodes(node.children)}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            // Gate the recursion on `expanded` so collapsed subtrees neither
+            // render nor spend the row budget; Collapse caches them for the
+            // slide-up. The pt-1 lives inside so it clips away with the rows.
+            <Collapse open={expanded} className="flex flex-col gap-1 pt-1">
+              {expanded ? renderNodes(node.children) : null}
+            </Collapse>
           )}
         </div>,
       );
