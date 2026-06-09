@@ -181,8 +181,11 @@ interface MappedScheduling {
 /**
  * Translate one Anki card's scheduling (cards table row) into Kioku fields, so
  * the user keeps studying where they left off. Best-effort.
+ *
+ * `fsrs` is set ONLY when the collection shipped real FSRS memory state — its
+ * presence is also how the importer tells an FSRS deck from a classic SM-2 one.
  */
-function mapScheduling(
+export function mapScheduling(
   type: number,
   queue: number,
   due: number,
@@ -225,14 +228,19 @@ function mapScheduling(
   try {
     const d = JSON.parse(data || '{}') as { s?: number; d?: number };
     if (typeof d.s === 'number' && typeof d.d === 'number') {
+      const ivlDays = Math.max(0, ivl);
       fsrs = {
         stability: d.s,
         difficulty: d.d,
-        elapsedDays: 0,
-        scheduledDays: Math.max(0, ivl),
+        elapsedDays: ivlDays,
+        scheduledDays: ivlDays,
         reps,
         lapses,
-        lastReview: state === 'new' ? null : nowMs,
+        // Back-date the last review to when Anki actually scheduled this card
+        // (due − interval) so FSRS derives the correct elapsed time on the next
+        // review. Using "now" would make every imported card look freshly
+        // reviewed and shrink its next interval.
+        lastReview: state === 'new' ? null : dueMs - ivlDays * DAY,
       };
     }
   } catch {
@@ -479,7 +487,6 @@ export async function importApkg(
     const settings = await repo.getSettings();
     const created: Array<{ id: string; path: string; cards: Card[] }> = [];
     let colorIdx = Math.floor(Math.random() * DECK_COLORS.length);
-    let mappedFirst = false;
     let audioSeen = false;
 
     for (const [did, rows] of rowsByDid) {
@@ -539,11 +546,18 @@ export async function importApkg(
 
       const fullName = deckNameById.get(did) || fallbackName;
       const color = DECK_COLORS[colorIdx++ % DECK_COLORS.length];
+      // Preserve the source schedule: keep the deck on the algorithm whose fields
+      // we actually imported. A classic Anki deck (SM-2) ships no FSRS memory
+      // state, so forcing it onto FSRS would discard the ease/interval we mapped
+      // and reschedule every card from an empty (stability 0) state — the cards
+      // stay due (count is right) but every interval is wrong. Use FSRS only when
+      // the collection genuinely carried FSRS memory state.
+      const usesFsrs = prepared.some((p) => p.sched.fsrs !== undefined);
       const deck = await repo.createDeck({
         name: leafName(fullName), // clean leaf label; full path lives in settings
         color,
         category: 'Importado',
-        algorithm: settings.defaultAlgorithm,
+        algorithm: usesFsrs ? 'fsrs' : 'sm2',
         newPerDay: settings.newPerDay,
         reviewsPerDay: settings.reviewsPerDay,
         desiredRetention: settings.defaultDesiredRetention,
@@ -559,17 +573,6 @@ export async function importApkg(
           fsrs: p.sched.fsrs ?? base.fsrs,
         };
       });
-
-      // TEMP (verification): scheduling of the first imported card overall.
-      if (!mappedFirst && cards[0]) {
-        mappedFirst = true;
-        const c = cards[0];
-        // eslint-disable-next-line no-console
-        console.log(
-          `[apkg import] "${fullName}" first card: state=${c.state} ` +
-            `due=${new Date(c.due).toISOString()} ivl=${c.sm2.intervalDays}d ease=${c.sm2.ease}`,
-        );
-      }
 
       created.push({ id: deck.id, path: fullName, cards });
     }
