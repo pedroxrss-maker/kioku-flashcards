@@ -1,8 +1,10 @@
 /** Time-of-day greeting in Brazilian Portuguese. */
 export function greeting(date: Date = new Date()): string {
   const h = date.getHours();
-  if (h >= 5 && h < 12) return 'Bom dia';
-  if (h >= 12 && h < 18) return 'Boa tarde';
+  // Boundaries kept in sync with dayPartForHour (the hero art):
+  // morning 05–10, afternoon 11–16, evening/night 17–04.
+  if (h >= 5 && h < 11) return 'Bom dia';
+  if (h >= 11 && h < 17) return 'Boa tarde';
   return 'Boa noite';
 }
 

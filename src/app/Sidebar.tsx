@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { useDecks } from '../db/hooks';
+import { useAllLogs, useDecks, useSettings } from '../db/hooks';
+import { studiedToday } from '../features/stats/compute';
 import { cn } from '../lib/cn';
 import { APP_VERSION, NAV_ITEMS } from './nav';
 import brandLogo from '../../neurofluency-logo-branca.png';
@@ -26,6 +27,57 @@ function navItemClass({ isActive }: { isActive: boolean }) {
     isActive
       ? 'text-fg bg-[color:var(--accent-soft)]'
       : 'text-muted hover:text-fg hover:bg-[color:var(--surface-2)]',
+  );
+}
+
+/** Compact daily-goal: a small progress ring with today's count + the goal. */
+function DailyGoalMini() {
+  const logs = useAllLogs();
+  const settings = useSettings();
+  const goal = settings?.dailyGoal ?? 40;
+  const today = studiedToday(logs);
+  const pct = goal > 0 ? Math.min(1, today / goal) : 0;
+  const size = 48;
+  const stroke = 5;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="mt-auto px-4 pt-4 flex items-center gap-3">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: 'stroke-dashoffset .5s ease' }}
+        />
+        <text
+          x="50%"
+          y="50%"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontFamily="var(--display)"
+          fontWeight={700}
+          fontSize="13"
+          fill="var(--fg)"
+        >
+          {today}
+        </text>
+      </svg>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold leading-tight">Meta diária</p>
+        <p className="mono text-[10px] text-muted">
+          {today}/{goal} cards
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -77,8 +129,10 @@ export function Sidebar() {
         </div>
       )}
 
+      <DailyGoalMini />
+
       {/* NeuroFluency lockup — fills the sidebar width, proportion preserved. */}
-      <div className="mt-auto px-4 pt-5 pb-1" title="NeuroFluency">
+      <div className="px-4 pt-5 pb-1" title="NeuroFluency">
         <svg
           viewBox="0 0 132 24"
           role="img"

@@ -202,13 +202,17 @@ export function ProgressChart({ logs }: { logs: ReviewLog[] }) {
           ))}
         </svg>
 
-        {/* floating value tooltip (kept on the active point) */}
+        {/* floating value tooltip — slides between days as you hover */}
         {activePt && (
-          <div
-            style={{
-              position: 'absolute',
+          <motion.div
+            initial={false}
+            animate={{
               left: `${(activePt.x / VBW) * 100}%`,
               top: `${(activePt.y / VBH) * 100}%`,
+            }}
+            transition={{ duration: reduce ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              position: 'absolute',
               transform: 'translate(-50%, calc(-100% - 10px))',
               background: 'var(--surface)',
               border: '1px solid var(--line-strong)',
@@ -224,7 +228,7 @@ export function ProgressChart({ logs }: { logs: ReviewLog[] }) {
               {points[activeIdx]?.value ?? 0}
             </div>
             <div className="text-muted" style={{ fontSize: 10 }}>cards</div>
-          </div>
+          </motion.div>
         )}
       </div>
 

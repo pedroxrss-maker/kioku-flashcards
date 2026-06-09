@@ -30,10 +30,11 @@ describe('App smoke test', () => {
     );
     expect(decks.length).toBeGreaterThan(0);
 
-    // The dashboard greeting renders with the profile display name. Awaited:
-    // the shell shows decks (sidebar) before the data-gate mounts Home.
+    // The dashboard greeting renders with the profile display name (time-of-day
+    // greeting, so match any variant). Awaited: the shell shows decks (sidebar)
+    // before the data-gate mounts Home.
     expect(
-      await screen.findByText(/Bem-vindo de volta, Pedro/, {}, { timeout: 8000 }),
+      await screen.findByText(/(Bom dia|Boa tarde|Boa noite), Pedro/, {}, { timeout: 8000 }),
     ).toBeTruthy();
   });
 });

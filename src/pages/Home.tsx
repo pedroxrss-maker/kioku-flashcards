@@ -24,6 +24,7 @@ import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
 import { Heatmap } from '../features/stats/Heatmap';
 import { ProgressChart } from '../features/stats/ProgressChart';
+import { HeroBackdrop, useDayPart } from '../features/home/HeroBackdrop';
 import { CreateDeckModal } from '../features/decks/CreateDeckModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { DeckAvatar } from '../features/decks/deckIcons';
@@ -32,15 +33,13 @@ import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
-import { computeStreak } from '../lib/greeting';
-import { dayKey } from '../lib/date';
+import { computeStreak, greeting } from '../lib/greeting';
+import { dayKey, startOfLocalDay } from '../lib/date';
 import {
   accuracySince,
   decksCreatedThisMonth,
   longestStreak,
-  recentActivity,
   reviewsSince,
-  studiedToday,
 } from '../features/stats/compute';
 import type { Deck } from '../db/types';
 
@@ -51,14 +50,6 @@ function initials(name: string): string {
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-function formatAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 60_000) return 'Agora';
-  if (diff < 3_600_000) return `Há ${Math.floor(diff / 60_000)}min`;
-  if (diff < DAY) return `Há ${Math.floor(diff / 3_600_000)}h`;
-  return `Há ${Math.floor(diff / DAY)}d`;
 }
 
 /* ------------------------------------------------------------- stat card -- */
@@ -93,45 +84,6 @@ function StatCard({
         <p className="text-[11px] mt-0.5 truncate" style={{ color }}>{sub}</p>
       </div>
     </Panel>
-  );
-}
-
-/* --------------------------------------------------------- daily ring ----- */
-function DailyRing({ value, goal }: { value: number; goal: number }) {
-  const pct = goal > 0 ? Math.min(1, value / goal) : 0;
-  const size = 132;
-  const stroke = 12;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c * (1 - pct)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-      />
-      <text
-        x="50%"
-        y="50%"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontFamily="var(--display)"
-        fontWeight={700}
-        fontSize="24"
-        fill="var(--fg)"
-      >
-        {value}/{goal}
-      </text>
-    </svg>
   );
 }
 
@@ -261,7 +213,8 @@ export function Home() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const name = displayName;
-  const goal = settings?.dailyGoal ?? 40;
+  // Drives both the time-of-day hero image and the greeting, live across boundaries.
+  const dayPart = useDayPart();
 
   const byDeck = useMemo(() => groupCardsByDeck(allCards), [allCards]);
 
@@ -285,11 +238,21 @@ export function Home() {
   );
 
   const mostDue = deckRows.find((r) => r.due > 0) ?? deckRows[0];
+  const totalDue = deckRows.reduce((n, r) => n + r.due, 0);
   const hierarchical = hasHierarchy(decks, settings?.deckPaths);
 
   const stats = useMemo(() => {
     const keys = new Set(logs.map((l) => dayKey(l.reviewedAt)));
     const weekAgo = Date.now() - 7 * DAY;
+    const todayStart = startOfLocalDay();
+    let todayMs = 0;
+    let todayCount = 0;
+    for (const l of logs) {
+      if (l.reviewedAt >= todayStart) {
+        todayMs += l.durationMs;
+        todayCount += 1;
+      }
+    }
     return {
       totalDecks: decks.length,
       decksMonth: decksCreatedThisMonth(decks),
@@ -298,13 +261,10 @@ export function Home() {
       streak: computeStreak(keys),
       best: longestStreak(keys),
       accuracy7d: accuracySince(logs, weekAgo),
-      today: studiedToday(logs),
+      today: todayCount,
+      todayAvgSec: todayCount ? todayMs / todayCount / 1000 : 0,
     };
   }, [logs, decks]);
-
-  const activity = useMemo(() => recentActivity(logs, decks, 4), [logs, decks]);
-  const remaining = Math.max(0, goal - stats.today);
-  const dailyPct = goal > 0 ? Math.min(100, Math.round((stats.today / goal) * 100)) : 0;
 
   return (
     <div className="flex flex-col gap-6 rise">
@@ -394,13 +354,42 @@ export function Home() {
         </div>
       </div>
 
-      {/* Greeting */}
-      <header>
-        <h1 className="display" style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 600 }}>
-          Bem-vindo de volta, {name}! 👋
-        </h1>
-        <p className="text-muted mt-1">Pronto para mais uma sessão de estudos?</p>
-      </header>
+      {/* Greeting hero — illustrated time-of-day backdrop behind the welcome + CTA */}
+      <Panel className="relative overflow-hidden">
+        <HeroBackdrop part={dayPart} />
+        {/* Contrast scrim: darker on the left where the text sits. */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(100deg, rgba(8,8,12,0.9) 0%, rgba(8,8,12,0.62) 44%, rgba(8,8,12,0.12) 100%)',
+          }}
+          aria-hidden
+        />
+        <div className="relative p-5 md:p-7 flex flex-col gap-4 min-h-[208px] md:min-h-[236px]">
+          <div className="flex-1">
+            <h1 className="display" style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 600 }}>
+              {greeting()}, {name}! 👋
+            </h1>
+            <p className="text-muted mt-1">Pronto para mais uma sessão de estudos?</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="btn btn-accent"
+              onClick={() => mostDue && nav(`/review/${mostDue.deck.id}`)}
+              disabled={!mostDue}
+            >
+              <Play size={16} /> Estudar agora
+            </button>
+            {totalDue > 0 && (
+              <span className="pill" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                {totalDue} a revisar
+              </span>
+            )}
+          </div>
+        </div>
+      </Panel>
 
       {/* Stat cards */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -432,9 +421,12 @@ export function Home() {
       {/* Continue studying — full width */}
       <Panel className="p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="display truncate" style={{ fontSize: 19, fontWeight: 600 }}>
+            <h2 className="display truncate shrink-0" style={{ fontSize: 19, fontWeight: 600 }}>
               Continuar estudando
             </h2>
+            <span className="mono text-xs text-muted hidden md:block truncate">
+              {stats.today} cards revisados hoje · {stats.todayAvgSec.toFixed(1)}s/card
+            </span>
             <Link to="/decks" className="text-sm text-accent hover:underline shrink-0 whitespace-nowrap">
               Ver todos<span className="hidden sm:inline"> os decks</span>
             </Link>
@@ -489,77 +481,6 @@ export function Home() {
             </div>
           )}
       </Panel>
-
-      {/* Daily progress + recent activity — balanced 2-column row */}
-      <section className="grid lg:grid-cols-2 gap-4 md:gap-5 items-start">
-        {/* Daily progress */}
-        <Panel className="p-4 md:p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="display" style={{ fontSize: 17, fontWeight: 600 }}>
-                Progresso diário
-              </h2>
-              <span className="pill pill-muted" style={{ padding: '3px 10px', fontSize: 12 }}>
-                Hoje
-              </span>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <DailyRing value={stats.today} goal={goal} />
-              <p className="text-sm text-muted mt-3">Cards estudados hoje</p>
-              <p className="text-sm mt-1">
-                {remaining > 0
-                  ? `Faltam ${remaining} cards para bater sua meta diária!`
-                  : 'Meta diária batida! 🎉'}
-              </p>
-              <div className="h-1.5 w-full rounded-full mt-3" style={{ background: 'var(--surface-2)' }}>
-                <div style={{ width: `${dailyPct}%`, height: '100%', background: 'var(--accent)', borderRadius: 999, transition: 'width .4s ease' }} />
-              </div>
-              <button
-                className="btn btn-ghost mt-4 w-full"
-                style={{ color: 'var(--accent)', borderColor: 'color-mix(in srgb, var(--accent) 40%, transparent)' }}
-                onClick={() => mostDue && nav(`/review/${mostDue.deck.id}`)}
-                disabled={!mostDue}
-              >
-                <Play size={15} /> Estudar agora
-              </button>
-            </div>
-          </Panel>
-
-          {/* Recent activity */}
-          <Panel className="p-4 md:p-5">
-            <h2 className="display mb-3" style={{ fontSize: 17, fontWeight: 600 }}>
-              Atividade recente
-            </h2>
-            {activity.length === 0 ? (
-              <p className="text-sm text-muted">Nenhuma atividade ainda.</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {activity.map((a, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <span
-                      className="flex items-center justify-center rounded-full shrink-0 mt-0.5"
-                      style={{
-                        width: 28,
-                        height: 28,
-                        background: a.kind === 'session' ? 'color-mix(in srgb, var(--accent-green) 18%, transparent)' : 'color-mix(in srgb, var(--accent-amber) 18%, transparent)',
-                        color: a.kind === 'session' ? 'var(--accent-green)' : 'var(--accent-amber)',
-                      }}
-                    >
-                      {a.kind === 'session' ? <CheckCircle2 size={15} /> : <Plus size={15} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm leading-tight">{a.main}</p>
-                      <p className="text-xs text-muted truncate">{a.sub}</p>
-                    </div>
-                    <span className="text-xs text-muted shrink-0">{formatAgo(a.time)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Link to="/stats" className="block text-sm text-accent hover:underline mt-4">
-              Ver toda atividade
-            </Link>
-          </Panel>
-      </section>
 
       <CreateDeckModal open={createOpen} onClose={() => setCreateOpen(false)} />
       {settingsDeck && (
