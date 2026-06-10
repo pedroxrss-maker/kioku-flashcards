@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Pencil, RotateCcw, X, Zap } from 'lucide-react';
+import { ArrowLeft, Check, HelpCircle, Pencil, RotateCcw, X, Zap } from 'lucide-react';
 import { useReviewSession } from '../features/review/useReviewSession';
 import { AnswerButtons } from '../features/review/AnswerButtons';
 import { buttonsFor } from '../features/review/buttons';
@@ -11,6 +11,7 @@ import { TypeInCard } from '../features/review/TypeInCard';
 import { Confetti } from '../features/review/Confetti';
 import { cardTypeOf } from '../lib/cardType';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
+import { TutorPanel } from '../features/ai/TutorPanel';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { tts } from '../features/tts/tts';
@@ -35,6 +36,7 @@ export function ReviewSession() {
   const session = useReviewSession(deckId);
   const { deck, currentDeck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
   const [editOpen, setEditOpen] = useState(false);
+  const [tutorOpen, setTutorOpen] = useState(false);
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const storedAudioRef = useRef<HTMLAudioElement | null>(null);
   const reduce = useReducedMotion();
@@ -46,7 +48,7 @@ export function ReviewSession() {
   // hidden for them.
   const isTypeIn = !!current && cardTypeOf(current.front) === 'typein';
   // Grouping-parent sessions use a synthetic "group:" id that isn't a real deck
-  // route — return to the deck list instead of a non-existent detail page.
+  // route, so return to the deck list instead of a non-existent detail page.
   const exitTo = deckId && !deckId.startsWith('group:') ? `/decks/${deckId}` : '/decks';
   const location = useLocation();
   // "Sair" returns to exactly the screen the user came from (history back). Falls
@@ -59,7 +61,7 @@ export function ReviewSession() {
   // Keyboard: space/enter flip; 1..N rate after reveal; Esc exit.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (editOpen) return; // the editor handles its own keys while open
+      if (editOpen || tutorOpen) return; // the editor/tutor own their keys while open
       if (e.key === 'Escape') {
         goBack();
         return;
@@ -108,7 +110,12 @@ export function ReviewSession() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen]);
+  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen, tutorOpen]);
+
+  // Close the tutor whenever the card changes (it is about one specific card).
+  useEffect(() => {
+    setTutorOpen(false);
+  }, [current?.id]);
 
   // Pronounce the front as soon as a card appears, in priority order:
   //   1) a stored audio FILE (cards.audio_path, e.g. ElevenLabs) via a signed URL
@@ -325,6 +332,16 @@ export function ReviewSession() {
               <Pencil size={15} />
             </button>
           )}
+          {current && flipped && (
+            <button
+              onClick={() => setTutorOpen(true)}
+              aria-label="Preciso de ajuda (tutor IA)"
+              title="Preciso de ajuda (tutor IA)"
+              className="p-1.5 rounded-[var(--r-sm)] text-muted hover:text-accent hover:bg-[color:var(--surface-2)] transition-colors"
+            >
+              <HelpCircle size={15} />
+            </button>
+          )}
         </div>
         <div className="text-center min-w-0">
           <p className="font-bold truncate text-sm" style={{ maxWidth: '50vw' }}>
@@ -474,6 +491,17 @@ export function ReviewSession() {
           deckId={current.deckId}
           card={current}
           ttsLang={(audioDeck ?? deck).ttsLang}
+        />
+      )}
+
+      {/* AI tutor for the current card (overlay; does not touch session state). */}
+      {current && (
+        <TutorPanel
+          key={current.id}
+          open={tutorOpen}
+          onClose={() => setTutorOpen(false)}
+          front={stripHtml(current.front)}
+          back={stripHtml(current.back)}
         />
       )}
     </motion.div>
