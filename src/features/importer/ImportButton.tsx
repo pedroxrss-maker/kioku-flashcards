@@ -11,7 +11,7 @@ interface ImportButtonProps {
   size?: 'sm' | 'md';
 }
 
-/** Read a Blob via FileReader — a DIFFERENT code path than `Blob.arrayBuffer()`,
+/** Read a Blob via FileReader, a DIFFERENT code path than `Blob.arrayBuffer()`,
  *  which can throw NotReadableError on some large or cloud-synced files. */
 function readViaFileReader(blob: Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
@@ -25,12 +25,12 @@ function readViaFileReader(blob: Blob): Promise<ArrayBuffer> {
 /**
  * Read a File fully into memory, robustly, immediately inside the user gesture
  * (so the File reference never goes stale). Big/cloud-synced .colpkg collections
- * — the kind that carry subdecks — often make `Blob.arrayBuffer()` throw
+ * (the kind that carry subdecks) often make `Blob.arrayBuffer()` throw
  * NotReadableError, so we escalate through progressively more resilient
  * strategies before giving up:
- *   1) file.arrayBuffer()            — fast path
- *   2) FileReader over the whole file — different API, frequently succeeds where 1 fails
- *   3) FileReader chunk by chunk      — most resilient for very large files
+ *   1) file.arrayBuffer()             : fast path
+ *   2) FileReader over the whole file : different API, frequently succeeds where 1 fails
+ *   3) FileReader chunk by chunk      : most resilient for very large files
  */
 async function readFileBytes(file: File): Promise<Uint8Array> {
   try {
@@ -62,6 +62,7 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -69,8 +70,9 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
     if (!file) return;
     setBusy(true);
     setError(null);
+    setProgress(null);
 
-    // Read the FULL file into memory NOW — synchronously within this user-gesture
+    // Read the FULL file into memory NOW, synchronously within this user-gesture
     // handler, before any deck parsing or other awaits. Large or cloud-synced
     // files (OneDrive/Drive) can lose their File reference if the read is
     // deferred, which surfaces as "the requested file could not be read".
@@ -91,12 +93,15 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
 
     try {
       const { importApkg } = await import('./apkg-import');
-      const res = await importApkg(bytes, file.name);
+      const res = await importApkg(bytes, file.name, (p) => {
+        if (p.total > 0) setProgress(`${p.phase} ${p.done}/${p.total}`);
+      });
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao importar o arquivo.');
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -109,7 +114,11 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
         onClick={() => fileRef.current?.click()}
         disabled={busy}
       >
-        {busy ? 'Importando… (pode levar um tempo)' : 'Importar .apkg'}
+        {busy
+          ? progress
+            ? `Importando ${progress}`
+            : 'Importando… (pode levar um tempo)'
+          : 'Importar .apkg'}
       </Button>
       <input
         ref={fileRef}
