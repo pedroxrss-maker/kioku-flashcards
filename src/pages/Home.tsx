@@ -399,25 +399,6 @@ export function Home() {
         <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="#b14cff" />
       </section>
 
-      {/* Review heatmap */}
-      <Panel className="p-4 md:p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <CalendarDays size={16} className="text-muted" />
-          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
-        </div>
-        <div className="flex flex-col lg:flex-row lg:items-start gap-5">
-          <div className="min-w-0 lg:flex-1">
-            <Heatmap logs={logs} />
-          </div>
-          <div
-            className="border-t pt-5 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-5 lg:flex-1 min-w-0"
-            style={{ borderColor: 'var(--line)' }}
-          >
-            <ProgressChart logs={logs} />
-          </div>
-        </div>
-      </Panel>
-
       {/* Continue studying — full width */}
       <Panel className="p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -480,6 +461,25 @@ export function Home() {
               ))}
             </div>
           )}
+      </Panel>
+
+      {/* Review heatmap */}
+      <Panel className="p-4 md:p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={16} className="text-muted" />
+          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
+        </div>
+        <div className="flex flex-col lg:flex-row lg:items-start gap-5">
+          <div className="min-w-0 lg:flex-1">
+            <Heatmap logs={logs} />
+          </div>
+          <div
+            className="border-t pt-5 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-5 lg:flex-1 min-w-0"
+            style={{ borderColor: 'var(--line)' }}
+          >
+            <ProgressChart logs={logs} />
+          </div>
+        </div>
       </Panel>
 
       <CreateDeckModal open={createOpen} onClose={() => setCreateOpen(false)} />

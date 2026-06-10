@@ -1,4 +1,4 @@
-import { BarChart3, House, Layers, Settings, Zap } from 'lucide-react';
+import { BarChart3, House, Layers, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface NavItemDef {
@@ -11,7 +11,6 @@ export interface NavItemDef {
 export const NAV_ITEMS: NavItemDef[] = [
   { to: '/', label: 'Início', icon: House, end: true },
   { to: '/decks', label: 'Meus decks', icon: Layers },
-  { to: '/review', label: 'Revisão', icon: Zap },
   { to: '/stats', label: 'Estatísticas', icon: BarChart3 },
   { to: '/settings', label: 'Configurações', icon: Settings },
 ];
