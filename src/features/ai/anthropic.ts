@@ -122,6 +122,47 @@ export async function generateCards(req: GenerateRequest): Promise<GeneratedCard
   return parseCardsJson(text);
 }
 
+export interface BatchProgress {
+  call: number;
+  got: number;
+  target: number;
+}
+
+/**
+ * Generate up to `target` cards in batches of at most 50 per call (the source is
+ * re-sent each call with the already-generated fronts as an avoid-list, so the
+ * model produces new material and we merge + de-dupe). Stops when a call adds
+ * nothing new or after a safety cap of calls. Used for long PDFs / pages.
+ */
+export async function generateCardsBatched(
+  base: Omit<GenerateRequest, 'count' | 'avoid'>,
+  target: number,
+  onProgress?: (p: BatchProgress) => void,
+): Promise<GeneratedCard[]> {
+  const all: GeneratedCard[] = [];
+  const seen = new Set<string>();
+  for (let call = 1; call <= 6 && all.length < target; call += 1) {
+    onProgress?.({ call, got: all.length, target });
+    const want = Math.min(50, target - all.length);
+    const batch = await generateCards({
+      ...base,
+      count: want,
+      avoid: all.map((c) => c.front).slice(-120),
+    });
+    let added = 0;
+    for (const c of batch) {
+      const key = c.front.trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        all.push(c);
+        added += 1;
+      }
+    }
+    if (added === 0) break; // the model has nothing new to add
+  }
+  return all.slice(0, target);
+}
+
 export interface TutorRequest {
   /** Plain-text front of the flashcard being reviewed. */
   front: string;

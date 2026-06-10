@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { DeckBrowser } from '../features/decks/DeckBrowser';
 import { ImportButton } from '../features/importer/ImportButton';
+import { AiImportButton } from '../features/importer/AiImportButton';
 import { useDecks } from '../db/hooks';
 
 export function Decks() {
@@ -17,6 +18,7 @@ export function Decks() {
             <Link to="/generate" className="btn btn-accent btn-sm">
               <Sparkles size={16} /> Gerar deck com IA
             </Link>
+            <AiImportButton />
             <ImportButton variant="ghost" />
           </div>
         }
