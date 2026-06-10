@@ -7,8 +7,11 @@ import {
   storeAudio,
   storeImage,
   toEditorHtml,
+  uploadImageToStorage,
 } from '../media/media';
+import { recordStorageUpload } from '../media/usage';
 import { clozeNumbers } from '../../lib/cloze';
+import { pushToast } from '../../lib/toast';
 import { ElevenLabsDialog } from '../tts/ElevenLabsDialog';
 
 interface RichTextFieldProps {
@@ -16,6 +19,9 @@ interface RichTextFieldProps {
   valueHtml: string;
   onChange: (html: string) => void;
   autoFocus?: boolean;
+  /** Deck id. When set, inserted images upload to Supabase Storage; without it
+   *  they fall back to the local IndexedDB store (legacy behavior). */
+  deckId?: string;
   /** Deck language (e.g. 'en-US'), used to seed the ElevenLabs dialog. */
   ttsLang?: string;
   /** Show the "Cloze" button (lights up when text is selected). */
@@ -66,7 +72,7 @@ function ToolbarBtn({
 /** contentEditable rich-text field with a formatting + image + audio toolbar. */
 export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>(
   function RichTextField(
-    { label, valueHtml, onChange, autoFocus, ttsLang = 'en-US', showCloze = false, onTab, onCtrlEnter },
+    { label, valueHtml, onChange, autoFocus, deckId, ttsLang = 'en-US', showCloze = false, onTab, onCtrlEnter },
     fwdRef,
   ) {
   const ref = useRef<HTMLDivElement>(null);
@@ -153,10 +159,21 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const { id, url } = await storeImage(file);
-    ref.current?.focus();
-    document.execCommand('insertHTML', false, `<img src="${url}" data-kioku-media="${id}" alt="" />`);
-    emit();
+    try {
+      // With a deck id, upload to Supabase Storage (syncs across devices). Without
+      // one, keep the legacy IndexedDB path so nothing breaks.
+      const { ref: mediaRef, url } = deckId
+        ? await uploadImageToStorage(file, deckId).then(async (r) => {
+            void recordStorageUpload(r.bytes);
+            return { ref: r.path, url: r.url };
+          })
+        : await storeImage(file).then((r) => ({ ref: r.id, url: r.url }));
+      ref.current?.focus();
+      document.execCommand('insertHTML', false, `<img src="${url}" data-kioku-media="${mediaRef}" alt="" />`);
+      emit();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Não foi possível enviar a imagem.');
+    }
   }
 
   async function onAudioFile(e: ChangeEvent<HTMLInputElement>) {

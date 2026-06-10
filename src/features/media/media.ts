@@ -1,14 +1,19 @@
 import { repo } from '../../db/repositories';
 import { uuid } from '../../lib/uuid';
+import { getSignedUrl, mediaObjectPath, uploadMedia } from './storage';
+import { resizeImageBlob } from './image';
 
 /**
- * Media handling. Images and audio both live as `MediaBlob` rows in IndexedDB.
- * Card HTML references them with custom URIs:
+ * Media handling. A card references media in its HTML with custom URIs:
  *   - images  -> `kioku-media://<id>`  (rendered as <img>)
  *   - audio   -> `kioku-audio://<id>`  (rendered as a playable <audio> chip)
- * At render time we swap those refs for object URLs; in the editor we additionally
+ *
+ * The `<id>` is either a Supabase Storage object path (contains "/", resolved to
+ * a short-lived signed URL) or a legacy IndexedDB MediaBlob id (a bare uuid,
+ * resolved to a local object URL). Both schemes coexist so old cards keep
+ * working. At render time we swap refs for URLs; in the editor we additionally
  * tag the element (`data-kioku-media` / `data-kioku-audio`) so we can serialize
- * back to the storage form. Audio works offline with no API key once stored.
+ * back to the storage form.
  */
 
 const MEDIA_PROTOCOL = 'kioku-media://';
@@ -32,6 +37,22 @@ function refId(src: string): { id: string; isAudio: boolean } | null {
   if (src.startsWith(MEDIA_PROTOCOL)) return { id: src.slice(MEDIA_PROTOCOL.length), isAudio: false };
   if (src.startsWith(AUDIO_PROTOCOL)) return { id: src.slice(AUDIO_PROTOCOL.length), isAudio: true };
   return null;
+}
+
+/** A ref id with a "/" is a Storage object path; a bare id is a legacy blob. */
+function isStoragePath(id: string): boolean {
+  return id.includes('/');
+}
+
+/** Resolve a media ref id to a displayable URL: Storage paths become short-lived
+ *  signed URLs, legacy ids become IndexedDB object URLs. Never throws (returns
+ *  null so one broken media never blocks the whole card render). */
+async function urlForRef(id: string): Promise<string | null> {
+  try {
+    return isStoragePath(id) ? await getSignedUrl(id) : await objectUrlForMedia(id);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -58,7 +79,7 @@ export async function resolveMediaHtml(html: string): Promise<string> {
     els.map(async (el) => {
       const ref = refId(el.getAttribute('src') ?? '');
       if (!ref) return;
-      const url = await objectUrlForMedia(ref.id);
+      const url = await urlForRef(ref.id);
       if (url) el.setAttribute('src', url);
     }),
   );
@@ -74,7 +95,7 @@ export async function toEditorHtml(html: string): Promise<string> {
     els.map(async (el) => {
       const ref = refId(el.getAttribute('src') ?? '');
       if (!ref) return;
-      const url = await objectUrlForMedia(ref.id);
+      const url = await urlForRef(ref.id);
       if (!url) return;
       el.setAttribute('src', url);
       el.setAttribute(ref.isAudio ? 'data-kioku-audio' : 'data-kioku-media', ref.id);
@@ -133,6 +154,36 @@ export async function storeAudio(
   const url = URL.createObjectURL(blob);
   urlCache.set(id, url);
   return { id, url };
+}
+
+/**
+ * Upload an image to the private "media" bucket (downscaled first), returning the
+ * Storage object path to embed (as kioku-media://<path>), a local preview URL for
+ * instant insertion, and the uploaded byte size (for usage tracking).
+ */
+export async function uploadImageToStorage(
+  file: Blob,
+  deckId: string,
+): Promise<{ path: string; url: string; bytes: number }> {
+  let blob: Blob = file;
+  let ext = 'jpg';
+  let contentType = file.type || 'image/jpeg';
+  try {
+    const r = await resizeImageBlob(file);
+    blob = r.blob;
+    ext = r.ext;
+    contentType = r.contentType;
+  } catch {
+    // Could not decode/resize: upload the original bytes as-is.
+    if (contentType.includes('png')) ext = 'png';
+    else if (contentType.includes('webp')) ext = 'webp';
+    else if (contentType.includes('gif')) ext = 'gif';
+  }
+  const path = await mediaObjectPath(deckId, `img_${uuid().slice(0, 8)}.${ext}`);
+  await uploadMedia(path, blob, contentType);
+  // Local preview URL for an instant insert; resolveMediaHtml signs the path later.
+  const url = URL.createObjectURL(blob);
+  return { path, url, bytes: blob.size };
 }
 
 function escapeHtml(s: string): string {

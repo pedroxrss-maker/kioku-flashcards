@@ -287,6 +287,7 @@ export function CardEditorModal({
                   valueHtml={front}
                   onChange={setFront}
                   autoFocus
+                  deckId={deckId}
                   ttsLang={ttsLang}
                   showCloze
                   onTab={focusNext}
@@ -302,6 +303,7 @@ export function CardEditorModal({
                   label="Extra (verso, opcional)"
                   valueHtml={back}
                   onChange={setBack}
+                  deckId={deckId}
                   ttsLang={ttsLang}
                   onCtrlEnter={save}
                 />
@@ -314,6 +316,7 @@ export function CardEditorModal({
                   valueHtml={front}
                   onChange={setFront}
                   autoFocus
+                  deckId={deckId}
                   ttsLang={ttsLang}
                   onTab={focusNext}
                   onCtrlEnter={save}
@@ -343,6 +346,7 @@ export function CardEditorModal({
                   valueHtml={front}
                   onChange={setFront}
                   autoFocus
+                  deckId={deckId}
                   ttsLang={ttsLang}
                   onTab={focusNext}
                   onCtrlEnter={save}
@@ -353,6 +357,7 @@ export function CardEditorModal({
                   label="Verso"
                   valueHtml={back}
                   onChange={setBack}
+                  deckId={deckId}
                   ttsLang={ttsLang}
                   onCtrlEnter={save}
                 />
