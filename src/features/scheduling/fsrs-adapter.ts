@@ -8,6 +8,7 @@ import {
 } from 'ts-fsrs';
 import type { Card, CardState, Rating, ReviewLog } from '../../db/types';
 import { labelInterval } from './sm2-adapter';
+import { uuid } from '../../lib/uuid';
 
 const DAY = 86_400_000;
 
@@ -116,7 +117,7 @@ export function makeFsrsScheduler(desiredRetention: number) {
       const res = s.next(toFsrs(card, now), new Date(now), RATING[rating]);
       const updated = fromFsrs(card, res.card);
       const log: ReviewLog = {
-        id: crypto.randomUUID(),
+        id: uuid(),
         cardId: card.id,
         deckId: card.deckId,
         rating,

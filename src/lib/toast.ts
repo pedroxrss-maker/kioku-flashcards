@@ -3,6 +3,8 @@
  * pt-BR messages — e.g. a background review write that failed — without
  * coupling the data layer to React. Mount <Toaster /> once to render them.
  */
+import { uuid } from './uuid';
+
 export type ToastKind = 'error' | 'info' | 'success';
 
 export interface Toast {
@@ -33,10 +35,7 @@ export function dismissToast(id: string): void {
 }
 
 export function pushToast(kind: ToastKind, message: string, ttlMs = 6000): string {
-  const id =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random()}`;
+  const id = uuid();
   // Collapse exact duplicates so a flaky network doesn't stack identical toasts.
   if (toasts.some((t) => t.message === message && t.kind === kind)) return id;
   toasts = [...toasts, { id, kind, message }];

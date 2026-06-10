@@ -1,4 +1,5 @@
 import type { Card, Rating, ReviewLog } from '../../db/types';
+import { uuid } from '../../lib/uuid';
 
 export interface Sm2Config {
   learningStepsMin: number[]; // [1, 10]
@@ -185,7 +186,7 @@ export function makeSm2Scheduler(config: Sm2Config = DEFAULT_SM2) {
     apply(card: Card, rating: Rating, now: number, durationMs: number) {
       const updated = transition(card, rating, now, config, true);
       const log: ReviewLog = {
-        id: crypto.randomUUID(),
+        id: uuid(),
         cardId: card.id,
         deckId: card.deckId,
         rating,

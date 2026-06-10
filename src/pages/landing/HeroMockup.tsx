@@ -299,9 +299,37 @@ function MainCard() {
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                   <p style={{ color: 'var(--fg)', fontSize: 19, fontWeight: 600, lineHeight: 1.35, fontFamily: 'var(--body)' }}>{meta.q}</p>
                 </div>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--muted)', fontSize: 13, fontFamily: 'var(--body)' }}>
+                <motion.span
+                  style={{
+                    display: 'inline-flex',
+                    alignSelf: 'flex-start',
+                    alignItems: 'center',
+                    gap: 7,
+                    color: 'var(--accent)',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    fontFamily: 'var(--body)',
+                    padding: '7px 13px',
+                    borderRadius: 'var(--r-full)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 55%, transparent)',
+                    background: 'color-mix(in srgb, var(--accent) 14%, transparent)',
+                  }}
+                  animate={
+                    reduce
+                      ? undefined
+                      : {
+                          scale: [1, 1.04, 1],
+                          boxShadow: [
+                            '0 0 0 0 rgba(255,59,31,0.5)',
+                            '0 0 0 8px rgba(255,59,31,0)',
+                            '0 0 0 0 rgba(255,59,31,0)',
+                          ],
+                        }
+                  }
+                  transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+                >
                   <ArrowRight size={15} /> Clique para ver a resposta
-                </span>
+                </motion.span>
               </div>
 
               {/* BACK — answer text above the illustration; bg matches the image */}

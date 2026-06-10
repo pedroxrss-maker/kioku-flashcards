@@ -1,4 +1,5 @@
 import { repo } from '../../db/repositories';
+import { uuid } from '../../lib/uuid';
 
 /**
  * Media handling. Images and audio both live as `MediaBlob` rows in IndexedDB.
@@ -106,7 +107,7 @@ export function fromEditorHtml(html: string): string {
 export async function storeImage(
   file: Blob,
 ): Promise<{ id: string; url: string }> {
-  const id = crypto.randomUUID();
+  const id = uuid();
   await repo.putMedia({
     id,
     mime: file.type || 'image/png',
@@ -122,7 +123,7 @@ export async function storeImage(
 export async function storeAudio(
   blob: Blob,
 ): Promise<{ id: string; url: string }> {
-  const id = crypto.randomUUID();
+  const id = uuid();
   await repo.putMedia({
     id,
     mime: blob.type || 'audio/mpeg',

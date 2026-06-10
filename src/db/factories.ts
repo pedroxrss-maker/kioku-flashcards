@@ -7,6 +7,7 @@ import type {
   FsrsFields,
   Sm2Fields,
 } from './types';
+import { uuid } from '../lib/uuid';
 
 /** Fresh sm2 sub-state for a brand-new card. */
 export function newSm2Fields(): Sm2Fields {
@@ -36,7 +37,7 @@ export function newFsrsFields(): FsrsFields {
 
 export function makeDeck(input: DeckInput): Deck {
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     name: input.name.trim(),
     color: input.color,
     category: input.category?.trim() || undefined,
@@ -53,7 +54,7 @@ export function makeDeck(input: DeckInput): Deck {
 export function makeCard(input: CardInput): Card {
   const now = Date.now();
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     deckId: input.deckId,
     front: input.front,
     back: input.back,

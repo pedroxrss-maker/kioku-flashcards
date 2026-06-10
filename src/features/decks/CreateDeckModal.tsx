@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { cn } from '../../lib/cn';
+import { pushToast } from '../../lib/toast';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
@@ -60,6 +61,11 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       });
       onClose();
       nav(`/decks/${deck.id}`);
+    } catch (err) {
+      // Don't fail silently (the button used to just re-enable on iPad Safari).
+      pushToast('error', 'Não foi possível criar o deck. Tente novamente.');
+      // eslint-disable-next-line no-console
+      console.error('createDeck failed', err);
     } finally {
       setSaving(false);
     }
