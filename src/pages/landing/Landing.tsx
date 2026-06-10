@@ -6,6 +6,7 @@
  * prefers-reduced-motion via framer-motion's useReducedMotion.
  */
 import { useNavigate } from 'react-router-dom';
+import { SIGNUPS_ENABLED } from '../../config';
 import { Reveal } from './anim';
 import { NeuroLockup } from './brand';
 import { LandingNav } from './LandingNav';
@@ -68,7 +69,7 @@ function FinalCta() {
             Comece a vencer o esquecimento hoje<span style={{ color: 'var(--accent)' }}>.</span>
           </h2>
           <div className="mt-7 flex justify-center">
-            <button type="button" className="btn-mega" onClick={() => nav('/entrar?mode=signup')}>
+            <button type="button" className="btn-mega" onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}>
               Criar conta grátis
             </button>
           </div>

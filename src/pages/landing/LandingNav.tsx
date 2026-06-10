@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
 import { KiokuMark } from './brand';
 import { scrollToId } from './anim';
+import { SIGNUPS_ENABLED } from '../../config';
 
 const ANCHORS: Array<[string, string]> = [
   ['Recursos', 'recursos'],
@@ -65,7 +66,7 @@ export function LandingNav() {
           </button>
           <button
             type="button"
-            onClick={() => nav('/entrar?mode=signup')}
+            onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}
             className="btn btn-accent btn-sm"
           >
             Criar conta

@@ -4,6 +4,7 @@ import { Brain, FlaskConical, RefreshCw } from 'lucide-react';
 import { Reveal, scrollToId } from './anim';
 import { NeuroWordmark } from './brand';
 import { HeroMockup } from './HeroMockup';
+import { SIGNUPS_ENABLED } from '../../config';
 
 const VALUES = [
   { icon: Brain, title: 'SM-2 e FSRS', line: 'dois algoritmos de repetição espaçada' },
@@ -58,7 +59,7 @@ export function Hero() {
 
           <Reveal delay={0.18}>
             <div className="flex flex-wrap items-center gap-3 mt-7">
-              <button type="button" className="btn-mega" onClick={() => nav('/entrar?mode=signup')}>
+              <button type="button" className="btn-mega" onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}>
                 Criar conta grátis
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => scrollToId('como-funciona', reduce)}>

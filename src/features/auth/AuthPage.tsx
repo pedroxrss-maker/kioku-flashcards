@@ -10,6 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { SIGNUPS_ENABLED } from '../../config';
 import brandLogo from '../../../neurofluency-logo-branca.png';
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -31,9 +32,11 @@ export function AuthPage() {
   const { signIn, signUp } = useAuth();
   const reduce = useReducedMotion();
   // Tab is driven by the URL: /entrar?mode=signup opens "Criar conta",
-  // /entrar (or ?mode=login) opens "Entrar".
+  // /entrar (or ?mode=login) opens "Entrar". When signups are disabled we ignore
+  // ?mode=signup and only ever show the login form.
   const [searchParams] = useSearchParams();
-  const paramMode: Mode = searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
+  const paramMode: Mode =
+    SIGNUPS_ENABLED && searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
   const [mode, setMode] = useState<Mode>(paramMode);
   useEffect(() => {
     setMode(paramMode);
@@ -96,7 +99,9 @@ export function AuthPage() {
         </div>
 
         <div className="surface p-6 md:p-7">
-          {/* Tabs — the accent pill slides between options (shared layout). */}
+          {/* Tabs (login + signup): the accent pill slides between options. Hidden
+              entirely when signups are disabled, leaving only the login form. */}
+          {SIGNUPS_ENABLED && (
           <div
             className="flex gap-1 p-1 mb-5"
             style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-full)' }}
@@ -133,6 +138,7 @@ export function AuthPage() {
               );
             })}
           </div>
+          )}
 
           <form onSubmit={onSubmit} className="flex flex-col" noValidate>
             {/* Signup-only name field: smoothly expands/collapses on toggle.
@@ -227,17 +233,23 @@ export function AuthPage() {
             </button>
           </form>
 
-          <p className="text-sm text-muted text-center mt-5">
-            {isSignup ? 'Já tem uma conta?' : 'Ainda não tem conta?'}{' '}
-            <button
-              type="button"
-              className="font-semibold"
-              style={{ color: 'var(--accent)' }}
-              onClick={() => switchMode(isSignup ? 'signin' : 'signup')}
-            >
-              {isSignup ? 'Entrar' : 'Criar conta'}
-            </button>
-          </p>
+          {SIGNUPS_ENABLED ? (
+            <p className="text-sm text-muted text-center mt-5">
+              {isSignup ? 'Já tem uma conta?' : 'Ainda não tem conta?'}{' '}
+              <button
+                type="button"
+                className="font-semibold"
+                style={{ color: 'var(--accent)' }}
+                onClick={() => switchMode(isSignup ? 'signin' : 'signup')}
+              >
+                {isSignup ? 'Entrar' : 'Criar conta'}
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs text-muted text-center mt-5">
+              Cadastros temporariamente fechados.
+            </p>
+          )}
         </div>
       </div>
     </div>

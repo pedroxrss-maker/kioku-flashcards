@@ -12,7 +12,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { CSSProperties, ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import type { MotionValue } from 'framer-motion';
-import { ArrowRight, Flame, MoreVertical, Star } from 'lucide-react';
+import { ArrowRight, Flame, MoreVertical, Pointer, Star } from 'lucide-react';
 import { makeSm2Scheduler } from '../../features/scheduling/sm2-adapter';
 import type { Card, Rating } from '../../db/types';
 import { useCountUp } from './anim';
@@ -85,6 +85,8 @@ interface DemoState {
   meta: DemoMeta;
   index: number;
   flipped: boolean;
+  /** True once the user has flipped the card at least once (hides the hint). */
+  touched: boolean;
   flip: () => void;
   preview: Record<Rating, { card: Card; intervalLabel: string }>;
   rate: (r: Rating) => void;
@@ -99,6 +101,7 @@ function useSm2Demo(): DemoState {
   const [cards, setCards] = useState<Card[]>(() => DECK.map(newDemoCard));
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [touched, setTouched] = useState(false);
 
   const current = cards[index];
   const preview = useMemo(() => scheduler.preview(current, Date.now()), [scheduler, current]);
@@ -115,7 +118,11 @@ function useSm2Demo(): DemoState {
     meta: DECK[index],
     index,
     flipped,
-    flip: () => setFlipped((f) => !f),
+    touched,
+    flip: () => {
+      setTouched(true);
+      setFlipped((f) => !f);
+    },
     preview,
     rate,
   };
@@ -505,6 +512,7 @@ export function HeroMockup() {
   const pProg = useTransform(scrollY, [0, 700], [0, 30]);
   const pEvo = useTransform(scrollY, [0, 700], [0, -36]);
   const demo = useSm2Demo();
+  const reduce = useReducedMotion();
 
   return (
     <DemoCtx.Provider value={demo}>
@@ -541,6 +549,38 @@ export function HeroMockup() {
           </Tilt3D>
         </Draggable>
       </FloatItem>
+
+      {/* Click-hand cursor: rises from "Evolução" up to the card's CTA, taps,
+          then loops — a gentle hint to click the demo. Vanishes once the user
+          flips the card the first time. Decorative + off under reduced motion.
+          Coords are in the 520x460 design box. */}
+      {!reduce && !demo.touched && (
+        <motion.div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            zIndex: 20,
+            pointerEvents: 'none',
+            filter: 'drop-shadow(0 3px 7px rgba(0,0,0,0.55))',
+          }}
+          animate={{
+            x: [420, 420, 116, 116, 116, 116, 116, 420],
+            y: [372, 372, 280, 280, 280, 280, 280, 372],
+            opacity: [0, 1, 1, 1, 1, 1, 0, 0],
+            scale: [1, 1, 1, 0.82, 1, 1, 1, 1],
+          }}
+          transition={{
+            duration: 4,
+            times: [0, 0.1, 0.42, 0.5, 0.57, 0.74, 0.82, 1],
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        >
+          <Pointer size={30} strokeWidth={1.6} fill="#fff" color="#fff" />
+        </motion.div>
+      )}
     </Scaler>
     </DemoCtx.Provider>
   );
