@@ -5,6 +5,7 @@ import { Toaster } from '../components/Toaster';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
 import { Decks } from '../pages/Decks';
+import { GenerateDeck } from '../pages/GenerateDeck';
 import { DeckDetail } from '../pages/DeckDetail';
 import { ReviewHub } from '../pages/ReviewHub';
 import { ReviewSession } from '../pages/ReviewSession';
@@ -68,6 +69,7 @@ function AuthedApp() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/decks" element={<Decks />} />
+          <Route path="/generate" element={<GenerateDeck />} />
           <Route path="/decks/:id" element={<DeckDetail />} />
           <Route path="/review" element={<ReviewHub />} />
           <Route path="/stats" element={<Stats />} />

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { DeckBrowser } from '../features/decks/DeckBrowser';
 import { ImportButton } from '../features/importer/ImportButton';
@@ -10,7 +12,14 @@ export function Decks() {
       <PageHeader
         title="Meus decks"
         subtitle={`${decks.length} ${decks.length === 1 ? 'deck' : 'decks'}`}
-        action={<ImportButton variant="ghost" />}
+        action={
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Link to="/generate" className="btn btn-accent btn-sm">
+              <Sparkles size={16} /> Gerar deck com IA
+            </Link>
+            <ImportButton variant="ghost" />
+          </div>
+        }
       />
       <DeckBrowser />
     </div>
