@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Eye, Pencil, Volume2 } from 'lucide-react';
+import { Cloud, Eye, Pencil, Volume2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
 import { RichTextField } from './RichTextField';
 import type { RichTextFieldHandle } from './RichTextField';
 import { CardHtml } from '../media/CardHtml';
+import { GenerateCardAudioButton } from '../tts/GenerateCardAudioButton';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { buildClozeHtml, clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
@@ -374,6 +375,20 @@ export function CardEditorModal({
         </span>
         <Toggle checked={pronounce} onChange={setPronounce} />
       </label>
+
+      {editing && card && (
+        <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--line)' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Cloud size={15} className="text-muted shrink-0" />
+            <span className="text-sm font-semibold">Áudio na nuvem (ElevenLabs)</span>
+          </div>
+          <GenerateCardAudioButton card={card} />
+          <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
+            Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do deck
+            está ligado. Configure a chave da ElevenLabs em Configurações.
+          </p>
+        </div>
+      )}
     </Modal>
   );
 }

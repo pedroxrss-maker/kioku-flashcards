@@ -94,6 +94,7 @@ export function defaultSettings(): AppSettings {
     deckAudio: {},
     deckPaths: {},
     deckTreeCollapsed: [],
+    storageBytesUsed: 0,
   };
 }
 

@@ -102,6 +102,8 @@ interface CardRow {
   fsrs: FsrsFields;
   created_at: string;
   updated_at: string;
+  // Nullable; absent entirely on DBs where the migration has not been run yet.
+  audio_path?: string | null;
 }
 interface LogRow {
   id: string;
@@ -160,7 +162,7 @@ function rowToDeck(r: DeckRow): Deck {
 }
 
 function cardToRow(c: Card, userId: string) {
-  return {
+  const row: Record<string, unknown> = {
     id: c.id,
     deck_id: c.deckId,
     user_id: userId,
@@ -173,6 +175,10 @@ function cardToRow(c: Card, userId: string) {
     created_at: toIso(c.createdAt),
     updated_at: toIso(c.updatedAt),
   };
+  // Only send audio_path when set, so inserts/upserts keep working on databases
+  // where the audio_path column migration has not been run yet.
+  if (c.audioPath) row.audio_path = c.audioPath;
+  return row;
 }
 function rowToCard(r: CardRow): Card {
   return {
@@ -186,6 +192,7 @@ function rowToCard(r: CardRow): Card {
     fsrs: r.fsrs,
     createdAt: toEpoch(r.created_at),
     updatedAt: toEpoch(r.updated_at),
+    audioPath: r.audio_path ?? null,
   };
 }
 
@@ -319,6 +326,7 @@ export class SupabaseRepository implements KiokuRepository {
     if (patch.due !== undefined) row.due = toIso(patch.due);
     if (patch.sm2 !== undefined) row.sm2 = patch.sm2;
     if (patch.fsrs !== undefined) row.fsrs = patch.fsrs;
+    if (patch.audioPath !== undefined) row.audio_path = patch.audioPath;
     row.updated_at = toIso(Date.now());
     const { error } = await supabase.from('cards').update(row).eq('id', id);
     if (error) writeFail(error);

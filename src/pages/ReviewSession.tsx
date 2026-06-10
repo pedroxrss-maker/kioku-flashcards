@@ -16,6 +16,7 @@ import { repo } from '../db/repositories';
 import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
 import { deckAudioEnabled } from '../lib/deckAudio';
+import { getSignedUrl } from '../features/media/storage';
 
 // All decks use 4 answer buttons (the King of Buttons option was removed).
 const REVIEW_BUTTONS = 4 as const;
@@ -35,6 +36,7 @@ export function ReviewSession() {
   const { deck, currentDeck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
   const [editOpen, setEditOpen] = useState(false);
   const cardWrapRef = useRef<HTMLDivElement>(null);
+  const storedAudioRef = useRef<HTMLAudioElement | null>(null);
   const reduce = useReducedMotion();
 
   // The current card's own deck drives audio + TTS language (in a parent session
@@ -108,51 +110,88 @@ export function ReviewSession() {
     return () => window.removeEventListener('keydown', onKey);
   }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen]);
 
-  // Pronounce the front as soon as a card appears. Cards with a stored audio
-  // chip (e.g. ElevenLabs) play it offline with no key; text-only cards fall back
-  // to Web Speech. The audio chip's object URL resolves asynchronously, so for
-  // audio cards we poll briefly until the <audio> element is in the DOM.
+  // Pronounce the front as soon as a card appears, in priority order:
+  //   1) a stored audio FILE (cards.audio_path, e.g. ElevenLabs) via a signed URL
+  //   2) an attached audio chip in the front HTML (kioku-audio://)
+  //   3) Web Speech (TTS) as the fallback when there is no stored audio
+  // Stored audio is preferred over TTS. The audio chip's object URL resolves
+  // asynchronously, so for those we poll briefly until the <audio> is in the DOM.
   useEffect(() => {
     if (!current || !audioDeck) return;
     if (!deckAudioEnabled(settings, audioDeck.id)) return; // deck has audio disabled
     if (!settings?.tts.autoPronounceFront) return;
     if (settings.mutedCards?.[current.id]) return; // card opted out of pronunciation
 
-    const hasAudio = current.front.includes('kioku-audio://');
-
-    if (!hasAudio) {
-      if (settings.tts.enabled) {
-        const text = stripHtml(current.front);
-        if (text) {
-          void tts.speak(text, {
-            lang: audioDeck.ttsLang,
-            voiceURI: settings.tts.voiceURI,
-            rate: settings.tts.rate,
-          });
-        }
+    let cancelled = false;
+    const speakFront = () => {
+      if (cancelled || !settings.tts.enabled) return;
+      const text = stripHtml(current.front);
+      if (text) {
+        void tts.speak(text, {
+          lang: audioDeck.ttsLang,
+          voiceURI: settings.tts.voiceURI,
+          rate: settings.tts.rate,
+        });
       }
-      return;
+    };
+    const stopStored = () => {
+      const a = storedAudioRef.current;
+      if (a) {
+        try {
+          a.pause();
+        } catch {
+          /* ignore */
+        }
+        storedAudioRef.current = null;
+      }
+    };
+
+    // 1) Stored audio file takes priority.
+    if (current.audioPath) {
+      getSignedUrl(current.audioPath)
+        .then((url) => {
+          if (cancelled) return;
+          const a = new Audio(url);
+          storedAudioRef.current = a;
+          void a.play().catch(() => {});
+        })
+        .catch(() => {
+          // Could not sign (storage issue): fall back to Web Speech.
+          speakFront();
+        });
+      return () => {
+        cancelled = true;
+        stopStored();
+      };
     }
 
-    let cancelled = false;
-    let tries = 0;
-    const playWhenReady = () => {
-      if (cancelled) return;
-      const el = cardWrapRef.current?.querySelector<HTMLAudioElement>(
-        '.flip-face:not(.flip-face-back) audio',
-      );
-      if (el) {
-        try {
-          el.currentTime = 0;
-        } catch {
-          /* not loaded yet */
+    // 2) Attached audio chip in the front HTML.
+    if (current.front.includes('kioku-audio://')) {
+      let tries = 0;
+      const playWhenReady = () => {
+        if (cancelled) return;
+        const el = cardWrapRef.current?.querySelector<HTMLAudioElement>(
+          '.flip-face:not(.flip-face-back) audio',
+        );
+        if (el) {
+          try {
+            el.currentTime = 0;
+          } catch {
+            /* not loaded yet */
+          }
+          void el.play().catch(() => {});
+          return;
         }
-        void el.play().catch(() => {});
-        return;
-      }
-      if (tries++ < 12) window.setTimeout(playWhenReady, 90);
-    };
-    playWhenReady();
+        if (tries++ < 12) window.setTimeout(playWhenReady, 90);
+      };
+      playWhenReady();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // 3) Web Speech fallback.
+    speakFront();
     return () => {
       cancelled = true;
     };

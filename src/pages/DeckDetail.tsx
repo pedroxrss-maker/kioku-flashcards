@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Folder, Play, Plus, Settings2, Zap } from 'lucide-react';
+import { ArrowLeft, Folder, Loader2, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
 import { useAllCards, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
@@ -18,6 +18,10 @@ import {
   groupReviewToken,
 } from '../lib/deckTree';
 import type { DeckTreeNode } from '../lib/deckTree';
+import { generateDeckAudio } from '../features/tts/audioGen';
+import type { DeckAudioProgress } from '../features/tts/audioGen';
+import { recordStorageUpload, warnIfStorageHigh } from '../features/media/usage';
+import { pushToast } from '../lib/toast';
 import type { Card } from '../db/types';
 
 export function DeckDetail() {
@@ -31,6 +35,8 @@ export function DeckDetail() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioProg, setAudioProg] = useState<DeckAudioProgress | null>(null);
 
   const counts = useMemo(
     () => countCards(cards, Date.now(), deck),
@@ -100,6 +106,36 @@ export function DeckDetail() {
   function editCard(card: Card) {
     setEditingCard(card);
     setEditorOpen(true);
+  }
+
+  async function genDeckAudio() {
+    if (!deck || !settings || audioBusy) return;
+    if (!settings.tts.elevenLabsApiKey?.trim()) {
+      pushToast('error', 'Configure a chave da ElevenLabs nas Configurações para gerar áudio.');
+      return;
+    }
+    setAudioBusy(true);
+    setAudioProg({ done: 0, total: 0 });
+    try {
+      const res = await generateDeckAudio(deck.id, settings, (p) => setAudioProg(p));
+      if (res.bytes > 0) {
+        const total = await recordStorageUpload(res.bytes);
+        warnIfStorageHigh(total);
+      }
+      if (res.total === 0) {
+        pushToast('info', 'Todos os cards com texto já têm áudio neste deck.');
+      } else {
+        let msg = `Áudio gerado para ${res.ok} ${res.ok === 1 ? 'card' : 'cards'}.`;
+        if (res.failed > 0) msg += ` ${res.failed} ${res.failed === 1 ? 'falhou' : 'falharam'}.`;
+        if (res.quotaHit) msg += ' Cota da ElevenLabs esgotada.';
+        pushToast(res.failed > 0 || res.quotaHit ? 'info' : 'success', msg);
+      }
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar áudio do deck.');
+    } finally {
+      setAudioBusy(false);
+      setAudioProg(null);
+    }
   }
 
   return (
@@ -179,6 +215,18 @@ export function DeckDetail() {
               Adicionar card
             </Button>
             <ExportButton deckId={deck.id} size="md" />
+            {!!settings?.tts.elevenLabsApiKey?.trim() && (
+              <Button
+                variant="default"
+                icon={audioBusy ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
+                onClick={genDeckAudio}
+                disabled={audioBusy}
+              >
+                {audioBusy
+                  ? `Gerando ${audioProg?.done ?? 0}/${audioProg?.total ?? 0}`
+                  : 'Gerar áudio'}
+              </Button>
+            )}
           </div>
         </div>
       </section>

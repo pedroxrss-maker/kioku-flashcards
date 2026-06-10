@@ -61,6 +61,10 @@ export interface Card {
   fsrs: FsrsFields;
   createdAt: number;
   updatedAt: number;
+  /** Storage object path of this card's primary audio (mp3), or null/undefined
+   *  when it has none. Preferred over TTS in review. Backed by the private
+   *  "media" bucket; never an inline data URL. */
+  audioPath?: string | null;
 }
 
 export interface ReviewLog {
@@ -122,6 +126,10 @@ export interface AppSettings {
   /** Collapsed nodes in the deck tree (full paths), persisted so expand/collapse
    *  survives reload. A path absent from this list renders expanded. */
   deckTreeCollapsed?: string[];
+  /** Approximate running total of Supabase Storage bytes used by this user's
+   *  media. Bumped after uploads so we can warn near the free-tier limit without
+   *  listing the whole bucket. */
+  storageBytesUsed?: number;
 }
 
 /* --------------------------------------------------------- creation inputs */

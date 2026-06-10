@@ -23,7 +23,7 @@ export const MEDIA_BUCKET = 'media';
 export class StorageUnavailableError extends Error {}
 
 const SETUP_HINT =
-  'Armazenamento de midia indisponivel. Rode o SQL de configuracao (db/storage-setup.sql) ' +
+  'Armazenamento de mídia indisponível. Rode o SQL de configuração (db/storage-setup.sql) ' +
   'no painel do Supabase e confirme que o bucket "media" existe.';
 
 /** Detects the "bucket/policy not configured" class of errors, vs transient ones. */
@@ -56,9 +56,9 @@ const SIGN_MARGIN_MS = 60_000; // refresh a bit before actual expiry
 /** Current authenticated user id (first path segment, enforced by RLS). */
 export async function currentUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getSession();
-  if (error) throw new Error('Sessao expirada. Entre novamente.');
+  if (error) throw new Error('Sessão expirada. Entre novamente.');
   const id = data.session?.user?.id;
-  if (!id) throw new Error('Voce precisa estar conectado.');
+  if (!id) throw new Error('Você precisa estar conectado.');
   return id;
 }
 
@@ -89,7 +89,7 @@ export async function uploadMedia(path: string, blob: Blob, contentType: string)
   if (error) {
     const setup = asSetupError(error);
     if (setup) throw setup;
-    throw new Error('Nao foi possivel enviar a midia. Tente novamente.');
+    throw new Error('Não foi possível enviar a mídia. Tente novamente.');
   }
   // A fresh upload may replace an object whose signed URL we cached: drop it.
   signedCache.delete(path);
@@ -105,7 +105,7 @@ export async function getSignedUrl(path: string, expiresIn = 3600): Promise<stri
   if (error || !data?.signedUrl) {
     const setup = asSetupError(error);
     if (setup) throw setup;
-    throw new Error('Nao foi possivel carregar a midia.');
+    throw new Error('Não foi possível carregar a mídia.');
   }
   signedCache.set(path, { url: data.signedUrl, expiresAt: now + expiresIn * 1000 });
   return data.signedUrl;
@@ -118,6 +118,6 @@ export async function removeMedia(path: string): Promise<void> {
   if (error) {
     const setup = asSetupError(error);
     if (setup) throw setup;
-    throw new Error('Nao foi possivel remover a midia.');
+    throw new Error('Não foi possível remover a mídia.');
   }
 }

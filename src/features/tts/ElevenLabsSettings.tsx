@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Cloud, Loader2 } from 'lucide-react';
+import { Check, Cloud, Loader2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
@@ -64,9 +64,21 @@ export function ElevenLabsSettings() {
 
       <div className="flex flex-col gap-4">
         <div>
-          <label className="field-label" htmlFor="el-key">
-            Chave de API da ElevenLabs
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="field-label" htmlFor="el-key" style={{ marginBottom: 0 }}>
+              Chave de API da ElevenLabs
+            </label>
+            {tt.elevenLabsApiKey ? (
+              <span
+                className="mono text-[10px] inline-flex items-center gap-1"
+                style={{ color: 'var(--accent-green)' }}
+              >
+                <Check size={11} /> chave salva
+              </span>
+            ) : (
+              <span className="mono text-[10px] text-muted">nenhuma chave</span>
+            )}
+          </div>
           <input
             id="el-key"
             type="password"
@@ -77,7 +89,7 @@ export function ElevenLabsSettings() {
             onChange={(e) => save({ elevenLabsApiKey: e.target.value.trim() })}
           />
           <p className="text-[11px] text-muted mt-1">
-            A chave fica salva apenas neste navegador.
+            A chave fica salva na sua conta e é usada para gerar e salvar os áudios na nuvem.
           </p>
         </div>
 
