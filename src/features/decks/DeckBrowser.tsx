@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Sparkles } from 'lucide-react';
 import { useAllCards, useDecks, useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { groupCardsByDeck } from '../../lib/deckStats';
@@ -89,18 +90,30 @@ export function DeckBrowser() {
         </div>
       </div>
 
+      {/* Deck creation: two matching dashed tiles, above the existing decks. */}
+      <div className="grid gap-4 sm:grid-cols-2 mb-5">
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[110px] sm:min-h-[140px] transition-colors"
+          style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
+        >
+          <Plus size={26} />
+          <span className="mono text-xs">Criar novo deck</span>
+        </button>
+        <Link
+          to="/generate"
+          className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[110px] sm:min-h-[140px] transition-colors"
+          style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
+        >
+          <Sparkles size={26} />
+          <span className="mono text-xs">Gerar deck com IA</span>
+        </Link>
+      </div>
+
       {tree ? (
         /* ---- hierarchical tree view ---- */
         <div className="flex flex-col gap-4">
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="hover-lift flex items-center justify-center gap-2 p-3 text-muted hover:text-fg transition-colors w-full"
-            style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
-          >
-            <Plus size={18} />
-            <span className="mono text-xs">Criar novo deck</span>
-          </button>
           <Panel className="p-2 sm:p-3">
             <DeckTree
               decks={byCategory}
@@ -115,7 +128,7 @@ export function DeckBrowser() {
           )}
         </div>
       ) : (
-        /* ---- flat grid view (unchanged) ---- */
+        /* ---- flat grid view ---- */
         <>
           <AnimatePresence mode="wait">
             <motion.div
@@ -126,18 +139,6 @@ export function DeckBrowser() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
-              {/* Create-deck tile sits FIRST. On mobile it's half a deck's height;
-                  on desktop the grid stretches it to match the other blocks. */}
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[90px] sm:min-h-[150px] transition-colors"
-                style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
-              >
-                <Plus size={26} />
-                <span className="mono text-xs">Criar novo deck</span>
-              </button>
-
               {filtered.map((deck) => (
                 <DeckCard key={deck.id} deck={deck} cards={byDeck.get(deck.id) ?? []} />
               ))}
