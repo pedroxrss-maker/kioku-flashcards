@@ -79,6 +79,7 @@ export function CardAssistBar({ front, back }: CardAssistBarProps) {
       <AnimatePresence initial={false}>
         {active && (
           <motion.div
+            key="assist-balloon"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -89,23 +90,34 @@ export function CardAssistBar({ front, back }: CardAssistBarProps) {
               className="p-3 rounded-[var(--r-md)]"
               style={{ background: 'var(--surface)', border: '1px solid var(--line-strong)' }}
             >
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Sparkles size={13} style={{ color: 'var(--accent)' }} />
-                <span className="mono text-[11px] text-muted">{activeLabel}</span>
-              </div>
-              {loading ? (
-                <span className="inline-flex items-center gap-2 text-muted text-sm">
-                  <Loader2 size={14} className="animate-spin" /> Pensando...
-                </span>
-              ) : error ? (
-                <span className="text-sm" style={{ color: 'var(--accent)' }}>
-                  {error}
-                </span>
-              ) : (
-                <p className="text-sm whitespace-pre-wrap" style={{ lineHeight: 1.55 }}>
-                  {text}
-                </p>
-              )}
+              {/* Switching actions fades the old answer out and the new one in. */}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`${active}-${loading ? 'l' : error ? 'e' : 't'}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Sparkles size={13} style={{ color: 'var(--accent)' }} />
+                    <span className="mono text-[11px] text-muted">{activeLabel}</span>
+                  </div>
+                  {loading ? (
+                    <span className="inline-flex items-center gap-2 text-muted text-sm">
+                      <Loader2 size={14} className="animate-spin" /> Pensando...
+                    </span>
+                  ) : error ? (
+                    <span className="text-sm" style={{ color: 'var(--accent)' }}>
+                      {error}
+                    </span>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap" style={{ lineHeight: 1.55 }}>
+                      {text}
+                    </p>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </motion.div>
         )}

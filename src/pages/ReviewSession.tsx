@@ -451,18 +451,18 @@ export function ReviewSession() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
 
-      {/* AI assist on the back: between the card and the rating buttons. */}
-      {current && flipped && (
-        <div className="px-4 md:px-6 pt-3 shrink-0 w-full max-w-2xl mx-auto">
-          <CardAssistBar
-            key={current.id}
-            front={stripHtml(current.front)}
-            back={stripHtml(current.back)}
-          />
-        </div>
-      )}
+        {/* AI assist: justified to the card and shown directly under it (back only). */}
+        {current && flipped && (
+          <div className="w-full max-w-2xl mt-4">
+            <CardAssistBar
+              key={current.id}
+              front={stripHtml(current.front)}
+              back={stripHtml(current.back)}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Bottom */}
       <div className="px-4 md:px-6 pb-6 pt-2 shrink-0 w-full max-w-2xl mx-auto">
