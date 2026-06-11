@@ -5,7 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
-import { generateCards, isAiConfigured } from '../features/ai/anthropic';
+import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
 import { fileToBase64 } from '../features/ai/readFile';
 import type { CardKind, GeneratedCard, GenerateSource } from '../features/ai/cards';
@@ -36,7 +36,7 @@ const LANGS: Array<[string, string]> = [
   ['Japanese', 'Japonês'],
 ];
 
-const MAX_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_PDF_BYTES = 15 * 1024 * 1024;
 
 export function GenerateDeck() {
   const nav = useNavigate();
@@ -64,7 +64,7 @@ export function GenerateDeck() {
         return;
       }
       if (pdf.size > MAX_PDF_BYTES) {
-        setError('PDF muito grande (máximo 25 MB). Tente um arquivo menor.');
+        setError('PDF muito grande (máximo 15 MB). Tente um arquivo menor.');
         return;
       }
       setBusy(true);
@@ -133,7 +133,7 @@ export function GenerateDeck() {
           <p className="text-sm text-muted" style={{ lineHeight: 1.6 }}>
             Para usar os recursos de IA, configure no Cloudflare a variável{' '}
             <b className="text-fg">VITE_AI_PROXY_URL</b> (recomendado: um Worker que guarda a chave
-            no servidor) ou, apenas para teste local, <b className="text-fg">VITE_ANTHROPIC_API_KEY</b>.
+            no servidor) ou, apenas para teste local, <b className="text-fg">VITE_GEMINI_API_KEY</b>.
             Depois refaça o build.
           </p>
           <Link to="/decks" className="btn btn-ghost btn-sm mt-4">
@@ -215,7 +215,7 @@ export function GenerateDeck() {
                 >
                   <FileText size={18} className="text-muted shrink-0" />
                   <span className="text-sm flex-1 min-w-0 truncate">
-                    {pdf ? pdf.name : 'Escolher um PDF (até 25 MB)'}
+                    {pdf ? pdf.name : 'Escolher um PDF (até 15 MB)'}
                   </span>
                   <input
                     type="file"

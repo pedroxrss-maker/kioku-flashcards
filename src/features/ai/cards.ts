@@ -1,8 +1,8 @@
 /**
  * Pure helpers for AI-generated flashcards: the generation prompt, defensive
  * JSON parsing of the model output, and turning a list of generated cards into a
- * real Kioku deck via the existing repo. No Anthropic calls live here (those are
- * in anthropic.ts), so this stays easy to unit test.
+ * real Kioku deck via the existing repo. No Gemini calls live here (those are
+ * in client.ts), so this stays easy to unit test.
  */
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';

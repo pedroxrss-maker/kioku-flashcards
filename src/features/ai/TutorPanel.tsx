@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { GraduationCap, Loader2, Send, X } from 'lucide-react';
-import { tutorReply } from './anthropic';
-import type { AiMessage } from './anthropic';
+import { tutorReply } from './client';
+import type { AiMessage } from './client';
 
 interface TutorPanelProps {
   open: boolean;

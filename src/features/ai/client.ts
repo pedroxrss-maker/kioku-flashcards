@@ -1,27 +1,29 @@
 /**
- * Single choke point for ALL Anthropic calls in the app.
+ * Single choke point for ALL Gemini (Google Generative Language) calls in the app.
  *
- * SECURITY: a key read from import.meta.env.VITE_ANTHROPIC_API_KEY is bundled
- * into the client JS and is publicly visible, so DIRECT-KEY MODE IS FOR LOCAL /
+ * SECURITY: a key read from import.meta.env.VITE_GEMINI_API_KEY is bundled into
+ * the client JS and is publicly visible, so DIRECT-KEY MODE IS FOR LOCAL /
  * PRIVATE TESTING ONLY. In production set VITE_AI_PROXY_URL to a Cloudflare
- * Worker that holds the key server-side and forwards to the Anthropic API; the
+ * Worker that holds the key server-side and forwards to the Gemini API; the
  * browser then sends no key at all. Adding that Worker later needs NO UI or
  * call-site changes, only the env var. If neither var is set, calls throw an
  * AiError with a clear pt-BR setup message (they never crash the app).
  *
- * The Worker should accept the same POST body this module sends and proxy it to
- * https://api.anthropic.com/v1/messages, adding the x-api-key and
- * anthropic-version headers on the server side.
+ * The Worker should accept the same POST body this module sends (the Gemini
+ * request plus a top-level `model`) and proxy it to
+ * https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent,
+ * adding the x-goog-api-key header on the server side.
  */
 import { buildGeneratePrompt, parseCardsJson } from './cards';
 import type { GeneratedCard, GenerateRequest } from './cards';
 
-/** The model to use for all generation and tutoring. */
-export const AI_MODEL = 'claude-sonnet-4-20250514';
+/** The model used for all generation and tutoring. Single source of truth; a
+ *  single call can override it via createMessage's `model` option if needed. */
+export const AI_MODEL = 'gemini-2.5-flash-lite';
 
 const PROXY_URL = import.meta.env.VITE_AI_PROXY_URL;
-const DIRECT_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const DIRECT_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 /** Carries a user-facing (pt-BR) message; safe to show in dialogs/toasts. */
 export class AiError extends Error {}
@@ -33,7 +35,7 @@ export function isAiConfigured(): boolean {
 
 const NOT_CONFIGURED =
   'IA não configurada. Defina VITE_AI_PROXY_URL (recomendado: um Cloudflare Worker que guarda a ' +
-  'chave) ou, apenas para teste local, VITE_ANTHROPIC_API_KEY, e refaça o build.';
+  'chave) ou, apenas para teste local, VITE_GEMINI_API_KEY, e refaça o build.';
 
 export type AiBlock =
   | { type: 'text'; text: string }
@@ -48,26 +50,57 @@ interface CreateOptions {
   system?: string;
   messages: AiMessage[];
   maxTokens?: number;
+  /** Override the model for a single call (defaults to AI_MODEL). */
+  model?: string;
 }
 
-/** Low-level Messages call. Returns the concatenated assistant text. */
-async function createMessage({ system, messages, maxTokens = 4096 }: CreateOptions): Promise<string> {
+/** One Gemini content part: plain text, or inline base64 data (PDF / image). */
+type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+
+/**
+ * Translate our provider-neutral AiMessage into a Gemini "content" object.
+ * Roles user/assistant become Gemini's user/model; a string body becomes one
+ * text part; AiBlock[] maps text blocks to { text } and base64 document/image
+ * blocks to { inlineData } (billed by Gemini as normal input tokens).
+ */
+function toGeminiContent(m: AiMessage): { role: 'user' | 'model'; parts: GeminiPart[] } {
+  const role: 'user' | 'model' = m.role === 'assistant' ? 'model' : 'user';
+  const parts: GeminiPart[] =
+    typeof m.content === 'string'
+      ? [{ text: m.content }]
+      : m.content.map((b) =>
+          b.type === 'text'
+            ? { text: b.text }
+            : { inlineData: { mimeType: b.source.media_type, data: b.source.data } },
+        );
+  return { role, parts };
+}
+
+/** Low-level Gemini generateContent call. Returns the concatenated model text.
+ *  Keeps the same options shape callers used before; the translation to and from
+ *  Gemini's request/response format lives entirely here. */
+async function createMessage({ system, messages, maxTokens = 4096, model = AI_MODEL }: CreateOptions): Promise<string> {
   if (!isAiConfigured()) throw new AiError(NOT_CONFIGURED);
 
-  const body = {
-    model: AI_MODEL,
-    max_tokens: maxTokens,
-    ...(system ? { system } : {}),
-    messages,
+  const geminiBody = {
+    contents: messages.map(toGeminiContent),
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    generationConfig: { maxOutputTokens: maxTokens },
   };
 
-  const url = PROXY_URL ? PROXY_URL : ANTHROPIC_URL;
+  // Proxy mode (production): POST the Gemini body plus `model` to the Worker,
+  // which routes to Google and adds the key server-side. Direct mode (TESTING
+  // ONLY): the model goes in the URL and the key ships in the bundle.
   const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (!PROXY_URL) {
-    // Direct browser mode (TESTING ONLY): the key is exposed in the bundle.
-    headers['x-api-key'] = DIRECT_KEY as string;
-    headers['anthropic-version'] = '2023-06-01';
-    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  let url: string;
+  let body: unknown;
+  if (PROXY_URL) {
+    url = PROXY_URL;
+    body = { model, ...geminiBody };
+  } else {
+    url = `${GEMINI_BASE}/${model}:generateContent`;
+    headers['x-goog-api-key'] = DIRECT_KEY as string;
+    body = geminiBody;
   }
 
   let res: Response;
@@ -94,10 +127,12 @@ async function createMessage({ system, messages, maxTokens = 4096 }: CreateOptio
     throw new AiError(`Erro da IA (HTTP ${res.status})${detail}.`);
   }
 
-  const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-  const text = (data.content ?? [])
-    .filter((b) => b.type === 'text' && typeof b.text === 'string')
-    .map((b) => b.text as string)
+  const data = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = (data.candidates?.[0]?.content?.parts ?? [])
+    .map((p) => p.text)
+    .filter((t): t is string => typeof t === 'string')
     .join('\n')
     .trim();
   if (!text) throw new AiError('A IA não retornou conteúdo. Tente novamente.');

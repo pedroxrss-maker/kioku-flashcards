@@ -4,7 +4,7 @@ import { FileText, Globe, Loader2, Sparkles } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { GeneratedCardsEditor } from '../ai/GeneratedCardsEditor';
-import { generateCardsBatched, isAiConfigured } from '../ai/anthropic';
+import { generateCardsBatched, isAiConfigured } from '../ai/client';
 import { createDeckFromGenerated } from '../ai/cards';
 import { extractFromUrl } from '../ai/url';
 import { fileToBase64 } from '../ai/readFile';
@@ -20,7 +20,7 @@ const LANGS: Array<[string, string]> = [
   ['Japanese', 'Japonês'],
 ];
 const TARGETS = [20, 30, 50, 80, 100];
-const MAX_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_PDF_BYTES = 15 * 1024 * 1024;
 
 /** Entry point button (placed next to the .apkg import) that opens the AI import
  *  modal. The .apkg importer stays a separate, untouched component. */
@@ -75,7 +75,7 @@ function AiImportModal({ open, onClose }: { open: boolean; onClose: () => void }
       if (tab === 'pdf') {
         if (!pdf) throw new Error('Selecione um arquivo PDF.');
         if (pdf.size > MAX_PDF_BYTES) {
-          throw new Error('PDF muito grande (máximo 25 MB). Tente um arquivo menor.');
+          throw new Error('PDF muito grande (máximo 15 MB). Tente um arquivo menor.');
         }
         source = { kind: 'pdf', base64: await fileToBase64(pdf) };
         defaultName = pdf.name.replace(/\.pdf$/i, '') || 'Deck do PDF';
@@ -131,7 +131,7 @@ function AiImportModal({ open, onClose }: { open: boolean; onClose: () => void }
         <p className="text-sm text-muted" style={{ lineHeight: 1.6 }}>
           IA não configurada. Defina <b className="text-fg">VITE_AI_PROXY_URL</b> (recomendado: um
           Cloudflare Worker que guarda a chave) ou, apenas para teste local,{' '}
-          <b className="text-fg">VITE_ANTHROPIC_API_KEY</b>, e refaça o build.
+          <b className="text-fg">VITE_GEMINI_API_KEY</b>, e refaça o build.
         </p>
       ) : cards ? (
         <div className="flex flex-col gap-4">
@@ -210,7 +210,7 @@ function AiImportModal({ open, onClose }: { open: boolean; onClose: () => void }
                 >
                   <FileText size={18} className="text-muted shrink-0" />
                   <span className="text-sm flex-1 min-w-0 truncate">
-                    {pdf ? pdf.name : 'Escolher um PDF (até 25 MB)'}
+                    {pdf ? pdf.name : 'Escolher um PDF (até 15 MB)'}
                   </span>
                   <input
                     type="file"
