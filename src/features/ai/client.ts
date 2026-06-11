@@ -216,3 +216,28 @@ export async function tutorReply(req: TutorRequest): Promise<string> {
     'memory hook. Do not just repeat the answer. Be concise. Always reply in Brazilian Portuguese.';
   return createMessage({ system, messages: req.history, maxTokens: 1024 });
 }
+
+export type CardAssistAction = 'example' | 'breakdown' | 'analogy' | 'mnemonic';
+
+/**
+ * One short, single-shot AI help for a card under review: a real-world example,
+ * a breakdown, an analogy, or a memory hook. Plain-text pt-BR, a few sentences.
+ */
+export async function cardAssist(
+  front: string,
+  back: string,
+  action: CardAssistAction,
+): Promise<string> {
+  const ASK: Record<CardAssistAction, string> = {
+    example: 'Dê UM exemplo do mundo real, concreto e curto, que ilustre este card.',
+    breakdown: 'Explique este card dividido em partes simples, num passo a passo bem curto.',
+    analogy: 'Dê UMA analogia curta e memorável para este card.',
+    mnemonic: 'Dê um gancho de memória (mnemônico) curto para lembrar deste card.',
+  };
+  const system =
+    'You help a student reviewing a flashcard. ' +
+    `Front: ${front}. Back: ${back}. ` +
+    'Answer in Brazilian Portuguese, in at most 3 short sentences. Be concrete and concise. ' +
+    'Plain text only: no markdown, no headings, no preamble.';
+  return createMessage({ system, messages: [{ role: 'user', content: ASK[action] }], maxTokens: 400 });
+}
