@@ -12,9 +12,21 @@ import { firstAudioUrl } from '../media/media';
 import type { AppSettings, Card } from '../../db/types';
 import type { AudioSide } from './audioGen';
 
-/** Lado que o áudio gerado (audio_path) fala. Default 'front'. */
+/**
+ * Lado que o áudio gerado (audio_path) fala.
+ *  - Se há registro explícito (settings.cardAudioSide), usa ele.
+ *  - Legado sem registro: se só UM lado tem áudio anexado (chip), o áudio
+ *    gerado é provavelmente do OUTRO lado (você não geraria áudio do lado que
+ *    já tem um áudio anexado). Senão, assume 'front'.
+ */
 export function generatedAudioSide(card: Card, settings: AppSettings | undefined): AudioSide {
-  return settings?.cardAudioSide?.[card.id] ?? 'front';
+  const tracked = settings?.cardAudioSide?.[card.id];
+  if (tracked) return tracked;
+  const frontChip = card.front.includes('kioku-audio://');
+  const backChip = card.back.includes('kioku-audio://');
+  if (frontChip && !backChip) return 'back';
+  if (backChip && !frontChip) return 'front';
+  return 'front';
 }
 
 /** Esta face tem áudio (gerado para ela, ou um chip anexado)? */
