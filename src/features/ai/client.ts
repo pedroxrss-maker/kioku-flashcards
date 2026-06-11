@@ -217,6 +217,21 @@ export async function tutorReply(req: TutorRequest): Promise<string> {
   return createMessage({ system, messages: req.history, maxTokens: 1024 });
 }
 
+/** One-shot "teach me this" for a card the student did not understand. pt-BR. */
+export async function tutorTeach(front: string, back: string): Promise<string> {
+  const system =
+    'You are a patient, encouraging tutor. The student did NOT understand this flashcard. ' +
+    `Front: ${front}. Back: ${back}. ` +
+    'Teach it: state the key idea, then explain simply with a concrete example or analogy that ' +
+    'makes it stick. Answer in Brazilian Portuguese, plain text only (no markdown, no headings), ' +
+    'in a short, warm paragraph.';
+  return createMessage({
+    system,
+    messages: [{ role: 'user', content: 'Não entendi este card. Me ensine isso.' }],
+    maxTokens: 700,
+  });
+}
+
 export type CardAssistAction = 'example' | 'breakdown' | 'analogy' | 'mnemonic';
 
 /**
