@@ -6,12 +6,17 @@ import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
 import { RichTextField } from './RichTextField';
 import type { RichTextFieldHandle } from './RichTextField';
-import { CardHtml } from '../media/CardHtml';
 import { GenerateCardAudioButton } from '../tts/GenerateCardAudioButton';
 import { isTtsConfigured } from '../tts/googleProvider';
+import { FlipCard } from '../review/FlipCard';
+import { ClozeCard } from '../review/ClozeCard';
+import { TypeInCard } from '../review/TypeInCard';
+import { firstAudioUrl } from '../media/media';
+import { getSignedUrl } from '../media/storage';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
-import { buildClozeHtml, clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
+import { deckAudioEnabled } from '../../lib/deckAudio';
+import { clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
 import { cardTypeOf, markTypeIn, stripTypeInMark } from '../../lib/cardType';
 import { pushToast } from '../../lib/toast';
 import type { CardType } from '../../lib/cardType';
@@ -51,6 +56,11 @@ export function CardEditorModal({
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [pronounce, setPronounce] = useState(true);
+  // Preview mirrors the review card (flip + buttons, scaled down). Local reveal
+  // state + the front audio resolved for the preview's speaker button.
+  const [previewRevealed, setPreviewRevealed] = useState(false);
+  const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   // Tab from the front jumps here; both also submit on Ctrl/Cmd+Enter.
   const backRef = useRef<RichTextFieldHandle>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -68,6 +78,56 @@ export function CardEditorModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, card]);
+
+  // Entering the preview: start on the front and resolve the attached/stored
+  // front audio so the preview's speaker button can replay it.
+  useEffect(() => {
+    if (!previewing) return;
+    setPreviewRevealed(false);
+    let cancelled = false;
+    void (async () => {
+      let url: string | null = null;
+      if (card?.audioPath) {
+        try {
+          url = await getSignedUrl(card.audioPath);
+        } catch {
+          url = null;
+        }
+      } else if (front.includes('kioku-audio://')) {
+        url = await firstAudioUrl(front);
+      }
+      if (!cancelled) setPreviewAudioUrl(url);
+    })();
+    return () => {
+      cancelled = true;
+      const a = previewAudioRef.current;
+      if (a) {
+        try {
+          a.pause();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewing]);
+
+  const replayPreviewAudio = () => {
+    if (!previewAudioUrl) return;
+    const a = previewAudioRef.current;
+    if (a) {
+      try {
+        a.pause();
+      } catch {
+        /* ignore */
+      }
+    }
+    const next = new Audio(previewAudioUrl);
+    previewAudioRef.current = next;
+    void next.play().catch(() => {});
+  };
+
+  const hasPreviewAudio = !!card?.audioPath || front.includes('kioku-audio://');
 
   function switchType(t: CardType) {
     if (t === type) return;
@@ -237,35 +297,56 @@ export function CardEditorModal({
             exit={{ opacity: 0 }}
             transition={{ duration: reduce ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}
           >
-            <p className="field-label">Pré-visualização (resposta revelada)</p>
-            <div
-              className={type === 'cloze' ? 'cloze-revealed' : undefined}
-              style={{
-                background: '#fbfbfa',
-                color: '#15151a',
-                border: '1px solid var(--line)',
-                borderRadius: 'var(--r-lg)',
-                boxShadow: 'var(--shadow-card)',
-                padding: '28px 24px',
-                textAlign: 'center',
-              }}
-            >
-              <CardHtml
-                html={
-                  (type === 'cloze' ? buildClozeHtml(front) : front) ||
-                  '<span style="opacity:.4">(frente vazia)</span>'
-                }
-                className="card-content"
-              />
-              {(type !== 'cloze' || !isEmptyHtml(back)) && (
-                <>
-                  <div className="my-5 h-px w-full" style={{ background: '#0f0f0f22' }} />
-                  <CardHtml
-                    html={back || '<span style="opacity:.4">(verso vazio)</span>'}
-                    className="card-content"
-                  />
-                </>
-              )}
+            <p className="field-label">Pré-visualização (clique para virar)</p>
+            <div className="flex justify-center">
+              <div className="card-preview-scale w-full flex justify-center">
+                {(() => {
+                  const audioOn = deckAudioEnabled(settings ?? undefined, deckId);
+                  const lang = 'en-US';
+                  const h = 'clamp(190px, 26vh, 260px)';
+                  const emptyFront = '<span style="opacity:.4">(frente vazia)</span>';
+                  if (type === 'cloze') {
+                    return (
+                      <ClozeCard
+                        front={front || emptyFront}
+                        back={back}
+                        ttsLang={lang}
+                        revealed={previewRevealed}
+                        onReveal={() => setPreviewRevealed((v) => !v)}
+                        height={h}
+                        audioEnabled={audioOn}
+                      />
+                    );
+                  }
+                  if (type === 'typein') {
+                    return (
+                      <TypeInCard
+                        front={front || emptyFront}
+                        back={back}
+                        ttsLang={lang}
+                        revealed={previewRevealed}
+                        onReveal={() => setPreviewRevealed(true)}
+                        onResolve={() => setPreviewRevealed(true)}
+                        height={h}
+                        audioEnabled={audioOn}
+                      />
+                    );
+                  }
+                  return (
+                    <FlipCard
+                      front={front || emptyFront}
+                      back={back || '<span style="opacity:.4">(verso vazio)</span>'}
+                      ttsLang={lang}
+                      flipped={previewRevealed}
+                      onFlip={() => setPreviewRevealed((v) => !v)}
+                      height={h}
+                      audioEnabled={audioOn}
+                      hasFrontAudio={hasPreviewAudio}
+                      onReplayFrontAudio={replayPreviewAudio}
+                    />
+                  );
+                })()}
+              </div>
             </div>
           </motion.div>
         ) : (

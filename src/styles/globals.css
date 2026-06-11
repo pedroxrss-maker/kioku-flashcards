@@ -404,6 +404,11 @@ button.pill.pill-active:hover {
 .flip-scene {
   perspective: 1600px;
 }
+/* Editor preview: the real review card, scaled down. zoom reflows the layout
+   (unlike transform), so cloze/typein cards still grow correctly when revealed. */
+.card-preview-scale {
+  zoom: 0.8;
+}
 .flip-inner {
   position: relative;
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
