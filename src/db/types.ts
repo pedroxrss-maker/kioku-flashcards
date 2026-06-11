@@ -121,6 +121,10 @@ export interface AppSettings {
    *  (cardId -> 'front' | 'back'). Unset = 'front' (legacy). Stored here (jsonb)
    *  so the single audio_path column needs no migration to know its side. */
   cardAudioSide?: Record<string, 'front' | 'back'>;
+  /** Per-side generated audio paths (cardId -> { front?, back? }), so a card can
+   *  have BOTH a front and a back generated track. The legacy single audio_path
+   *  + cardAudioSide above still resolve for older cards. */
+  cardAudio?: Record<string, { front?: string; back?: string }>;
   /** Hierarchical deck paths (deckId -> full "A::B::C" path), used to nest decks
    *  into a tree at runtime. Unset / no "::" = a flat top-level deck (default).
    *  Stored here (settings jsonb) so no decks-table migration is needed; the

@@ -14,7 +14,7 @@ import { ClozeCard } from '../review/ClozeCard';
 import { TypeInCard } from '../review/TypeInCard';
 import { firstAudioUrl } from '../media/media';
 import { getSignedUrl } from '../media/storage';
-import { generatedAudioSide } from '../tts/cardAudio';
+import { generatedFacePath } from '../tts/cardAudio';
 import { repo } from '../../db/repositories';
 import { newFsrsFields, newSm2Fields } from '../../db/factories';
 import { uuid } from '../../lib/uuid';
@@ -69,8 +69,8 @@ export function CardEditorModal({
   // For a NOT-yet-saved card: a stable id so generated audio has a path, plus the
   // pending track to attach when the card is actually created.
   const [draftId, setDraftId] = useState(() => uuid());
-  const [pendingAudioPath, setPendingAudioPath] = useState<string | null>(null);
-  const [pendingAudioSide, setPendingAudioSide] = useState<AudioSide>('front');
+  const [pendingFront, setPendingFront] = useState<string | null>(null);
+  const [pendingBack, setPendingBack] = useState<string | null>(null);
   // Tab from the front jumps here; both also submit on Ctrl/Cmd+Enter.
   const backRef = useRef<RichTextFieldHandle>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -86,27 +86,22 @@ export function CardEditorModal({
       setPreviewing(false);
       setPronounce(card ? settings?.mutedCards?.[card.id] !== true : true);
       setDraftId(uuid());
-      setPendingAudioPath(null);
-      setPendingAudioSide('front');
+      setPendingFront(null);
+      setPendingBack(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, card]);
 
-  // Side the generated audio (card.audioPath) speaks. Uses the same resolver as
-  // review (explicit record, else inferred from the attached chips) so the
-  // preview and review never disagree on which face owns the generated audio.
-  const genAudioSide: 'front' | 'back' | null = card?.audioPath
-    ? generatedAudioSide(card, settings ?? undefined)
-    : null;
-  // Each face has audio when the generated audio is for that side OR the side's
-  // (edited) HTML carries an attached chip. Known synchronously so the buttons
-  // appear instantly; the playable URL resolves in the effect below.
-  const hasPreviewFront = genAudioSide === 'front' || front.includes('kioku-audio://');
-  const hasPreviewBack = genAudioSide === 'back' || back.includes('kioku-audio://');
-  // A field "has audio" when its side owns the generated track, carries an
-  // attached chip, OR (new card) the pending draft track is for that side.
-  const frontHasAudio = hasPreviewFront || (!!pendingAudioPath && pendingAudioSide === 'front');
-  const backHasAudio = hasPreviewBack || (!!pendingAudioPath && pendingAudioSide === 'back');
+  // Each face has audio when it has a generated track (per-side map / legacy) OR
+  // the side's (edited) HTML carries an attached chip OR (new card) a pending
+  // draft track. Known synchronously so the buttons appear instantly; the
+  // playable URL resolves in the effect below.
+  const faceGenerated = (s: AudioSide) =>
+    card ? !!generatedFacePath(card, s, settings ?? undefined) : false;
+  const hasPreviewFront = faceGenerated('front') || front.includes('kioku-audio://');
+  const hasPreviewBack = faceGenerated('back') || back.includes('kioku-audio://');
+  const frontHasAudio = hasPreviewFront || !!pendingFront;
+  const backHasAudio = hasPreviewBack || !!pendingBack;
 
   // Entering the preview: start on the front and resolve each face's audio URL
   // (generated audio for that side wins over an attached chip on that side).
@@ -115,9 +110,11 @@ export function CardEditorModal({
     setPreviewRevealed(false);
     let cancelled = false;
     const resolve = async (side: 'front' | 'back'): Promise<string | null> => {
-      if (card?.audioPath && genAudioSide === side) {
+      const pending = side === 'front' ? pendingFront : pendingBack;
+      const path = pending ?? (card ? generatedFacePath(card, side, settings ?? undefined) : undefined);
+      if (path) {
         try {
-          return await getSignedUrl(card.audioPath);
+          return await getSignedUrl(path);
         } catch {
           /* não conseguiu assinar: tenta o chip abaixo */
         }
@@ -229,14 +226,15 @@ export function CardEditorModal({
         await applyPronounce(created.id);
         ids.push(created.id);
       }
-      // Attach the audio generated in this dialog (draft path) to the new card(s).
-      // Cloze notes yield several cards that share the same front track.
-      if (pendingAudioPath && ids.length > 0) {
-        for (const id of ids) await repo.updateCard(id, { audioPath: pendingAudioPath });
-        const sideMap = Object.fromEntries(ids.map((id) => [id, pendingAudioSide]));
-        await repo.saveSettings({
-          cardAudioSide: { ...(settings?.cardAudioSide ?? {}), ...sideMap },
-        });
+      // Attach the per-side audio generated in this dialog to the new card(s).
+      // Cloze notes yield several cards that share the same draft tracks.
+      if ((pendingFront || pendingBack) && ids.length > 0) {
+        const entry: { front?: string; back?: string } = {};
+        if (pendingFront) entry.front = pendingFront;
+        if (pendingBack) entry.back = pendingBack;
+        const map = { ...(settings?.cardAudio ?? {}) };
+        for (const id of ids) map[id] = entry;
+        await repo.saveSettings({ cardAudio: map });
       }
       pushToast(
         'success',
@@ -249,8 +247,8 @@ export function CardEditorModal({
       setPronounce(true);
       // Fresh draft so the next card starts without inheriting this audio.
       setDraftId(uuid());
-      setPendingAudioPath(null);
-      setPendingAudioSide('front');
+      setPendingFront(null);
+      setPendingBack(null);
     } finally {
       setSaving(false);
     }
@@ -541,7 +539,7 @@ export function CardEditorModal({
                     fsrs: newFsrsFields(),
                     createdAt: 0,
                     updatedAt: 0,
-                    audioPath: pendingAudioPath,
+                    audioPath: null,
                   }
             }
             persist={editing}
@@ -549,8 +547,8 @@ export function CardEditorModal({
               editing
                 ? undefined
                 : (path, s) => {
-                    setPendingAudioPath(path);
-                    setPendingAudioSide(s);
+                    if (s === 'front') setPendingFront(path);
+                    else setPendingBack(path);
                   }
             }
           />

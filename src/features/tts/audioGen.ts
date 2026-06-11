@@ -41,21 +41,20 @@ function cardText(card: Card, side: AudioSide): string {
  * quanto um áudio ANEXADO pelo usuário (chip kioku-audio:// no HTML do lado).
  * Usado para NUNCA sobrescrever um áudio que já existe.
  */
-export function cardHasAudio(card: Card, side: AudioSide): boolean {
-  if (card.audioPath) return true;
+export function cardHasAudio(card: Card, side: AudioSide, settings?: AppSettings): boolean {
+  if (settings?.cardAudio?.[card.id]?.[side]) return true;
+  if (card.audioPath) return true; // legacy single track: never overwrite
   const html = side === 'front' ? card.front : card.back;
   return html.includes('kioku-audio://');
 }
 
-/** Sintetiza o texto de um card, envia o MP3 e persiste cards.audio_path. */
+/** Sintetiza o texto de um card e envia o MP3 (um arquivo POR LADO). Quem chama
+ *  persiste o caminho em settings.cardAudio (não toca em cards.audio_path). */
 export async function generateAndStoreCardAudio(
   card: Card,
   settings: AppSettings,
   side: AudioSide = 'front',
   voice?: VoiceChoice,
-  /** When false (a not-yet-saved card), upload the MP3 but DON'T touch the DB;
-   *  the caller attaches cards.audio_path once the card is actually created. */
-  persist = true,
 ): Promise<{ path: string; bytes: number; blob: Blob }> {
   const voiceName = (voice?.voiceName ?? settings.tts.googleVoiceName)?.trim();
   if (!voiceName) {
@@ -66,9 +65,9 @@ export async function generateAndStoreCardAudio(
   if (!text) throw new TtsProviderError('Este card não tem texto para gerar áudio.');
 
   const blob = await synthesizeGoogle(text, { voiceName, languageCode, audioEncoding: 'MP3' });
-  const path = await mediaObjectPath(card.deckId, `${card.id}.mp3`);
+  // Per-side file so the front and back tracks never overwrite each other.
+  const path = await mediaObjectPath(card.deckId, `${card.id}.${side}.mp3`);
   await uploadMedia(path, blob, 'audio/mpeg');
-  if (persist) await repo.updateCard(card.id, { audioPath: path });
   return { path, bytes: blob.size, blob };
 }
 
@@ -99,20 +98,20 @@ export async function generateDeckAudio(
   voice?: VoiceChoice,
 ): Promise<DeckAudioResult> {
   const cards = await repo.listCards(deckId);
-  const targets = cards.filter((c) => !cardHasAudio(c, side) && cardText(c, side).length > 0);
+  const targets = cards.filter((c) => !cardHasAudio(c, side, settings) && cardText(c, side).length > 0);
   const total = targets.length;
   let ok = 0;
   let failed = 0;
   let bytes = 0;
   let stopped = false;
-  const doneIds: string[] = [];
+  const donePaths: Record<string, string> = {};
 
   for (let i = 0; i < targets.length; i += 1) {
     try {
       const r = await generateAndStoreCardAudio(targets[i], settings, side, voice);
       ok += 1;
       bytes += r.bytes;
-      doneIds.push(targets[i].id);
+      donePaths[targets[i].id] = r.path;
     } catch (e) {
       failed += 1;
       if (
@@ -128,11 +127,14 @@ export async function generateDeckAudio(
     await delay(250); // gentil com limites de taxa
   }
 
-  // Registra de uma vez o lado que cada áudio gerado fala (frente/verso).
-  if (doneIds.length > 0) {
-    const merged = { ...(settings.cardAudioSide ?? {}) };
-    for (const id of doneIds) merged[id] = side;
-    await repo.saveSettings({ cardAudioSide: merged });
+  // Persiste o caminho gerado de cada card, no lado pedido, sem apagar o outro.
+  const doneEntries = Object.entries(donePaths);
+  if (doneEntries.length > 0) {
+    const map = { ...(settings.cardAudio ?? {}) };
+    for (const [id, path] of doneEntries) {
+      map[id] = { ...(map[id] ?? {}), [side]: path };
+    }
+    await repo.saveSettings({ cardAudio: map });
   }
 
   return { total, ok, failed, skipped: cards.length - total, bytes, stopped };

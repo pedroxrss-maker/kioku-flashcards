@@ -29,13 +29,29 @@ export function generatedAudioSide(card: Card, settings: AppSettings | undefined
   return 'front';
 }
 
+/**
+ * Caminho do áudio gerado desta face. O mapa novo por lado
+ * (settings.cardAudio[cardId][side]) vence; senão cai no caminho único legado
+ * (audio_path) quando ele fala este lado. undefined se não há áudio gerado.
+ */
+export function generatedFacePath(
+  card: Card,
+  side: AudioSide,
+  settings: AppSettings | undefined,
+): string | undefined {
+  const perSide = settings?.cardAudio?.[card.id]?.[side];
+  if (perSide) return perSide;
+  if (card.audioPath && generatedAudioSide(card, settings) === side) return card.audioPath;
+  return undefined;
+}
+
 /** Esta face tem áudio (gerado para ela, ou um chip anexado)? */
 export function faceHasAudio(
   card: Card,
   side: AudioSide,
   settings: AppSettings | undefined,
 ): boolean {
-  if (card.audioPath && generatedAudioSide(card, settings) === side) return true;
+  if (generatedFacePath(card, side, settings)) return true;
   const html = side === 'front' ? card.front : card.back;
   return html.includes('kioku-audio://');
 }
@@ -46,9 +62,10 @@ export async function faceAudioUrl(
   side: AudioSide,
   settings: AppSettings | undefined,
 ): Promise<string | null> {
-  if (card.audioPath && generatedAudioSide(card, settings) === side) {
+  const path = generatedFacePath(card, side, settings);
+  if (path) {
     try {
-      return await getSignedUrl(card.audioPath);
+      return await getSignedUrl(path);
     } catch {
       /* não conseguiu assinar: tenta o chip anexado abaixo */
     }
