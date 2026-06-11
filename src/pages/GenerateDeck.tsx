@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
 import { NumberRoller } from '../components/NumberRoller';
+import { Select } from '../components/Select';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
 import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
@@ -329,18 +330,13 @@ export function GenerateDeck() {
                 <label className="field-label" htmlFor="g-lang">
                   Idioma dos cards
                 </label>
-                <select
+                <Select
                   id="g-lang"
-                  className="field"
+                  ariaLabel="Idioma dos cards"
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                >
-                  {LANGS.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setLanguage}
+                  options={LANGS.map(([value, label]) => ({ value, label }))}
+                />
               </div>
               <div>
                 <label className="field-label" htmlFor="g-name">
