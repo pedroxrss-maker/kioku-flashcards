@@ -6,6 +6,7 @@ import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { tts } from './tts';
 import { useVoices } from './useVoices';
+import { GoogleTtsSettings } from './GoogleTtsSettings';
 import type { AppSettings } from '../../db/types';
 
 /** TTS settings block — composed into the Settings page. */
@@ -96,6 +97,9 @@ export function TtsSettings() {
           )}
         </div>
       )}
+
+      {/* Áudio na nuvem (Google) funciona mesmo sem suporte a Web Speech. */}
+      <GoogleTtsSettings />
     </section>
   );
 }
