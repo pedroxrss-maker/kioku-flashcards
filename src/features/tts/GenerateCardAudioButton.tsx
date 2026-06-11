@@ -1,29 +1,37 @@
 import { useState } from 'react';
-import { Check, Loader2, Volume2 } from 'lucide-react';
+import { Loader2, Trash2, Volume2 } from 'lucide-react';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { pushToast } from '../../lib/toast';
 import { recordStorageUpload } from '../media/usage';
+import { removeMedia } from '../media/storage';
 import { generateAndStoreCardAudio } from './audioGen';
 import type { AudioSide } from './audioGen';
+import { generatedAudioSide } from './cardAudio';
 import { GOOGLE_VOICES, groupGoogleVoices } from './googleProvider';
 import type { Card } from '../../db/types';
 
 /**
- * Per-card control to generate (or regenerate) cloud audio (Google) into
- * Storage. Pick the side (Frente/Verso) and the voice. Switching to Verso
- * defaults the voice to Português; the front defaults to the saved voice. Both
- * are overridable in the dropdown.
+ * Per-card cloud audio (Google): shows WHICH side already has a generated track,
+ * lets you (re)generate it for a side with a chosen voice, and remove it. The
+ * Verso defaults the voice to Português; the front uses the saved default.
  */
 export function GenerateCardAudioButton({ card }: { card: Card }) {
   const settings = useSettings();
-  const [side, setSide] = useState<AudioSide>('front');
+  const [side, setSide] = useState<AudioSide>(
+    card.audioPath ? generatedAudioSide(card, undefined) : 'front',
+  );
   const [voiceName, setVoiceName] = useState(''); // '' = usar o padrão do lado
   const [languageCode, setLanguageCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [hasAudio, setHasAudio] = useState<boolean>(!!card.audioPath);
+  // The single generated track (cards.audio_path). Local so it reflects changes.
+  const [audioPath, setAudioPath] = useState<string | null>(card.audioPath ?? null);
 
   if (!settings) return null;
+
+  // Which side the generated track speaks (record, else inferred from chips).
+  const audioSide: AudioSide | null = audioPath ? generatedAudioSide(card, settings) : null;
+  const selectedHasAudio = side === audioSide;
 
   const groups = groupGoogleVoices();
   const ptDefault = GOOGLE_VOICES.find((v) => v.lang === 'pt-BR');
@@ -37,7 +45,7 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
 
   function pickSide(s: AudioSide) {
     setSide(s);
-    setVoiceName(''); // volta ao padrão daquele lado
+    setVoiceName('');
     setLanguageCode('');
   }
   function onPickVoice(id: string) {
@@ -56,14 +64,36 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
         languageCode: eff.lang,
       });
       await recordStorageUpload(r.bytes);
-      // Lembra de qual lado este áudio gerado fala (frente/verso).
       await repo.saveSettings({
         cardAudioSide: { ...(settings.cardAudioSide ?? {}), [card.id]: side },
       });
-      setHasAudio(true);
-      pushToast('success', hasAudio ? 'Áudio regerado e salvo na nuvem.' : 'Áudio gerado e salvo na nuvem.');
+      setAudioPath(r.path);
+      pushToast('success', selectedHasAudio ? 'Áudio regerado e salvo na nuvem.' : 'Áudio gerado e salvo na nuvem.');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar o áudio.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (busy || !settings || !audioPath) return;
+    setBusy(true);
+    try {
+      const path = audioPath;
+      await repo.updateCard(card.id, { audioPath: null });
+      const next = { ...(settings.cardAudioSide ?? {}) };
+      delete next[card.id];
+      await repo.saveSettings({ cardAudioSide: next });
+      try {
+        await removeMedia(path); // libera o arquivo no Storage (best-effort)
+      } catch {
+        /* ignore */
+      }
+      setAudioPath(null);
+      pushToast('success', 'Áudio removido.');
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : 'Falha ao remover o áudio.');
     } finally {
       setBusy(false);
     }
@@ -78,13 +108,19 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
               key={s}
               type="button"
               onClick={() => pickSide(s)}
-              className="px-2.5 py-1 text-xs rounded-[var(--r-sm)] transition-colors"
+              className="px-2.5 py-1 text-xs rounded-[var(--r-sm)] transition-colors inline-flex items-center gap-1.5"
               style={{
                 background: side === s ? 'var(--accent)' : 'transparent',
                 color: side === s ? '#fff' : 'var(--muted)',
               }}
             >
               {s === 'front' ? 'Frente' : 'Verso'}
+              {s === audioSide && (
+                <span
+                  className="inline-block rounded-full"
+                  style={{ width: 6, height: 6, background: side === s ? '#fff' : 'var(--accent-green)' }}
+                />
+              )}
             </button>
           ))}
         </div>
@@ -95,17 +131,28 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
           className="btn btn-ghost btn-sm disabled:opacity-50"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
-          {busy ? 'Gerando...' : hasAudio ? 'Regerar áudio' : 'Gerar áudio'}
+          {busy ? 'Gerando...' : selectedHasAudio ? 'Regerar áudio' : 'Gerar áudio'}
         </button>
-        {hasAudio && !busy && (
-          <span
-            className="inline-flex items-center gap-1 mono text-[11px]"
-            style={{ color: 'var(--accent-green)' }}
+        {selectedHasAudio && !busy && (
+          <button
+            type="button"
+            onClick={remove}
+            className="btn btn-ghost btn-sm"
+            title="Remover o áudio gerado deste lado"
           >
-            <Check size={12} /> áudio salvo
-          </span>
+            <Trash2 size={14} /> Remover
+          </button>
         )}
       </div>
+
+      <p className="mono text-[11px]" style={{ color: audioSide ? 'var(--accent-green)' : 'var(--muted)' }}>
+        {audioSide === 'front'
+          ? '✓ Voz do Google salva na frente.'
+          : audioSide === 'back'
+            ? '✓ Voz do Google salva no verso.'
+            : 'Nenhuma voz do Google gerada para este card ainda.'}
+      </p>
+
       <div className="flex items-center gap-2">
         <span className="mono text-[11px] text-muted shrink-0">Voz</span>
         <select
