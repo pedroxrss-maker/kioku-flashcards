@@ -81,6 +81,7 @@ function ToolbarBtn({
       className="p-1.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
         border: '1px solid var(--line)',
+        borderRadius: 'var(--r-sm)',
         color: active ? 'var(--accent)' : 'var(--muted)',
         borderColor: active ? 'var(--accent)' : 'var(--line)',
       }}

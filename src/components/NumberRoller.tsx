@@ -35,6 +35,8 @@ export function NumberRoller({
   ariaLabel,
 }: NumberRollerProps) {
   const [dir, setDir] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -44,6 +46,16 @@ export function NumberRoller({
     if (next === valueRef.current) return;
     setDir(next > valueRef.current ? 1 : -1);
     onChange(next);
+  }
+
+  function startEdit() {
+    setDraft(String(value));
+    setEditing(true);
+  }
+  function commitEdit() {
+    const n = parseInt(draft, 10);
+    if (!Number.isNaN(n)) set(n); // set() clamps to [min, max]
+    setEditing(false);
   }
 
   // Wheel must be a non-passive listener to roll the number (and not the page).
@@ -85,21 +97,53 @@ export function NumberRoller({
         <Minus size={16} />
       </button>
       <div className="relative flex-1 overflow-hidden">
-        <AnimatePresence custom={dir} initial={false}>
-          <motion.div
-            key={value}
-            custom={dir}
-            variants={ROLL}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 flex items-center justify-center text-sm font-semibold"
-          >
-            {value}
-            {suffix ? ` ${suffix}` : ''}
-          </motion.div>
-        </AnimatePresence>
+        {editing ? (
+          <input
+            autoFocus
+            type="text"
+            inputMode="numeric"
+            value={draft}
+            aria-label={ariaLabel}
+            onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commitEdit();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setEditing(false);
+              }
+            }}
+            className="absolute inset-0 w-full bg-transparent text-center text-sm font-semibold outline-none"
+          />
+        ) : (
+          <>
+            <AnimatePresence custom={dir} initial={false}>
+              <motion.div
+                key={value}
+                custom={dir}
+                variants={ROLL}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-0 flex items-center justify-center text-sm font-semibold"
+              >
+                {value}
+                {suffix ? ` ${suffix}` : ''}
+              </motion.div>
+            </AnimatePresence>
+            {/* Transparent overlay: click the number to type it directly. */}
+            <button
+              type="button"
+              onClick={startEdit}
+              aria-label="Digitar a quantidade"
+              title="Clique para digitar"
+              className="absolute inset-0 cursor-text"
+            />
+          </>
+        )}
       </div>
       <button
         type="button"
