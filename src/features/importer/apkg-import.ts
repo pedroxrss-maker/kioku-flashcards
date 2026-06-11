@@ -272,6 +272,14 @@ export interface ImportProgress {
   total: number;
 }
 
+/** Thrown internally when the caller aborts the import (rolled back, then re-thrown). */
+class ImportCancelledError extends Error {
+  constructor() {
+    super('Importação cancelada.');
+    this.name = 'ImportCancelledError';
+  }
+}
+
 /** True if the collection is the legacy "Please update..." placeholder (v3). */
 function looksLikePlaceholder(db: { exec: (sql: string) => Array<{ values: unknown[][] }> }): boolean {
   try {
@@ -298,6 +306,8 @@ export async function importApkg(
   data: ArrayBuffer | Uint8Array,
   fileName: string,
   onProgress?: (p: ImportProgress) => void,
+  /** Abort the import; partially-created decks are rolled back. */
+  signal?: AbortSignal,
 ): Promise<ImportResult> {
   const warnings: string[] = [];
   // Parse from the in-memory buffer the caller already read (never from a File
@@ -327,6 +337,10 @@ export async function importApkg(
       db = new SQL.Database(realBytes);
     }
   }
+
+  // Decks created so far, so a cancel can roll them back (their cards are only
+  // inserted at the very end, so a cancelled deck would otherwise be left empty).
+  const createdDeckIds: string[] = [];
 
   try {
     // ---- media map (filename -> zip member). The manifest may be zstd-compressed
@@ -725,6 +739,7 @@ export async function importApkg(
     // ---- phase 2: create each deck, upload its media, then build its cards ----
     const created: Array<{ id: string; path: string; cards: Card[] }> = [];
     for (const plan of plans) {
+      if (signal?.aborted) throw new ImportCancelledError();
       const color = DECK_COLORS[colorIdx++ % DECK_COLORS.length];
       // Preserve the source schedule: keep the deck on the algorithm whose fields
       // we actually imported. A classic Anki deck (SM-2) ships no FSRS memory
@@ -742,12 +757,14 @@ export async function importApkg(
         desiredRetention: settings.defaultDesiredRetention,
         buttonCount: 4,
       });
+      createdDeckIds.push(deck.id);
 
       const { images: imageRefs, audio: audioRefs } = await uploadDeckMedia(
         deck.id,
         plan.imageFiles,
         plan.audioFiles,
         () => {
+          if (signal?.aborted) throw new ImportCancelledError();
           mediaDone += 1;
           onProgress?.({ phase: 'mídia', done: mediaDone, total: mediaTotal });
         },
@@ -826,6 +843,19 @@ export async function importApkg(
       mediaCount,
       warnings,
     };
+  } catch (err) {
+    if (err instanceof ImportCancelledError) {
+      // Roll back the decks created before the cancel (their cards were never
+      // inserted), so nothing half-imported is left behind.
+      for (const id of createdDeckIds) {
+        try {
+          await repo.deleteDeck(id);
+        } catch {
+          /* best-effort rollback */
+        }
+      }
+    }
+    throw err;
   } finally {
     db.close();
   }

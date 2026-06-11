@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Loader2, Upload } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
-import type { ImportResult } from './apkg-import';
+import type { ImportProgress, ImportResult } from './apkg-import';
 
 interface ImportButtonProps {
   variant?: 'default' | 'accent' | 'ghost';
@@ -62,7 +63,12 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  function cancelImport() {
+    abortRef.current?.abort();
+  }
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -71,6 +77,8 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
     setBusy(true);
     setError(null);
     setProgress(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     // Read the FULL file into memory NOW, synchronously within this user-gesture
     // handler, before any deck parsing or other awaits. Large or cloud-synced
@@ -82,6 +90,7 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[import] não foi possível ler o arquivo', err);
+      abortRef.current = null;
       setBusy(false);
       setError(
         'Não foi possível ler o arquivo. Copie o .apkg/.colpkg para uma pasta local ' +
@@ -93,13 +102,23 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
 
     try {
       const { importApkg } = await import('./apkg-import');
-      const res = await importApkg(bytes, file.name, (p) => {
-        if (p.total > 0) setProgress(`${p.phase} ${p.done}/${p.total}`);
-      });
+      const res = await importApkg(
+        bytes,
+        file.name,
+        (p) => {
+          if (p.total > 0) setProgress(p);
+        },
+        controller.signal,
+      );
       setResult(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao importar o arquivo.');
+      // A user cancel aborts the controller; the import rolls itself back, so we
+      // just close the dialog silently instead of showing an error.
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Falha ao importar o arquivo.');
+      }
     } finally {
+      abortRef.current = null;
       setBusy(false);
       setProgress(null);
     }
@@ -114,11 +133,7 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
         onClick={() => fileRef.current?.click()}
         disabled={busy}
       >
-        {busy
-          ? progress
-            ? `Importando ${progress}`
-            : 'Importando… (pode levar um tempo)'
-          : 'Importar .apkg'}
+        {busy ? 'Importando…' : 'Importar .apkg'}
       </Button>
       <input
         ref={fileRef}
@@ -127,6 +142,67 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
         hidden
         onChange={onFile}
       />
+
+      {/* Blocking import overlay: blurred backdrop, live progress, and the only
+          way out is the Cancel button (clicks elsewhere are swallowed). */}
+      <AnimatePresence>
+        {busy && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              background: 'rgba(0, 0, 0, 0.55)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="surface p-6 w-full max-w-sm flex flex-col items-center text-center gap-4"
+              style={{ borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-pop)' }}
+            >
+              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent)' }} />
+              <div>
+                <h3 className="font-bold text-base">Importando deck</h3>
+                <p className="text-sm text-muted mt-1">
+                  {progress
+                    ? `Importando ${progress.phase}...`
+                    : 'Lendo o arquivo... (pode levar um tempo)'}
+                </p>
+              </div>
+              {progress && progress.total > 0 && (
+                <div className="w-full">
+                  <div
+                    className="h-1.5 rounded-full overflow-hidden"
+                    style={{ background: 'var(--surface-2)' }}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.round((progress.done / progress.total) * 100)}%`,
+                        background: 'var(--accent)',
+                        transition: 'width 0.2s ease',
+                      }}
+                    />
+                  </div>
+                  <p className="mono text-[11px] text-muted mt-2">
+                    {progress.done} / {progress.total}
+                  </p>
+                </div>
+              )}
+              <Button variant="ghost" size="sm" onClick={cancelImport}>
+                Cancelar
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Modal
         open={!!result}
