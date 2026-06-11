@@ -19,7 +19,7 @@ import { resizeImageBlob } from './image';
 const MEDIA_PROTOCOL = 'kioku-media://';
 const AUDIO_PROTOCOL = 'kioku-audio://';
 
-// One object URL per media id, reused across renders (not revoked in v1 —
+// One object URL per media id, reused across renders (not revoked in v1,
 // bounded by the number of distinct media blobs).
 const urlCache = new Map<string, string>();
 
@@ -68,6 +68,25 @@ export function stripAudioHtml(html: string): string {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   doc.querySelectorAll('.kioku-audio-chip, audio').forEach((el) => el.remove());
   return doc.body.innerHTML.replace(/\[sound:[^\]]*\]/gi, '').trim();
+}
+
+/**
+ * Resolve the FIRST attached-audio ref in card HTML to a playable URL (signed
+ * Storage URL or local object URL). Returns null when the card has no attached
+ * audio. Lets review play/replay the audio without relying on a rendered
+ * <audio> element (which may be hidden by the deck's audio toggle).
+ */
+export async function firstAudioUrl(html: string): Promise<string | null> {
+  if (!html || !html.includes(AUDIO_PROTOCOL)) return null;
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  for (const el of Array.from(doc.querySelectorAll('audio'))) {
+    const ref = refId(el.getAttribute('src') ?? '');
+    if (ref?.isAudio) {
+      const url = await urlForRef(ref.id);
+      if (url) return url;
+    }
+  }
+  return null;
 }
 
 /** Storage HTML (kioku-media / kioku-audio refs) -> display HTML (object URLs). */

@@ -18,6 +18,7 @@ import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
 import { deckAudioEnabled } from '../lib/deckAudio';
 import { getSignedUrl } from '../features/media/storage';
+import { firstAudioUrl } from '../features/media/media';
 
 // All decks use 4 answer buttons (the King of Buttons option was removed).
 const REVIEW_BUTTONS = 4 as const;
@@ -39,6 +40,7 @@ export function ReviewSession() {
   const [tutorOpen, setTutorOpen] = useState(false);
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const storedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [frontAudioUrl, setFrontAudioUrl] = useState<string | null>(null);
   const reduce = useReducedMotion();
 
   // The current card's own deck drives audio + TTS language (in a parent session
@@ -117,30 +119,22 @@ export function ReviewSession() {
     setTutorOpen(false);
   }, [current?.id]);
 
-  // Pronounce the front as soon as a card appears, in priority order:
-  //   1) a stored audio FILE (cards.audio_path, gerado na nuvem) via a signed URL
-  //   2) an attached audio chip in the front HTML (kioku-audio://)
-  //   3) Web Speech (TTS) as the fallback when there is no stored audio
-  // Stored audio is preferred over TTS. The audio chip's object URL resolves
-  // asynchronously, so for those we poll briefly until the <audio> is in the DOM.
+  // Play the front's audio as soon as a card appears:
+  //   - An EXPLICIT audio (stored cards.audio_path, or an attached
+  //     kioku-audio:// chip) is deliberate content, so it plays regardless of
+  //     the deck's TTS toggle. Resolve it to a URL and play via a dedicated
+  //     Audio (storedAudioRef), independent of any rendered <audio> element.
+  //   - With no explicit audio, fall back to Web Speech (TTS), which stays
+  //     gated by the deck audio toggle + the global "Ativar pronúncia".
+  // Both honor "Pronunciar a frente ao aparecer" and the per-card mute. The
+  // resolved URL is kept in state so the speaker button can replay it.
   useEffect(() => {
-    if (!current || !audioDeck) return;
-    if (!deckAudioEnabled(settings, audioDeck.id)) return; // deck has audio disabled
-    if (!settings?.tts.autoPronounceFront) return;
-    if (settings.mutedCards?.[current.id]) return; // card opted out of pronunciation
-
+    if (!current || !audioDeck || !settings) {
+      setFrontAudioUrl(null);
+      return;
+    }
     let cancelled = false;
-    const speakFront = () => {
-      if (cancelled || !settings.tts.enabled) return;
-      const text = stripHtml(current.front);
-      if (text) {
-        void tts.speak(text, {
-          lang: audioDeck.ttsLang,
-          voiceURI: settings.tts.voiceURI,
-          rate: settings.tts.rate,
-        });
-      }
-    };
+
     const stopStored = () => {
       const a = storedAudioRef.current;
       if (a) {
@@ -152,58 +146,73 @@ export function ReviewSession() {
         storedAudioRef.current = null;
       }
     };
-
-    // 1) Stored audio file takes priority.
-    if (current.audioPath) {
-      getSignedUrl(current.audioPath)
-        .then((url) => {
-          if (cancelled) return;
-          const a = new Audio(url);
-          storedAudioRef.current = a;
-          void a.play().catch(() => {});
-        })
-        .catch(() => {
-          // Could not sign (storage issue): fall back to Web Speech.
-          speakFront();
+    const play = (url: string) => {
+      stopStored();
+      const a = new Audio(url);
+      storedAudioRef.current = a;
+      void a.play().catch(() => {});
+    };
+    const speakFront = () => {
+      if (cancelled || !settings.tts.enabled) return;
+      const text = stripHtml(current.front);
+      if (text) {
+        void tts.speak(text, {
+          lang: audioDeck.ttsLang,
+          voiceURI: settings.tts.voiceURI,
+          rate: settings.tts.rate,
         });
-      return () => {
-        cancelled = true;
-        stopStored();
-      };
-    }
+      }
+    };
 
-    // 2) Attached audio chip in the front HTML.
-    if (current.front.includes('kioku-audio://')) {
-      let tries = 0;
-      const playWhenReady = () => {
-        if (cancelled) return;
-        const el = cardWrapRef.current?.querySelector<HTMLAudioElement>(
-          '.flip-face:not(.flip-face-back) audio',
-        );
-        if (el) {
-          try {
-            el.currentTime = 0;
-          } catch {
-            /* not loaded yet */
-          }
-          void el.play().catch(() => {});
-          return;
+    const autoPlay =
+      settings.tts.autoPronounceFront && settings.mutedCards?.[current.id] !== true;
+    const deckOn = deckAudioEnabled(settings, audioDeck.id);
+
+    void (async () => {
+      let url: string | null = null;
+      if (current.audioPath) {
+        try {
+          url = await getSignedUrl(current.audioPath);
+        } catch {
+          url = null;
         }
-        if (tries++ < 12) window.setTimeout(playWhenReady, 90);
-      };
-      playWhenReady();
-      return () => {
-        cancelled = true;
-      };
-    }
+      } else if (current.front.includes('kioku-audio://')) {
+        url = await firstAudioUrl(current.front);
+      }
+      if (cancelled) return;
+      setFrontAudioUrl(url);
+      if (url) {
+        if (autoPlay) play(url); // explicit audio: bypasses the deck TTS toggle
+      } else if (autoPlay && deckOn && settings.tts.enabled) {
+        speakFront();
+      }
+    })();
 
-    // 3) Web Speech fallback.
-    speakFront();
     return () => {
       cancelled = true;
+      stopStored();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
+
+  // Replay the current front audio from the start (the speaker button).
+  const replayFrontAudio = () => {
+    if (!frontAudioUrl) return;
+    const a = storedAudioRef.current;
+    if (a) {
+      try {
+        a.pause();
+      } catch {
+        /* ignore */
+      }
+    }
+    const next = new Audio(frontAudioUrl);
+    storedAudioRef.current = next;
+    void next.play().catch(() => {});
+  };
+
+  const hasFrontAudio =
+    !!current && (!!current.audioPath || current.front.includes('kioku-audio://'));
 
   if (session.loading) {
     return (
@@ -420,6 +429,8 @@ export function ReviewSession() {
                     flipped={flipped}
                     onFlip={flip}
                     audioEnabled={audioOn}
+                    hasFrontAudio={hasFrontAudio}
+                    onReplayFrontAudio={replayFrontAudio}
                   />
                 );
               })()}
