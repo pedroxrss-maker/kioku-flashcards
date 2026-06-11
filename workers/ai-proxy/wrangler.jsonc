@@ -1,0 +1,15 @@
+{
+  // Worker proxy da IA (Google Gemini) para o Kioku.
+  //
+  // Deploy (rode DENTRO de workers/ai-proxy): `npx wrangler deploy`.
+  // A chave NUNCA fica neste arquivo. Defina-a como secret:
+  //   npx wrangler secret put GOOGLE_GEMINI_API_KEY
+  // Ajuste ALLOWED_ORIGINS abaixo para o seu dominio de producao do Kioku
+  // (mantendo http://localhost:5173 para desenvolvimento).
+  "name": "kioku-ai-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "vars": {
+    "ALLOWED_ORIGINS": "https://kioku.com.br,http://localhost:5173"
+  }
+}
