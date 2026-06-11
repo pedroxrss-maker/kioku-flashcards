@@ -5,6 +5,7 @@ import { Check, ClipboardList, FileText, Loader2, Sparkles, Type, Wand2 } from '
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
+import { NumberRoller } from '../components/NumberRoller';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
 import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
@@ -25,8 +26,6 @@ const CARD_TYPES: Array<{ id: CardType; label: string }> = [
   { id: 'cloze', label: 'Cloze' },
   { id: 'typein', label: 'Escreva a resposta' },
 ];
-
-const COUNTS = [10, 20, 30, 50];
 
 const LANGS: Array<[string, string]> = [
   ['Portuguese (Brazil)', 'Português'],
@@ -316,21 +315,15 @@ export function GenerateDeck() {
                 </div>
               </div>
               <div>
-                <label className="field-label" htmlFor="g-count">
-                  Quantidade
-                </label>
-                <select
-                  id="g-count"
-                  className="field"
+                <span className="field-label">Quantidade</span>
+                <NumberRoller
                   value={count}
-                  onChange={(e) => setCount(Number(e.target.value))}
-                >
-                  {COUNTS.map((c) => (
-                    <option key={c} value={c}>
-                      {c} cards
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCount}
+                  min={1}
+                  max={100}
+                  suffix="cards"
+                  ariaLabel="Quantidade de cards"
+                />
               </div>
               <div>
                 <label className="field-label" htmlFor="g-lang">
