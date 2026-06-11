@@ -1,23 +1,66 @@
-import { Volume2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Loader2, Play, Volume2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
 import { SmoothSlider } from '../../components/SmoothSlider';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
-import { tts } from './tts';
-import { useVoices } from './useVoices';
-import { GoogleTtsSettings } from './GoogleTtsSettings';
+import { groupGoogleVoices, isTtsConfigured, listGoogleVoices, synthesizeGoogle } from './googleProvider';
+import { TtsProviderError } from './providers';
 import type { AppSettings } from '../../db/types';
+
+type Status = { kind: 'idle' | 'ok' | 'err'; msg?: string };
+
+/** Frase curta de teste, no idioma da voz escolhida. */
+const SAMPLE: Record<string, string> = {
+  'pt-BR': 'Olá! Esta é uma voz de teste do Kioku.',
+  'en-US': 'Hello! This is a Kioku test voice.',
+};
 
 /** TTS settings block, composed into the Settings page. */
 export function TtsSettings() {
   const settings = useSettings();
-  const voices = useVoices();
+  const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [testing, setTesting] = useState(false);
+  const previewUrl = useRef<string | null>(null);
+
   if (!settings) return null;
   const tt = settings.tts;
+  const voices = listGoogleVoices();
+  const groups = groupGoogleVoices();
 
   const save = (patch: Partial<AppSettings['tts']>) =>
     repo.saveSettings({ tts: { ...tt, ...patch } });
+
+  function onPickVoice(id: string) {
+    const v = voices.find((x) => x.id === id);
+    if (!v) return;
+    save({ googleVoiceName: v.id, googleLanguageCode: v.lang ?? tt.googleLanguageCode });
+  }
+
+  async function testVoice() {
+    if (testing) return;
+    setTesting(true);
+    setStatus({ kind: 'idle' });
+    try {
+      const sample = SAMPLE[tt.googleLanguageCode] ?? SAMPLE['en-US'];
+      const blob = await synthesizeGoogle(sample, {
+        voiceName: tt.googleVoiceName,
+        languageCode: tt.googleLanguageCode,
+      });
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      previewUrl.current = URL.createObjectURL(blob);
+      await new Audio(previewUrl.current).play();
+      setStatus({ kind: 'ok', msg: 'Voz tocada com sucesso.' });
+    } catch (e) {
+      setStatus({
+        kind: 'err',
+        msg: e instanceof TtsProviderError ? e.message : 'Falha ao gerar a prévia.',
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   return (
     <section className="surface p-5 md:p-6">
@@ -26,80 +69,86 @@ export function TtsSettings() {
         <h2 className="mono text-sm text-muted">Áudio · Pronúncia (TTS)</h2>
       </div>
 
-      {!tts.supported ? (
-        <p className="text-sm text-muted">
-          Seu navegador não suporta síntese de voz (Web Speech API).
-        </p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <Toggle
-            checked={tt.enabled}
-            onChange={(v) => save({ enabled: v })}
-            label="Ativar pronúncia"
-            description="Mostra o ícone de alto-falante nos cards e na revisão."
-          />
+      <div className="flex flex-col gap-4">
+        <Toggle
+          checked={tt.enabled}
+          onChange={(v) => save({ enabled: v })}
+          label="Ativar pronúncia"
+          description="Mostra o ícone de alto-falante nos cards e na revisão."
+        />
 
-          {tt.enabled && (
-            <>
-              <div>
-                <label className="field-label" htmlFor="tts-voice">
-                  Voz
-                </label>
-                <select
-                  id="tts-voice"
-                  className="field"
-                  value={tt.voiceURI ?? ''}
-                  onChange={(e) => save({ voiceURI: e.target.value || null })}
+        {tt.enabled && (
+          <>
+            <div>
+              <label className="field-label" htmlFor="tts-voice">
+                Voz (Google)
+              </label>
+              <select
+                id="tts-voice"
+                className="field"
+                value={tt.googleVoiceName}
+                onChange={(e) => onPickVoice(e.target.value)}
+              >
+                {groups.map((g) => (
+                  <optgroup key={g.lang} label={g.label}>
+                    {g.items.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted mt-1">
+                A credencial do Google fica no servidor (Worker), não no aplicativo.
+              </p>
+              {!isTtsConfigured() && (
+                <p className="mono text-[11px] mt-1" style={{ color: 'var(--muted)' }}>
+                  O servidor de voz (Worker) ainda não foi configurado. Você pode escolher a voz
+                  agora; a geração de áudio fica disponível quando o Worker estiver no ar.
+                </p>
+              )}
+            </div>
+
+            <SmoothSlider
+              id="tts-rate"
+              value={tt.rate}
+              min={0.5}
+              max={1.5}
+              step={0.025}
+              onCommit={(v) => save({ rate: v })}
+              label={(v) => `Velocidade · ${v.toFixed(2)}×`}
+            />
+
+            <Toggle
+              checked={tt.autoPronounceFront}
+              onChange={(v) => save({ autoPronounceFront: v })}
+              label="Pronunciar a frente ao aparecer"
+              description="Assim que um card aparece, toca o áudio dele (se houver) ou fala a frente automaticamente."
+            />
+
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={testing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                onClick={testVoice}
+                disabled={testing}
+              >
+                Testar voz
+              </Button>
+              {status.kind !== 'idle' && (
+                <span
+                  className="mono text-[11px]"
+                  style={{ color: status.kind === 'ok' ? 'var(--accent-green)' : 'var(--accent)' }}
                 >
-                  <option value="">Automática (pelo idioma do deck)</option>
-                  {voices.map((v, i) => (
-                    <option key={`${v.voiceURI}-${i}`} value={v.voiceURI}>
-                      {v.name} · {v.lang}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <SmoothSlider
-                id="tts-rate"
-                value={tt.rate}
-                min={0.5}
-                max={1.5}
-                step={0.025}
-                onCommit={(v) => save({ rate: v })}
-                label={(v) => `Velocidade · ${v.toFixed(2)}×`}
-              />
-
-              <Toggle
-                checked={tt.autoPronounceFront}
-                onChange={(v) => save({ autoPronounceFront: v })}
-                label="Pronunciar a frente ao aparecer"
-                description="Assim que um card aparece, toca o áudio dele (se houver) ou fala a frente automaticamente."
-              />
-
-              <div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<Volume2 size={14} />}
-                  onClick={() =>
-                    tts.speak('Hello, this is Kioku.', {
-                      lang: 'en-US',
-                      voiceURI: tt.voiceURI,
-                      rate: tt.rate,
-                    })
-                  }
-                >
-                  Testar voz
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Áudio na nuvem (Google) funciona mesmo sem suporte a Web Speech. */}
-      <GoogleTtsSettings />
+                  {status.kind === 'ok' ? '✓' : '⚠'} {status.msg}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
