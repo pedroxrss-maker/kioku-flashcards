@@ -39,7 +39,7 @@ export function buildInitialQueue({
   const dueReviews = cards.filter((c) => c.state === 'review' && c.due <= now);
   const news = cards.filter((c) => c.state === 'new');
 
-  // "Infinitas": deliver every due review the scheduler surfaced, no ceiling.
+  // "Automáticas": deliver every due review the scheduler surfaced, no ceiling.
   const reviewCap =
     deck.reviewsPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, deck.reviewsPerDay - reviewsDone);
   const newCap =

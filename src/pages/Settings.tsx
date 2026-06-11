@@ -114,7 +114,7 @@ export function Settings() {
                     className="field flex items-center"
                     style={{ color: 'var(--accent)', fontWeight: 600 }}
                   >
-                    Infinitas
+                    Automáticas
                   </motion.div>
                 ) : (
                   <motion.input
@@ -138,7 +138,7 @@ export function Settings() {
                 checked={reviewsUnlimited}
                 onChange={(v) => repo.saveSettings({ reviewsPerDay: v ? UNLIMITED_PER_DAY : 200 })}
               />
-              <span className="text-xs">Infinitas</span>
+              <span className="text-xs">Automáticas</span>
             </div>
           </div>
         </div>
@@ -146,9 +146,10 @@ export function Settings() {
           Decks existentes mantêm seus próprios limites (ajuste em cada deck).
         </p>
         <p className="text-xs text-muted mt-2" style={{ lineHeight: 1.55 }}>
-          Com <b className="text-fg">Infinitas</b>, o Kioku entrega todas as revisões que o algoritmo
-          (SM-2 ou FSRS) marcar como devidas no dia, sem teto — ideal para zerar o acúmulo de cards.
-          Em compensação, dias com muitas cartas vencidas podem render sessões longas.
+          Com <b className="text-fg">Automáticas</b>, o Kioku deixa o algoritmo (SM-2 ou FSRS)
+          decidir: entrega todas as revisões marcadas como devidas no dia, sem teto fixo. Ideal para
+          zerar o acúmulo de cards. Em compensação, dias com muitas cartas vencidas podem render
+          sessões longas.
         </p>
       </Section>
 

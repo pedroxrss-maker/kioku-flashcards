@@ -246,7 +246,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
           <div>
             <label className="field-label" htmlFor="ds-rev">Revisões / dia</label>
             {reviewsPerDay >= UNLIMITED_PER_DAY ? (
-              <div className="field flex items-center font-semibold" style={{ color: 'var(--accent)' }}>Infinitas</div>
+              <div className="field flex items-center font-semibold" style={{ color: 'var(--accent)' }}>Automáticas</div>
             ) : (
               <input id="ds-rev" type="number" min={0} className="field" value={reviewsPerDay}
                 onChange={(e) => setReviewsPerDay(Math.max(0, Number(e.target.value) || 0))} />
@@ -254,7 +254,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
             <div className="flex items-center gap-2 mt-2">
               <Toggle checked={reviewsPerDay >= UNLIMITED_PER_DAY}
                 onChange={(v) => setReviewsPerDay(v ? UNLIMITED_PER_DAY : 200)} />
-              <span className="text-xs">Infinitas</span>
+              <span className="text-xs">Automáticas</span>
             </div>
           </div>
         </div>
