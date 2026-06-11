@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Folder, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
-import { useAllCards, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
+import { ArrowLeft, CalendarDays, Folder, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
+import { useAllCards, useAllLogs, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
+import { Heatmap } from '../features/stats/Heatmap';
 import { CardRow } from '../features/decks/CardRow';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
@@ -28,7 +29,14 @@ export function DeckDetail() {
   const cards = useCards(id);
   const decks = useDecks();
   const allCards = useAllCards();
+  const allLogs = useAllLogs();
   const settings = useSettings();
+
+  // Reviews that belong to THIS deck (its own cards), for the deck heatmap.
+  const deckLogs = useMemo(
+    () => (id ? allLogs.filter((l) => l.deckId === id) : []),
+    [allLogs, id],
+  );
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -249,6 +257,15 @@ export function DeckDetail() {
           </div>
         </section>
       )}
+
+      {/* Review heatmap for THIS deck */}
+      <Panel className="p-4 md:p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={16} className="text-muted" />
+          <h2 className="mono text-sm text-muted">Mapa de revisões deste deck</h2>
+        </div>
+        <Heatmap logs={deckLogs} />
+      </Panel>
 
       {/* Card list */}
       <section>

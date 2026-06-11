@@ -114,7 +114,14 @@ function DeckStudyRow({
   const nav = useNavigate();
   return (
     <div
-      className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)] min-w-0"
+      onClick={() => nav(`/decks/${deck.id}`)}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') nav(`/decks/${deck.id}`);
+      }}
+      className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)] min-w-0 cursor-pointer"
+      title={`Abrir ${deck.name}`}
     >
       <DeckAvatar deck={deck} size={40} />
 
@@ -127,11 +134,16 @@ function DeckStudyRow({
 
       <CardCounts newCount={newCount} learning={learning} reviewDue={reviewDue} />
 
-      <Link to={`/review/${deck.id}`} className="btn btn-accent btn-sm shrink-0" aria-label="Estudar">
+      <Link
+        to={`/review/${deck.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="btn btn-accent btn-sm shrink-0"
+        aria-label="Estudar"
+      >
         <Play size={14} /> <span className="hidden sm:inline">Estudar</span>
       </Link>
 
-      <div className="relative shrink-0">
+      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={onMenu}
