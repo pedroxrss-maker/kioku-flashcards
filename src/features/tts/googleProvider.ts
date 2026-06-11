@@ -114,3 +114,14 @@ export const GOOGLE_VOICES: TtsVoice[] = [
 export function listGoogleVoices(): TtsVoice[] {
   return GOOGLE_VOICES;
 }
+
+/** Vozes agrupadas por idioma (en-US depois pt-BR), para os seletores. */
+export function groupGoogleVoices(): Array<{ lang: string; label: string; items: TtsVoice[] }> {
+  const order: Array<{ lang: string; label: string }> = [
+    { lang: 'en-US', label: 'Inglês (EUA)' },
+    { lang: 'pt-BR', label: 'Português (BR)' },
+  ];
+  return order
+    .map((g) => ({ ...g, items: GOOGLE_VOICES.filter((v) => v.lang === g.lang) }))
+    .filter((g) => g.items.length > 0);
+}
