@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Panel } from '../../components/Panel';
 import { AlgoBadge } from './AlgoBadge';
 import { DeckAvatar } from './deckIcons';
+import { CardCounts } from './CardCounts';
 import { countCards } from '../../lib/deckStats';
 import type { Card, Deck } from '../../db/types';
 
@@ -37,19 +38,12 @@ export function DeckCard({ deck, cards }: DeckCardProps) {
         <AlgoBadge algorithm={deck.algorithm} className="shrink-0" />
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-sm">
           <b className="display text-base">{counts.total}</b>{' '}
           <span className="text-muted">cards</span>
         </span>
-        {counts.due > 0 && (
-          <span
-            className="pill"
-            style={{ borderColor: deck.color, color: deck.color, fontSize: 10, padding: '4px 9px' }}
-          >
-            {counts.due} a revisar
-          </span>
-        )}
+        <CardCounts newCount={counts.newCount} learning={counts.learning} reviewDue={counts.reviewDue} />
       </div>
 
       <div className="mt-auto">

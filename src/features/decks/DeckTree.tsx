@@ -7,6 +7,7 @@ import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DeckAvatar } from './deckIcons';
 import { AlgoBadge } from './AlgoBadge';
+import { CardCounts } from './CardCounts';
 import {
   aggregateCounts,
   buildDeckTree,
@@ -265,11 +266,7 @@ function DeckTreeRow({
 
       {/* Three aligned count columns (Anki layout): new · learning · due.
           On a parent these are the aggregate sums across all descendants. */}
-      <div className="flex items-center gap-1 sm:gap-2.5 shrink-0 mono">
-        <CountCell value={counts.newCount} color="var(--accent-blue)" label="novos" />
-        <CountCell value={counts.learning} color="var(--accent)" label="aprendendo" />
-        <CountCell value={counts.reviewDue} color="var(--accent-green)" label="a revisar" />
-      </div>
+      <CardCounts newCount={counts.newCount} learning={counts.learning} reviewDue={counts.reviewDue} />
 
       {studiable && (
         <Link
@@ -355,16 +352,3 @@ function DeckTreeRow({
   );
 }
 
-/** One right-aligned, fixed-width count column. Fixed widths keep the three
- *  columns aligned across every row; zero is dimmed so non-zero counts pop. */
-function CountCell({ value, color, label }: { value: number; color: string; label: string }) {
-  return (
-    <span
-      className="w-7 sm:w-9 text-right text-xs sm:text-sm tabular-nums"
-      style={{ color: value > 0 ? color : 'var(--line-strong)' }}
-      title={`${value} ${label}`}
-    >
-      {value}
-    </span>
-  );
-}

@@ -29,6 +29,7 @@ import { CreateDeckModal } from '../features/decks/CreateDeckModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { DeckAvatar } from '../features/decks/deckIcons';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
+import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
@@ -90,8 +91,9 @@ function StatCard({
 /* ----------------------------------------------------------- deck row ----- */
 function DeckStudyRow({
   deck,
-  count,
-  pct,
+  newCount,
+  learning,
+  reviewDue,
   onMenu,
   menuOpen,
   onCloseMenu,
@@ -99,8 +101,9 @@ function DeckStudyRow({
   onDelete,
 }: {
   deck: Deck;
-  count: number;
-  pct: number;
+  newCount: number;
+  learning: number;
+  reviewDue: number;
   onMenu: () => void;
   menuOpen: boolean;
   onCloseMenu: () => void;
@@ -115,18 +118,13 @@ function DeckStudyRow({
       <DeckAvatar deck={deck} size={40} />
 
       <div className="min-w-0 flex-1">
-        <p className="font-semibold truncate leading-tight">{deck.name}</p>
-        <div className="flex items-center gap-2 mb-1.5 min-w-0">
-          <p className="text-xs text-muted truncate">{count} cards</p>
-          <AlgoBadge algorithm={deck.algorithm} className="shrink-0" />
-        </div>
         <div className="flex items-center gap-2 min-w-0">
-          <div className="h-1.5 flex-1 min-w-0 rounded-full" style={{ background: 'var(--surface-2)' }}>
-            <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 999 }} />
-          </div>
-          <span className="text-[11px] text-muted shrink-0 w-9 text-right">{pct}%</span>
+          <p className="font-semibold truncate leading-tight">{deck.name}</p>
+          <AlgoBadge algorithm={deck.algorithm} className="shrink-0 hidden sm:inline-flex" />
         </div>
       </div>
+
+      <CardCounts newCount={newCount} learning={learning} reviewDue={reviewDue} />
 
       <Link to={`/review/${deck.id}`} className="btn btn-accent btn-sm shrink-0" aria-label="Estudar">
         <Play size={14} /> <span className="hidden sm:inline">Estudar</span>
@@ -225,9 +223,10 @@ export function Home() {
         const c = countCards(byDeck.get(deck.id) ?? [], now, deck);
         return {
           deck,
-          count: c.total,
           due: c.due,
-          pct: c.total ? Math.round((c.mastered / c.total) * 100) : 0,
+          newCount: c.newCount,
+          learning: c.learning,
+          reviewDue: c.reviewDue,
         };
       })
       .sort((a, b) => b.due - a.due);
@@ -443,8 +442,9 @@ export function Home() {
                 <DeckStudyRow
                   key={r.deck.id}
                   deck={r.deck}
-                  count={r.count}
-                  pct={r.pct}
+                  newCount={r.newCount}
+                  learning={r.learning}
+                  reviewDue={r.reviewDue}
                   menuOpen={menuDeckId === r.deck.id}
                   onMenu={() => setMenuDeckId((id) => (id === r.deck.id ? null : r.deck.id))}
                   onCloseMenu={() => setMenuDeckId(null)}
