@@ -58,7 +58,14 @@ export function FlipCard({
       onMouseDown={(e) => e.preventDefault()}
       title="Ouvir áudio"
       aria-label="Ouvir áudio"
-      className="text-black/45 hover:text-black transition-colors"
+      className="inline-flex items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
+      style={{
+        width: 36,
+        height: 36,
+        background: 'var(--accent)',
+        color: '#fff',
+        boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent)',
+      }}
     >
       <Volume2 size={18} />
     </button>
@@ -90,9 +97,12 @@ export function FlipCard({
         </div>
         {/* Back face */}
         <div className="review-face flip-face flip-face-back">
-          {audioEnabled && (
-            <div className="absolute top-3 right-3 flex gap-2">
-              <SpeakerButton text={stripHtml(back)} lang={ttsLang} size={18} onLight />
+          {(hasFrontAudio || audioEnabled) && (
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              {hasFrontAudio && frontAudioBtn}
+              {audioEnabled && (
+                <SpeakerButton text={stripHtml(back)} lang={ttsLang} size={18} onLight />
+              )}
             </div>
           )}
           <div className="w-full max-w-xl">

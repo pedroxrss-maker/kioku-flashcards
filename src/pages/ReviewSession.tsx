@@ -87,6 +87,12 @@ export function ReviewSession() {
         setEditOpen(true);
         return;
       }
+      // "R" replays the attached front audio (any card type, either face).
+      if ((e.key === 'r' || e.key === 'R') && frontAudioUrl) {
+        e.preventDefault();
+        replayFrontAudio();
+        return;
+      }
       // Type-in cards own their keyboard (the focused input handles Enter); the
       // global flip/rate shortcuts must not reveal or rate them.
       if (cardTypeOf(current.front) === 'typein') return;
@@ -112,7 +118,7 @@ export function ReviewSession() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen, tutorOpen]);
+  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen, tutorOpen, frontAudioUrl]);
 
   // Close the tutor whenever the card changes (it is about one specific card).
   useEffect(() => {
