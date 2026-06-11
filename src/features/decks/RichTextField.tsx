@@ -1,5 +1,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import type {
+  ChangeEvent,
+  ClipboardEvent as ReactClipboardEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from 'react';
 import { Bold, Braces, Image as ImageIcon, Italic, List, Underline, Volume2 } from 'lucide-react';
 import {
   audioChipHtml,
@@ -128,6 +133,27 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
     if (ref.current) onChange(fromEditorHtml(ref.current.innerHTML));
   }
 
+  /**
+   * Cola SEMPRE como texto puro. O HTML do site de origem (cores, fundo branco,
+   * fontes) nunca entra no card: o texto adota o estilo do editor. Quebras de
+   * linha sao preservadas.
+   */
+  function onPaste(e: ReactClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const dt = e.clipboardData;
+    let text = dt.getData('text/plain');
+    if (!text) {
+      const html = dt.getData('text/html');
+      if (html) {
+        text = new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
+      }
+    }
+    if (!text) return;
+    ref.current?.focus();
+    document.execCommand('insertText', false, text);
+    emit();
+  }
+
   function exec(command: string) {
     ref.current?.focus();
     document.execCommand(command, false);
@@ -211,6 +237,7 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
         contentEditable
         suppressContentEditableWarning
         onInput={emit}
+        onPaste={onPaste}
         onKeyDown={(e: ReactKeyboardEvent<HTMLDivElement>) => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onCtrlEnter) {
             e.preventDefault();

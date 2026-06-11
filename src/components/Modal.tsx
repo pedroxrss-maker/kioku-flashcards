@@ -32,9 +32,13 @@ export function Modal({
   // overlay itself with little movement. This stops a touch that merely grazes
   // the edge, a swipe/scroll, or a drag that began inside the dialog (e.g. while
   // selecting text in an input) from synthesizing a backdrop "click" and
-  // dismissing the modal — the over-sensitive close on mobile.
+  // dismissing the modal, the over-sensitive close on mobile.
   const press = useRef<{ onOverlay: boolean; x: number; y: number } | null>(null);
   const CLOSE_SLOP = 10; // px of movement still treated as a tap, not a drag
+  // When was the last context menu (right-click) opened inside the modal. A
+  // native menu (e.g. right-click > Colar) can dismiss with a synthesized press
+  // on the backdrop; we must never treat that as a deliberate close.
+  const lastContextMenu = useRef(0);
 
   const onOverlayPointerDown = (e: ReactPointerEvent) => {
     press.current = { onOverlay: e.target === e.currentTarget, x: e.clientX, y: e.clientY };
@@ -46,6 +50,12 @@ export function Modal({
     if (!p || !p.onOverlay) return; // didn't start on the backdrop
     if (e.target !== e.currentTarget) return; // didn't end on the backdrop
     if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLOSE_SLOP) return; // a drag/graze
+    // Ignore a backdrop "tap" right after a context menu (e.g. paste via
+    // right-click): that is the menu dismissing, not the user closing.
+    if (lastContextMenu.current && Date.now() - lastContextMenu.current < 2500) {
+      lastContextMenu.current = 0;
+      return;
+    }
     onClose();
   };
 
@@ -74,6 +84,12 @@ export function Modal({
           transition={{ duration: reduce ? 0 : 0.2, ease: 'easeOut' }}
           onPointerDown={onOverlayPointerDown}
           onPointerUp={onOverlayPointerUp}
+          onPointerCancel={() => {
+            press.current = null;
+          }}
+          onContextMenu={() => {
+            lastContextMenu.current = Date.now();
+          }}
         >
           <motion.div
             className="modal-box"
