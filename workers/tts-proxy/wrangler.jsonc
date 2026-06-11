@@ -10,6 +10,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-06-01",
   "vars": {
-    "ALLOWED_ORIGINS": "https://SEU-DOMINIO-KIOKU,http://localhost:5173"
+    "ALLOWED_ORIGINS": "https://kioku.com.br,http://localhost:5173"
   }
 }
