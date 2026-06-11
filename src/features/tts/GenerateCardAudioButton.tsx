@@ -16,7 +16,17 @@ import type { Card } from '../../db/types';
  * lets you (re)generate it for a side with a chosen voice, and remove it. The
  * Verso defaults the voice to Português; the front uses the saved default.
  */
-export function GenerateCardAudioButton({ card }: { card: Card }) {
+export function GenerateCardAudioButton({
+  card,
+  persist = true,
+  onAudioChange,
+}: {
+  card: Card;
+  /** False for a not-yet-saved card: generate to a draft path, report via
+   *  onAudioChange, and let the editor attach it when the card is created. */
+  persist?: boolean;
+  onAudioChange?: (audioPath: string | null, side: AudioSide) => void;
+}) {
   const settings = useSettings();
   const [side, setSide] = useState<AudioSide>(
     card.audioPath ? generatedAudioSide(card, undefined) : 'front',
@@ -26,11 +36,16 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
   const [busy, setBusy] = useState(false);
   // The single generated track (cards.audio_path). Local so it reflects changes.
   const [audioPath, setAudioPath] = useState<string | null>(card.audioPath ?? null);
+  // The side the most recent in-dialog generation used: overrides the inferred
+  // side instantly, and is the ONLY side signal for a not-yet-saved card.
+  const [localSide, setLocalSide] = useState<AudioSide | null>(null);
 
   if (!settings) return null;
 
-  // Which side the generated track speaks (record, else inferred from chips).
-  const audioSide: AudioSide | null = audioPath ? generatedAudioSide(card, settings) : null;
+  // Which side the generated track speaks (just-generated, else record/chips).
+  const audioSide: AudioSide | null = audioPath
+    ? localSide ?? generatedAudioSide(card, settings)
+    : null;
   const selectedHasAudio = side === audioSide;
 
   const groups = groupGoogleVoices();
@@ -59,15 +74,22 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
     if (busy || !settings) return;
     setBusy(true);
     try {
-      const r = await generateAndStoreCardAudio(card, settings, side, {
-        voiceName: eff.name,
-        languageCode: eff.lang,
-      });
+      const r = await generateAndStoreCardAudio(
+        card,
+        settings,
+        side,
+        { voiceName: eff.name, languageCode: eff.lang },
+        persist,
+      );
       await recordStorageUpload(r.bytes);
-      await repo.saveSettings({
-        cardAudioSide: { ...(settings.cardAudioSide ?? {}), [card.id]: side },
-      });
+      if (persist) {
+        await repo.saveSettings({
+          cardAudioSide: { ...(settings.cardAudioSide ?? {}), [card.id]: side },
+        });
+      }
       setAudioPath(r.path);
+      setLocalSide(side);
+      onAudioChange?.(r.path, side);
       // Toca uma vez para o usuário confirmar que deu certo.
       try {
         const url = URL.createObjectURL(r.blob);
@@ -90,16 +112,20 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
     setBusy(true);
     try {
       const path = audioPath;
-      await repo.updateCard(card.id, { audioPath: null });
-      const next = { ...(settings.cardAudioSide ?? {}) };
-      delete next[card.id];
-      await repo.saveSettings({ cardAudioSide: next });
+      if (persist) {
+        await repo.updateCard(card.id, { audioPath: null });
+        const next = { ...(settings.cardAudioSide ?? {}) };
+        delete next[card.id];
+        await repo.saveSettings({ cardAudioSide: next });
+      }
       try {
         await removeMedia(path); // libera o arquivo no Storage (best-effort)
       } catch {
         /* ignore */
       }
       setAudioPath(null);
+      setLocalSide(null);
+      onAudioChange?.(null, side);
       pushToast('success', 'Áudio removido.');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : 'Falha ao remover o áudio.');

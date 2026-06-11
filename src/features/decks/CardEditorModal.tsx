@@ -7,6 +7,7 @@ import { Toggle } from '../../components/Toggle';
 import { RichTextField } from './RichTextField';
 import type { RichTextFieldHandle } from './RichTextField';
 import { GenerateCardAudioButton } from '../tts/GenerateCardAudioButton';
+import type { AudioSide } from '../tts/audioGen';
 import { isTtsConfigured } from '../tts/googleProvider';
 import { FlipCard } from '../review/FlipCard';
 import { ClozeCard } from '../review/ClozeCard';
@@ -15,6 +16,8 @@ import { firstAudioUrl } from '../media/media';
 import { getSignedUrl } from '../media/storage';
 import { generatedAudioSide } from '../tts/cardAudio';
 import { repo } from '../../db/repositories';
+import { newFsrsFields, newSm2Fields } from '../../db/factories';
+import { uuid } from '../../lib/uuid';
 import { useSettings } from '../../db/hooks';
 import { deckAudioEnabled } from '../../lib/deckAudio';
 import { clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
@@ -63,6 +66,11 @@ export function CardEditorModal({
   const [previewFrontUrl, setPreviewFrontUrl] = useState<string | null>(null);
   const [previewBackUrl, setPreviewBackUrl] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  // For a NOT-yet-saved card: a stable id so generated audio has a path, plus the
+  // pending track to attach when the card is actually created.
+  const [draftId, setDraftId] = useState(() => uuid());
+  const [pendingAudioPath, setPendingAudioPath] = useState<string | null>(null);
+  const [pendingAudioSide, setPendingAudioSide] = useState<AudioSide>('front');
   // Tab from the front jumps here; both also submit on Ctrl/Cmd+Enter.
   const backRef = useRef<RichTextFieldHandle>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -77,6 +85,9 @@ export function CardEditorModal({
       setNonce((n) => n + 1);
       setPreviewing(false);
       setPronounce(card ? settings?.mutedCards?.[card.id] !== true : true);
+      setDraftId(uuid());
+      setPendingAudioPath(null);
+      setPendingAudioSide('front');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, card]);
@@ -208,9 +219,20 @@ export function CardEditorModal({
     setSaving(true);
     try {
       const cards = cardsToCreate();
+      const ids: string[] = [];
       for (const { f, b } of cards) {
         const created = await repo.createCard({ deckId, front: f, back: b });
         await applyPronounce(created.id);
+        ids.push(created.id);
+      }
+      // Attach the audio generated in this dialog (draft path) to the new card(s).
+      // Cloze notes yield several cards that share the same front track.
+      if (pendingAudioPath && ids.length > 0) {
+        for (const id of ids) await repo.updateCard(id, { audioPath: pendingAudioPath });
+        const sideMap = Object.fromEntries(ids.map((id) => [id, pendingAudioSide]));
+        await repo.saveSettings({
+          cardAudioSide: { ...(settings?.cardAudioSide ?? {}), ...sideMap },
+        });
       }
       pushToast(
         'success',
@@ -221,6 +243,10 @@ export function CardEditorModal({
       setNonce((n) => n + 1);
       setPreviewing(false);
       setPronounce(true);
+      // Fresh draft so the next card starts without inheriting this audio.
+      setDraftId(uuid());
+      setPendingAudioPath(null);
+      setPendingAudioSide('front');
     } finally {
       setSaving(false);
     }
@@ -480,21 +506,42 @@ export function CardEditorModal({
             <Cloud size={15} style={{ color: 'var(--accent)' }} className="shrink-0" />
             <span className="text-sm font-semibold">Adicionar Áudio</span>
           </div>
-          {editing && card ? (
-            <>
-              {/* Pass the CURRENT edited front/back so generation reads the live
-                  text, not the stale saved card (e.g. words added after opening). */}
-              <GenerateCardAudioButton card={{ ...card, front: stored().f, back }} />
-              <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
-                Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do
-                deck está ligado. Escolha a voz em Configurações.
-              </p>
-            </>
-          ) : (
-            <p className="text-[11px] text-muted" style={{ lineHeight: 1.45 }}>
-              Adicione o card primeiro; depois abra-o para gerar o áudio da frente ou do verso.
-            </p>
-          )}
+          {/* Works for new AND existing cards. Generation always reads the CURRENT
+              edited front/back. For a new (unsaved) card it generates to a draft
+              path and is attached when the card is created (persist=false). */}
+          <GenerateCardAudioButton
+            key={editing && card ? card.id : draftId}
+            card={
+              editing && card
+                ? { ...card, front: stored().f, back }
+                : {
+                    id: draftId,
+                    deckId,
+                    front: stored().f,
+                    back,
+                    state: 'new',
+                    due: 0,
+                    sm2: newSm2Fields(),
+                    fsrs: newFsrsFields(),
+                    createdAt: 0,
+                    updatedAt: 0,
+                    audioPath: pendingAudioPath,
+                  }
+            }
+            persist={editing}
+            onAudioChange={
+              editing
+                ? undefined
+                : (path, s) => {
+                    setPendingAudioPath(path);
+                    setPendingAudioSide(s);
+                  }
+            }
+          />
+          <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
+            Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do deck
+            está ligado. Escolha a voz em Configurações.
+          </p>
         </div>
       )}
     </Modal>

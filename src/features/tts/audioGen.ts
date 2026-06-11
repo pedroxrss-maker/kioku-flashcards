@@ -53,6 +53,9 @@ export async function generateAndStoreCardAudio(
   settings: AppSettings,
   side: AudioSide = 'front',
   voice?: VoiceChoice,
+  /** When false (a not-yet-saved card), upload the MP3 but DON'T touch the DB;
+   *  the caller attaches cards.audio_path once the card is actually created. */
+  persist = true,
 ): Promise<{ path: string; bytes: number; blob: Blob }> {
   const voiceName = (voice?.voiceName ?? settings.tts.googleVoiceName)?.trim();
   if (!voiceName) {
@@ -65,7 +68,7 @@ export async function generateAndStoreCardAudio(
   const blob = await synthesizeGoogle(text, { voiceName, languageCode, audioEncoding: 'MP3' });
   const path = await mediaObjectPath(card.deckId, `${card.id}.mp3`);
   await uploadMedia(path, blob, 'audio/mpeg');
-  await repo.updateCard(card.id, { audioPath: path });
+  if (persist) await repo.updateCard(card.id, { audioPath: path });
   return { path, bytes: blob.size, blob };
 }
 
