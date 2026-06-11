@@ -17,7 +17,7 @@ export interface Deck {
   name: string;
   color: string; // hex, used as the deck's category accent
   category?: string;
-  algorithm: Algorithm; // selectable per deck, default 'fsrs'
+  algorithm: Algorithm; // selectable per deck, default 'sm2'
   createdAt: number;
   // per-deck study settings (override global defaults)
   newPerDay: number; // default 20

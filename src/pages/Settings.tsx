@@ -159,7 +159,7 @@ export function Settings() {
           Aplicado a cada novo deck. Cada deck pode trocar de algoritmo depois, nas configurações dele.
         </p>
         <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Algoritmo padrão">
-          {(['fsrs', 'sm2'] as Algorithm[]).map((a) => {
+          {(['sm2', 'fsrs'] as Algorithm[]).map((a) => {
             const selected = settings.defaultAlgorithm === a;
             return (
               <button
@@ -185,7 +185,7 @@ export function Settings() {
                   {selected && <Check size={15} style={{ color: 'var(--accent)' }} />}
                 </span>
                 <span className="relative z-[1] block text-xs text-muted">
-                  {a === 'fsrs' ? 'Moderno · padrão' : 'Clássico (Anki)'}
+                  {a === 'fsrs' ? 'Moderno' : 'Clássico (Anki) · padrão'}
                 </span>
               </button>
             );

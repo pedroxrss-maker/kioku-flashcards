@@ -6,24 +6,24 @@ import { MemoryRouter } from 'react-router-dom';
 import { CreateDeckModal } from './CreateDeckModal';
 
 describe('CreateDeckModal algorithm select', () => {
-  it('reveals FSRS retention by default and hides it for SM-2', () => {
+  it('hides FSRS retention by default (SM-2) and reveals it for FSRS', () => {
     render(
       <MemoryRouter>
         <CreateDeckModal open onClose={() => {}} />
       </MemoryRouter>,
     );
 
-    // FSRS is the default selection -> the config block is visible.
+    // SM-2 is the default selection -> the FSRS config block is hidden.
+    expect(screen.queryByText('Configurações FSRS')).toBeNull();
+
+    // Selecting FSRS reveals the config block.
+    fireEvent.click(screen.getByText('FSRS'));
     expect(screen.getByText('Configurações FSRS')).toBeTruthy();
     expect(screen.getByText('Retenção desejada')).toBeTruthy();
     expect(screen.getByText('90%')).toBeTruthy();
 
-    // Selecting SM-2 hides the FSRS config entirely.
+    // Back to SM-2 -> hidden again.
     fireEvent.click(screen.getByText('SM-2'));
     expect(screen.queryByText('Configurações FSRS')).toBeNull();
-
-    // Back to FSRS -> revealed again.
-    fireEvent.click(screen.getByText('FSRS'));
-    expect(screen.getByText('Configurações FSRS')).toBeTruthy();
   });
 });

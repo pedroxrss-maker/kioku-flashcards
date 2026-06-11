@@ -41,7 +41,7 @@ export function makeDeck(input: DeckInput): Deck {
     name: input.name.trim(),
     color: input.color,
     category: input.category?.trim() || undefined,
-    algorithm: input.algorithm ?? 'fsrs',
+    algorithm: input.algorithm ?? 'sm2',
     createdAt: Date.now(),
     newPerDay: input.newPerDay ?? 20,
     reviewsPerDay: input.reviewsPerDay ?? 200,
@@ -74,7 +74,7 @@ export function defaultSettings(): AppSettings {
     dailyGoal: 40,
     newPerDay: 20,
     reviewsPerDay: 200,
-    defaultAlgorithm: 'fsrs',
+    defaultAlgorithm: 'sm2',
     defaultDesiredRetention: 0.9,
     defaultButtonCount: 4,
     tts: {

@@ -21,7 +21,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [color, setColor] = useState<string>(DECK_COLORS[0]);
-  const [algorithm, setAlgorithm] = useState<Algorithm>('fsrs');
+  const [algorithm, setAlgorithm] = useState<Algorithm>('sm2');
   const [retention, setRetention] = useState(0.9);
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -32,7 +32,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       setCategory('');
       setColor(DECK_COLORS[0]);
       setIcon(undefined);
-      setAlgorithm(settings?.defaultAlgorithm ?? 'fsrs');
+      setAlgorithm(settings?.defaultAlgorithm ?? 'sm2');
       setRetention(settings?.defaultDesiredRetention ?? 0.9);
     }
   }, [open, settings]);
