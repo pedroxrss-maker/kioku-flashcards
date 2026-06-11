@@ -5,7 +5,17 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
 } from 'react';
-import { Bold, Braces, Image as ImageIcon, Italic, List, Underline, Volume2 } from 'lucide-react';
+import {
+  Baseline,
+  Bold,
+  Braces,
+  Highlighter,
+  Image as ImageIcon,
+  Italic,
+  List,
+  Underline,
+  Volume2,
+} from 'lucide-react';
 import {
   audioChipHtml,
   fromEditorHtml,
@@ -17,6 +27,11 @@ import {
 import { recordStorageUpload } from '../media/usage';
 import { clozeNumbers } from '../../lib/cloze';
 import { pushToast } from '../../lib/toast';
+
+/** Pastel text colors (readable on the light review card). */
+const TEXT_COLORS = ['#c44f6a', '#c17d2e', '#3f9460', '#3a8fb0', '#4d72c4', '#9059c0'];
+/** Pastel highlight backgrounds (soft; the chip rounds + clones across lines). */
+const HL_COLORS = ['#fff1a6', '#cdeccf', '#cfe3fb', '#fcd4e2', '#e6d6fb', '#fde2c4'];
 
 interface RichTextFieldProps {
   label: string;
@@ -71,6 +86,47 @@ function ToolbarBtn({
   );
 }
 
+/** Small swatch grid shown under the text-color / highlight toolbar buttons. */
+function ColorPopover({
+  colors,
+  onPick,
+  round,
+}: {
+  colors: string[];
+  onPick: (c: string) => void;
+  round?: boolean;
+}) {
+  return (
+    <div
+      className="absolute right-0 z-50 mt-1 p-2 grid grid-cols-3 gap-1.5"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--line-strong)',
+        borderRadius: 'var(--r-sm)',
+        boxShadow: 'var(--shadow-pop)',
+      }}
+    >
+      {colors.map((c) => (
+        <button
+          key={c}
+          type="button"
+          // Keep the editable selection while picking a color.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onPick(c)}
+          className="transition-transform hover:scale-110"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: round ? '50%' : 6,
+            background: c,
+            border: '1px solid rgba(0, 0, 0, 0.2)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** contentEditable rich-text field with a formatting + image + audio toolbar. */
 export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>(
   function RichTextField(
@@ -82,6 +138,7 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
   const imageRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const [canCloze, setCanCloze] = useState(false);
+  const [colorMenu, setColorMenu] = useState<'text' | 'hl' | null>(null);
 
   // The Cloze button lights up only while text is selected inside THIS field.
   useEffect(() => {
@@ -160,6 +217,38 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
     emit();
   }
 
+  /** Change the selected text color (inline CSS, not a deprecated <font>). */
+  function applyTextColor(color: string) {
+    ref.current?.focus();
+    document.execCommand('styleWithCSS', false, 'true');
+    document.execCommand('foreColor', false, color);
+    setColorMenu(null);
+    emit();
+  }
+
+  /** Wrap the selection in a rounded highlight chip (pastel background). */
+  function applyHighlight(color: string) {
+    const el = ref.current;
+    const sel = window.getSelection();
+    setColorMenu(null);
+    if (!el || !sel || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.commonAncestorContainer)) return;
+    const span = document.createElement('span');
+    span.className = 'card-hl';
+    span.style.backgroundColor = color;
+    try {
+      range.surroundContents(span);
+    } catch {
+      // Selection crosses element boundaries: extract, wrap, re-insert.
+      const frag = range.extractContents();
+      span.appendChild(frag);
+      range.insertNode(span);
+    }
+    sel.removeAllRanges();
+    emit();
+  }
+
   function insertAudioChip(audio: { id: string; url: string; label: string }) {
     if (!ref.current) return;
     ref.current.insertAdjacentHTML('beforeend', audioChipHtml(audio));
@@ -214,6 +303,29 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
           <ToolbarBtn onClick={() => exec('insertUnorderedList')} title="Lista">
             <List size={14} />
           </ToolbarBtn>
+          <div className="relative">
+            <ToolbarBtn
+              onClick={() => setColorMenu((m) => (m === 'text' ? null : 'text'))}
+              active={colorMenu === 'text'}
+              title="Cor do texto"
+            >
+              <Baseline size={14} />
+            </ToolbarBtn>
+            {colorMenu === 'text' && <ColorPopover colors={TEXT_COLORS} onPick={applyTextColor} round />}
+          </div>
+          <div className="relative">
+            <ToolbarBtn
+              onClick={() => setColorMenu((m) => (m === 'hl' ? null : 'hl'))}
+              active={colorMenu === 'hl'}
+              title="Destacar (highlight)"
+            >
+              <Highlighter size={14} />
+            </ToolbarBtn>
+            {colorMenu === 'hl' && <ColorPopover colors={HL_COLORS} onPick={applyHighlight} />}
+          </div>
+          {colorMenu && (
+            <div className="fixed inset-0 z-40" onMouseDown={() => setColorMenu(null)} />
+          )}
           {showCloze && (
             <ToolbarBtn
               onClick={wrapCloze}
