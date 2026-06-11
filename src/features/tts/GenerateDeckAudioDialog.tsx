@@ -7,30 +7,20 @@ import { pushToast } from '../../lib/toast';
 import { recordStorageUpload, warnIfStorageHigh } from '../media/usage';
 import { generateDeckAudio } from './audioGen';
 import type { AudioSide, DeckAudioProgress } from './audioGen';
-import { isTtsConfigured, listGoogleVoices, synthesizeGoogle } from './googleProvider';
-import { TtsProviderError, type TtsVoice } from './providers';
+import {
+  groupGoogleVoices,
+  isTtsConfigured,
+  listGoogleVoices,
+  sampleText,
+  synthesizeGoogle,
+} from './googleProvider';
+import { TtsProviderError } from './providers';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   deckId: string;
   deckName: string;
-}
-
-/** Frase curta de teste, no idioma da voz escolhida. */
-const SAMPLE: Record<string, string> = {
-  'pt-BR': 'Olá! Esta é uma voz de teste do Kioku.',
-  'en-US': 'Hello! This is a Kioku test voice.',
-};
-
-function groupVoices(voices: TtsVoice[]): Array<{ lang: string; label: string; items: TtsVoice[] }> {
-  const order: Array<{ lang: string; label: string }> = [
-    { lang: 'en-US', label: 'Inglês (EUA)' },
-    { lang: 'pt-BR', label: 'Português (BR)' },
-  ];
-  return order
-    .map((g) => ({ ...g, items: voices.filter((v) => v.lang === g.lang) }))
-    .filter((g) => g.items.length > 0);
 }
 
 /**
@@ -41,7 +31,7 @@ function groupVoices(voices: TtsVoice[]): Array<{ lang: string; label: string; i
 export function GenerateDeckAudioDialog({ open, onClose, deckId, deckName }: Props) {
   const settings = useSettings();
   const voices = listGoogleVoices();
-  const groups = groupVoices(voices);
+  const groups = groupGoogleVoices();
 
   const [voiceName, setVoiceName] = useState('');
   const [languageCode, setLanguageCode] = useState('en-US');
@@ -71,7 +61,7 @@ export function GenerateDeckAudioDialog({ open, onClose, deckId, deckName }: Pro
     if (testing || busy || !voiceName) return;
     setTesting(true);
     try {
-      const sample = SAMPLE[languageCode] ?? SAMPLE['en-US'];
+      const sample = sampleText(languageCode);
       const blob = await synthesizeGoogle(sample, { voiceName, languageCode });
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = URL.createObjectURL(blob);

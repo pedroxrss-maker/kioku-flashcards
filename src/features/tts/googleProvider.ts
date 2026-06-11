@@ -101,14 +101,68 @@ export async function synthesizeGoogle(text: string, opts: GoogleSynthOptions): 
  * `${VITE_TTS_PROXY_URL}/voices`.
  */
 export const GOOGLE_VOICES: TtsVoice[] = [
+  // Inglês (EUA)
   { id: 'en-US-Neural2-D', name: 'Inglês (EUA), masculina (D)', lang: 'en-US' },
   { id: 'en-US-Neural2-J', name: 'Inglês (EUA), masculina (J)', lang: 'en-US' },
   { id: 'en-US-Neural2-C', name: 'Inglês (EUA), feminina (C)', lang: 'en-US' },
   { id: 'en-US-Neural2-F', name: 'Inglês (EUA), feminina (F)', lang: 'en-US' },
+  // Português (BR)
   { id: 'pt-BR-Neural2-B', name: 'Português (BR), masculina (B)', lang: 'pt-BR' },
   { id: 'pt-BR-Neural2-A', name: 'Português (BR), feminina (A)', lang: 'pt-BR' },
   { id: 'pt-BR-Neural2-C', name: 'Português (BR), feminina (C)', lang: 'pt-BR' },
+  // Inglês (Reino Unido)
+  { id: 'en-GB-Neural2-B', name: 'Inglês (Reino Unido), masculina (B)', lang: 'en-GB' },
+  { id: 'en-GB-Neural2-D', name: 'Inglês (Reino Unido), masculina (D)', lang: 'en-GB' },
+  { id: 'en-GB-Neural2-A', name: 'Inglês (Reino Unido), feminina (A)', lang: 'en-GB' },
+  { id: 'en-GB-Neural2-C', name: 'Inglês (Reino Unido), feminina (C)', lang: 'en-GB' },
+  // Espanhol (Espanha)
+  { id: 'es-ES-Neural2-B', name: 'Espanhol (Espanha), masculina (B)', lang: 'es-ES' },
+  { id: 'es-ES-Neural2-C', name: 'Espanhol (Espanha), feminina (C)', lang: 'es-ES' },
+  { id: 'es-ES-Neural2-D', name: 'Espanhol (Espanha), feminina (D)', lang: 'es-ES' },
+  // Espanhol (América Latina)
+  { id: 'es-US-Neural2-B', name: 'Espanhol (Latam), masculina (B)', lang: 'es-US' },
+  { id: 'es-US-Neural2-C', name: 'Espanhol (Latam), masculina (C)', lang: 'es-US' },
+  { id: 'es-US-Neural2-A', name: 'Espanhol (Latam), feminina (A)', lang: 'es-US' },
+  // Francês (França)
+  { id: 'fr-FR-Neural2-B', name: 'Francês (França), masculina (B)', lang: 'fr-FR' },
+  { id: 'fr-FR-Neural2-D', name: 'Francês (França), masculina (D)', lang: 'fr-FR' },
+  { id: 'fr-FR-Neural2-A', name: 'Francês (França), feminina (A)', lang: 'fr-FR' },
+  { id: 'fr-FR-Neural2-C', name: 'Francês (França), feminina (C)', lang: 'fr-FR' },
+  // Alemão
+  { id: 'de-DE-Neural2-B', name: 'Alemão, masculina (B)', lang: 'de-DE' },
+  { id: 'de-DE-Neural2-D', name: 'Alemão, masculina (D)', lang: 'de-DE' },
+  { id: 'de-DE-Neural2-A', name: 'Alemão, feminina (A)', lang: 'de-DE' },
+  { id: 'de-DE-Neural2-C', name: 'Alemão, feminina (C)', lang: 'de-DE' },
+  // Italiano
+  { id: 'it-IT-Neural2-C', name: 'Italiano, masculina (C)', lang: 'it-IT' },
+  { id: 'it-IT-Neural2-A', name: 'Italiano, feminina (A)', lang: 'it-IT' },
+  // Japonês
+  { id: 'ja-JP-Neural2-C', name: 'Japonês, masculina (C)', lang: 'ja-JP' },
+  { id: 'ja-JP-Neural2-D', name: 'Japonês, masculina (D)', lang: 'ja-JP' },
+  { id: 'ja-JP-Neural2-B', name: 'Japonês, feminina (B)', lang: 'ja-JP' },
+  // Coreano
+  { id: 'ko-KR-Neural2-C', name: 'Coreano, masculina (C)', lang: 'ko-KR' },
+  { id: 'ko-KR-Neural2-A', name: 'Coreano, feminina (A)', lang: 'ko-KR' },
+  { id: 'ko-KR-Neural2-B', name: 'Coreano, feminina (B)', lang: 'ko-KR' },
 ];
+
+/** Frase curta de teste por idioma (prefixo de 2 letras). Cai para inglês. */
+const SAMPLES: Record<string, string> = {
+  en: 'Hello! This is a Kioku test voice.',
+  pt: 'Olá! Esta é uma voz de teste do Kioku.',
+  es: '¡Hola! Esta es una voz de prueba de Kioku.',
+  fr: 'Bonjour ! Ceci est une voix de test de Kioku.',
+  de: 'Hallo! Dies ist eine Kioku-Teststimme.',
+  it: 'Ciao! Questa è una voce di prova di Kioku.',
+  ja: 'こんにちは。これは Kioku のテスト音声です。',
+  ko: '안녕하세요. 이것은 Kioku 테스트 음성입니다.',
+};
+
+/** Texto de teste no idioma da voz (para o botão "Testar voz"). */
+export function sampleText(languageCode: string): string {
+  const base = (languageCode || 'en').slice(0, 2).toLowerCase();
+  return SAMPLES[base] ?? SAMPLES.en;
+}
 
 /** Vozes disponíveis no seletor. Hoje é a lista curada acima. */
 export function listGoogleVoices(): TtsVoice[] {
@@ -120,6 +174,14 @@ export function groupGoogleVoices(): Array<{ lang: string; label: string; items:
   const order: Array<{ lang: string; label: string }> = [
     { lang: 'en-US', label: 'Inglês (EUA)' },
     { lang: 'pt-BR', label: 'Português (BR)' },
+    { lang: 'en-GB', label: 'Inglês (Reino Unido)' },
+    { lang: 'es-ES', label: 'Espanhol (Espanha)' },
+    { lang: 'es-US', label: 'Espanhol (América Latina)' },
+    { lang: 'fr-FR', label: 'Francês (França)' },
+    { lang: 'de-DE', label: 'Alemão' },
+    { lang: 'it-IT', label: 'Italiano' },
+    { lang: 'ja-JP', label: 'Japonês' },
+    { lang: 'ko-KR', label: 'Coreano' },
   ];
   return order
     .map((g) => ({ ...g, items: GOOGLE_VOICES.filter((v) => v.lang === g.lang) }))

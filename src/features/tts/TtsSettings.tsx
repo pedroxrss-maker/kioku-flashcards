@@ -5,17 +5,17 @@ import { Toggle } from '../../components/Toggle';
 import { SmoothSlider } from '../../components/SmoothSlider';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
-import { groupGoogleVoices, isTtsConfigured, listGoogleVoices, synthesizeGoogle } from './googleProvider';
+import {
+  groupGoogleVoices,
+  isTtsConfigured,
+  listGoogleVoices,
+  sampleText,
+  synthesizeGoogle,
+} from './googleProvider';
 import { TtsProviderError } from './providers';
 import type { AppSettings } from '../../db/types';
 
 type Status = { kind: 'idle' | 'ok' | 'err'; msg?: string };
-
-/** Frase curta de teste, no idioma da voz escolhida. */
-const SAMPLE: Record<string, string> = {
-  'pt-BR': 'Olá! Esta é uma voz de teste do Kioku.',
-  'en-US': 'Hello! This is a Kioku test voice.',
-};
 
 /** TTS settings block, composed into the Settings page. */
 export function TtsSettings() {
@@ -43,7 +43,7 @@ export function TtsSettings() {
     setTesting(true);
     setStatus({ kind: 'idle' });
     try {
-      const sample = SAMPLE[tt.googleLanguageCode] ?? SAMPLE['en-US'];
+      const sample = sampleText(tt.googleLanguageCode);
       const blob = await synthesizeGoogle(sample, {
         voiceName: tt.googleVoiceName,
         languageCode: tt.googleLanguageCode,
