@@ -348,7 +348,6 @@ export function CardEditorModal({
               <div className="card-preview-scale w-full flex justify-center">
                 {(() => {
                   const audioOn = deckAudioEnabled(settings ?? undefined, deckId);
-                  const lang = 'en-US';
                   const h = 'clamp(190px, 26vh, 260px)';
                   const emptyFront = '<span style="opacity:.4">(frente vazia)</span>';
                   if (type === 'cloze') {
@@ -356,7 +355,6 @@ export function CardEditorModal({
                       <ClozeCard
                         front={front || emptyFront}
                         back={back}
-                        ttsLang={lang}
                         revealed={previewRevealed}
                         onReveal={() => setPreviewRevealed((v) => !v)}
                         height={h}
@@ -369,7 +367,6 @@ export function CardEditorModal({
                       <TypeInCard
                         front={front || emptyFront}
                         back={back}
-                        ttsLang={lang}
                         revealed={previewRevealed}
                         onReveal={() => setPreviewRevealed(true)}
                         onResolve={() => setPreviewRevealed(true)}
@@ -382,7 +379,6 @@ export function CardEditorModal({
                     <FlipCard
                       front={front || emptyFront}
                       back={back || '<span style="opacity:.4">(verso vazio)</span>'}
-                      ttsLang={lang}
                       flipped={previewRevealed}
                       onFlip={() => setPreviewRevealed((v) => !v)}
                       height={h}

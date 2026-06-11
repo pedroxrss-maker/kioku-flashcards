@@ -97,8 +97,6 @@ export interface AppSettings {
   defaultButtonCount: ButtonCount;
   tts: {
     enabled: boolean;
-    voiceURI: string | null;
-    rate: number; // 0.5 – 1.5
     autoPronounceFront: boolean;
     // TTS na nuvem do Google (gera e salva MP3). A credencial fica no servidor
     // (Worker), nunca no aplicativo.

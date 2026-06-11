@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import { Loader2, Play, Volume2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
-import { SmoothSlider } from '../../components/SmoothSlider';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import {
@@ -74,7 +73,7 @@ export function TtsSettings() {
           checked={tt.enabled}
           onChange={(v) => save({ enabled: v })}
           label="Ativar pronúncia"
-          description="Mostra o ícone de alto-falante nos cards e na revisão."
+          description="Toca o áudio dos cards na revisão. A voz é gerada no editor do card (ou do deck)."
         />
 
         {tt.enabled && (
@@ -110,21 +109,11 @@ export function TtsSettings() {
               )}
             </div>
 
-            <SmoothSlider
-              id="tts-rate"
-              value={tt.rate}
-              min={0.5}
-              max={1.5}
-              step={0.025}
-              onCommit={(v) => save({ rate: v })}
-              label={(v) => `Velocidade · ${v.toFixed(2)}×`}
-            />
-
             <Toggle
               checked={tt.autoPronounceFront}
               onChange={(v) => save({ autoPronounceFront: v })}
               label="Pronunciar a frente ao aparecer"
-              description="Assim que um card aparece, toca o áudio dele (se houver) ou fala a frente automaticamente."
+              description="Assim que um card aparece, toca o áudio da frente automaticamente (se houver)."
             />
 
             <div className="flex items-center gap-3">

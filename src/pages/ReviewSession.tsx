@@ -14,7 +14,6 @@ import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { TutorPanel } from '../features/ai/TutorPanel';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
-import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
 import { deckAudioEnabled } from '../lib/deckAudio';
 import { faceAudioUrl, faceHasAudio } from '../features/tts/cardAudio';
@@ -166,27 +165,15 @@ export function ReviewSession() {
       storedAudioRef.current = a;
       void a.play().catch(() => {});
     };
-    const speakFront = () => {
-      if (cancelled || !settings.tts.enabled) return;
-      const text = stripHtml(current.front);
-      if (text) {
-        void tts.speak(text, {
-          lang: audioDeck.ttsLang,
-          voiceURI: settings.tts.voiceURI,
-          rate: settings.tts.rate,
-        });
-      }
-    };
-
     // Auto-play only the FIRST time a card appears, not when this effect re-runs
     // because the SAME card was re-resolved after an inline edit (audio added or
-    // removed). That keeps the speaker buttons live without replaying on edit.
+    // removed). That keeps the audio buttons live without replaying on edit.
     const isNewCard = lastAutoPlayedId.current !== current.id;
     const autoPlay =
       isNewCard &&
+      settings.tts.enabled &&
       settings.tts.autoPronounceFront &&
       settings.mutedCards?.[current.id] !== true;
-    const deckOn = deckAudioEnabled(settings, audioDeck.id);
 
     void (async () => {
       const [frontUrl, backUrl] = await Promise.all([
@@ -198,8 +185,7 @@ export function ReviewSession() {
       setBackAudioUrl(backUrl);
       if (autoPlay) {
         lastAutoPlayedId.current = current.id;
-        if (frontUrl) play(frontUrl); // explicit audio: bypasses the deck TTS toggle
-        else if (deckOn && settings.tts.enabled) speakFront();
+        if (frontUrl) play(frontUrl);
       }
     })();
 
@@ -230,8 +216,10 @@ export function ReviewSession() {
   const replayFrontAudio = () => playStored(frontAudioUrl);
   const replayBackAudio = () => playStored(backAudioUrl);
 
-  const hasFrontAudio = !!current && faceHasAudio(current, 'front', settings);
-  const hasBackAudio = !!current && faceHasAudio(current, 'back', settings);
+  // Audio buttons appear only when the global pronunciation toggle is on AND the
+  // face has its own generated/attached track (the old Web Speech voice is gone).
+  const hasFrontAudio = !!settings?.tts.enabled && !!current && faceHasAudio(current, 'front', settings);
+  const hasBackAudio = !!settings?.tts.enabled && !!current && faceHasAudio(current, 'back', settings);
 
   if (session.loading) {
     return (
@@ -413,14 +401,12 @@ export function ReviewSession() {
             >
               {(() => {
                 const type = cardTypeOf(current.front);
-                const ttsL = (audioDeck ?? deck).ttsLang;
                 const audioOn = deckAudioEnabled(settings, (audioDeck ?? deck).id);
                 if (type === 'cloze') {
                   return (
                     <ClozeCard
                       front={current.front}
                       back={current.back}
-                      ttsLang={ttsL}
                       revealed={flipped}
                       onReveal={flip}
                       audioEnabled={audioOn}
@@ -436,7 +422,6 @@ export function ReviewSession() {
                     <TypeInCard
                       front={current.front}
                       back={current.back}
-                      ttsLang={ttsL}
                       revealed={flipped}
                       onReveal={flip}
                       onResolve={rate}
@@ -452,7 +437,6 @@ export function ReviewSession() {
                   <FlipCard
                     front={current.front}
                     back={current.back}
-                    ttsLang={ttsL}
                     flipped={flipped}
                     onFlip={flip}
                     audioEnabled={audioOn}

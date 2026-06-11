@@ -1,16 +1,14 @@
 import { useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CardHtml } from '../media/CardHtml';
-import { SpeakerButton } from '../tts/SpeakerButton';
 import { PlayAudioButton } from './PlayAudioButton';
-import { buildClozeHtml, clozePlainText } from '../../lib/cloze';
+import { buildClozeHtml } from '../../lib/cloze';
 import { stripHtml } from '../../lib/text';
 import { cn } from '../../lib/cn';
 
 interface ClozeCardProps {
   front: string;
   back: string;
-  ttsLang: string;
   /** Whether the answer is revealed (the hidden word fades in). */
   revealed: boolean;
   onReveal: () => void;
@@ -32,7 +30,6 @@ interface ClozeCardProps {
 export function ClozeCard({
   front,
   back,
-  ttsLang,
   revealed,
   onReveal,
   height = 'clamp(280px, 46vh, 440px)',
@@ -52,14 +49,10 @@ export function ClozeCard({
         className={cn('cloze-card cursor-pointer', revealed && 'cloze-revealed')}
         style={{ minHeight: height }}
       >
-        {/* Corner: the sentence (front) audio, else the front-text TTS. */}
-        {(hasFrontAudio || audioEnabled) && (
+        {/* Corner: plays the sentence (front) audio when it has a track. */}
+        {hasFrontAudio && (
           <div className="absolute top-3 right-3">
-            {hasFrontAudio ? (
-              <PlayAudioButton onPlay={onReplayFrontAudio} />
-            ) : (
-              <SpeakerButton text={clozePlainText(front)} lang={ttsLang} size={18} onLight />
-            )}
+            <PlayAudioButton onPlay={onReplayFrontAudio} />
           </div>
         )}
         <div className="w-full max-w-xl">

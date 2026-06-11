@@ -79,8 +79,6 @@ export function defaultSettings(): AppSettings {
     defaultButtonCount: 4,
     tts: {
       enabled: true,
-      voiceURI: null,
-      rate: 1,
       autoPronounceFront: true,
       provider: 'google',
       googleVoiceName: 'en-US-Neural2-D',

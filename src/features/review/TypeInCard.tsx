@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
 import { CardHtml } from '../media/CardHtml';
-import { SpeakerButton } from '../tts/SpeakerButton';
 import { PlayAudioButton } from './PlayAudioButton';
 import { stripTypeInMark, normalizeAnswer } from '../../lib/cardType';
 import { stripHtml } from '../../lib/text';
@@ -12,7 +11,6 @@ import type { Rating } from '../../db/types';
 interface TypeInCardProps {
   front: string;
   back: string;
-  ttsLang: string;
   /** Whether the answer is revealed (drives the grade buttons in the parent). */
   revealed: boolean;
   /** Reveal the answer (first Enter). */
@@ -43,7 +41,6 @@ const KEY_RATINGS: Rating[] = ['again', 'hard', 'good', 'easy'];
 export function TypeInCard({
   front,
   back,
-  ttsLang,
   revealed,
   onReveal,
   onResolve,
@@ -55,7 +52,6 @@ export function TypeInCard({
   onReplayBackAudio,
 }: TypeInCardProps) {
   const promptHtml = useMemo(() => stripTypeInMark(front), [front]);
-  const promptText = useMemo(() => stripHtml(promptHtml), [promptHtml]);
   const expected = useMemo(() => stripHtml(back), [back]);
   const [typed, setTyped] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,14 +85,10 @@ export function TypeInCard({
   return (
     <div className="flip-scene w-full max-w-2xl">
       <div className="cloze-card" style={{ minHeight: height }}>
-        {/* Corner: the prompt (front) audio, else the front-text TTS. */}
-        {(hasFrontAudio || audioEnabled) && (
+        {/* Corner: plays the prompt (front) audio when it has a track. */}
+        {hasFrontAudio && (
           <div className="absolute top-3 right-3">
-            {hasFrontAudio ? (
-              <PlayAudioButton onPlay={onReplayFrontAudio} />
-            ) : (
-              <SpeakerButton text={promptText} lang={ttsLang} size={18} onLight />
-            )}
+            <PlayAudioButton onPlay={onReplayFrontAudio} />
           </div>
         )}
         <div className="w-full max-w-xl">

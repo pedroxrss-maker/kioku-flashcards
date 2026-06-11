@@ -1,14 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CardHtml } from '../media/CardHtml';
-import { SpeakerButton } from '../tts/SpeakerButton';
 import { PlayAudioButton } from './PlayAudioButton';
-import { stripHtml } from '../../lib/text';
 import { cn } from '../../lib/cn';
 
 interface FlipCardProps {
   front: string;
   back: string;
-  ttsLang: string;
   flipped: boolean;
   onFlip: () => void;
   /** Minimum card height. The card grows beyond this to fit its content. */
@@ -40,7 +37,6 @@ interface FlipCardProps {
 export function FlipCard({
   front,
   back,
-  ttsLang,
   flipped,
   onFlip,
   height = 'clamp(280px, 46vh, 440px)',
@@ -99,18 +95,12 @@ export function FlipCard({
         )}
         style={{ height: innerH ?? undefined, minHeight: height, maxHeight: '82vh' }}
       >
-        {/* The top-right corner is ALWAYS the front control (front audio, else the
-            front-text TTS), on both faces. */}
+        {/* The top-right corner plays the front's own audio track, on both faces
+            (shown only when the front actually has a track). */}
         {/* Front face */}
         <div className="review-face flip-face">
-          {(hasFrontAudio || audioEnabled) && (
-            <div className="absolute top-3 right-3 z-10">
-              {hasFrontAudio ? (
-                audioBtn(onReplayFrontAudio)
-              ) : (
-                <SpeakerButton text={stripHtml(front)} lang={ttsLang} size={18} onLight />
-              )}
-            </div>
+          {hasFrontAudio && (
+            <div className="absolute top-3 right-3 z-10">{audioBtn(onReplayFrontAudio)}</div>
           )}
           <div ref={frontRef} className="w-full shrink-0">
             <CardHtml html={front} className="card-content" audioEnabled={audioEnabled && !hasFrontAudio} />
@@ -119,14 +109,8 @@ export function FlipCard({
         {/* Back face: corner stays the FRONT audio; a dedicated button on the
             right under the divider plays the BACK audio, only when there is one. */}
         <div className="review-face flip-face flip-face-back">
-          {(hasFrontAudio || audioEnabled) && (
-            <div className="absolute top-3 right-3 z-10">
-              {hasFrontAudio ? (
-                audioBtn(onReplayFrontAudio)
-              ) : (
-                <SpeakerButton text={stripHtml(front)} lang={ttsLang} size={18} onLight />
-              )}
-            </div>
+          {hasFrontAudio && (
+            <div className="absolute top-3 right-3 z-10">{audioBtn(onReplayFrontAudio)}</div>
           )}
           <div ref={backRef} className="w-full max-w-xl shrink-0">
             <CardHtml html={front} className="card-content-sm" audioEnabled={audioEnabled && !hasFrontAudio} />

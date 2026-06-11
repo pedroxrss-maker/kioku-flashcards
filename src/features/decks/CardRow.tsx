@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { Pencil, Trash2, X } from 'lucide-react';
 import { Panel } from '../../components/Panel';
 import { CardHtml } from '../media/CardHtml';
-import { SpeakerButton } from '../tts/SpeakerButton';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { cn } from '../../lib/cn';
-import { stripHtml } from '../../lib/text';
 import { deckAudioEnabled } from '../../lib/deckAudio';
 import type { Card, CardState, Deck } from '../../db/types';
 
@@ -49,11 +47,6 @@ export function CardRow({ card, deck, onEdit }: CardRowProps) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="mono text-[10px] text-muted">Frente</span>
-            {audioOn && (
-              <span onClick={(e) => e.stopPropagation()}>
-                <SpeakerButton text={stripHtml(card.front)} lang={deck.ttsLang} size={13} />
-              </span>
-            )}
           </div>
           <CardHtml html={card.front} className="card-content-sm" audioEnabled={audioOn} />
         </div>
@@ -63,11 +56,6 @@ export function CardRow({ card, deck, onEdit }: CardRowProps) {
         >
           <div className="flex items-center gap-2 mb-1.5">
             <span className="mono text-[10px] text-muted">Verso</span>
-            {audioOn && (
-              <span onClick={(e) => e.stopPropagation()}>
-                <SpeakerButton text={stripHtml(card.back)} lang={deck.ttsLang} size={13} />
-              </span>
-            )}
           </div>
           <CardHtml html={card.back} className="card-content-sm" audioEnabled={audioOn} />
         </div>
