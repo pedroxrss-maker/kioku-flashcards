@@ -13,6 +13,7 @@ import { ClozeCard } from '../review/ClozeCard';
 import { TypeInCard } from '../review/TypeInCard';
 import { firstAudioUrl } from '../media/media';
 import { getSignedUrl } from '../media/storage';
+import { generatedAudioSide } from '../tts/cardAudio';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { deckAudioEnabled } from '../../lib/deckAudio';
@@ -80,9 +81,11 @@ export function CardEditorModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, card]);
 
-  // Side the generated audio (card.audioPath) speaks. Default 'front' (legacy).
+  // Side the generated audio (card.audioPath) speaks. Uses the same resolver as
+  // review (explicit record, else inferred from the attached chips) so the
+  // preview and review never disagree on which face owns the generated audio.
   const genAudioSide: 'front' | 'back' | null = card?.audioPath
-    ? settings?.cardAudioSide?.[card.id] ?? 'front'
+    ? generatedAudioSide(card, settings ?? undefined)
     : null;
   // Each face has audio when the generated audio is for that side OR the side's
   // (edited) HTML carries an attached chip. Known synchronously so the buttons
