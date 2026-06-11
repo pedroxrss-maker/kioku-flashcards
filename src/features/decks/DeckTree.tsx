@@ -55,15 +55,21 @@ function Collapse({
   const reduce = useReducedMotion();
   const durationMs = reduce ? 0 : 240;
   const [mounted, setMounted] = useState(open);
+  // Clip only WHILE sliding. Once fully expanded, allow overflow so an open deck
+  // dropdown menu can spill past the rows instead of being cut off under the
+  // next deck. Collapsing clips again immediately so the slide-up stays masked.
+  const [clip, setClip] = useState(!open);
   const cached = useRef<ReactNode>(null);
   if (open) cached.current = children; // keep the latest content while expanded
 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      return;
+      const t = setTimeout(() => setClip(false), durationMs);
+      return () => clearTimeout(t);
     }
     // Hold the content for one transition, then drop it once fully collapsed.
+    setClip(true);
     const t = setTimeout(() => setMounted(false), durationMs);
     return () => clearTimeout(t);
   }, [open, durationMs]);
@@ -76,7 +82,7 @@ function Collapse({
         transition: `grid-template-rows ${durationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
       }}
     >
-      <div style={{ overflow: 'hidden', minHeight: 0 }} className={className}>
+      <div style={{ overflow: clip ? 'hidden' : 'visible', minHeight: 0 }} className={className}>
         {open ? children : mounted ? cached.current : null}
       </div>
     </div>
