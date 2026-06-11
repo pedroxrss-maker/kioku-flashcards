@@ -103,6 +103,10 @@ export function CardEditorModal({
   // appear instantly; the playable URL resolves in the effect below.
   const hasPreviewFront = genAudioSide === 'front' || front.includes('kioku-audio://');
   const hasPreviewBack = genAudioSide === 'back' || back.includes('kioku-audio://');
+  // A field "has audio" when its side owns the generated track, carries an
+  // attached chip, OR (new card) the pending draft track is for that side.
+  const frontHasAudio = hasPreviewFront || (!!pendingAudioPath && pendingAudioSide === 'front');
+  const backHasAudio = hasPreviewBack || (!!pendingAudioPath && pendingAudioSide === 'back');
 
   // Entering the preview: start on the front and resolve each face's audio URL
   // (generated audio for that side wins over an attached chip on that side).
@@ -409,6 +413,7 @@ export function CardEditorModal({
                   label="Texto"
                   valueHtml={front}
                   onChange={setFront}
+                  hasAudio={frontHasAudio}
                   autoFocus
                   deckId={deckId}                  showCloze
                   onTab={focusNext}
@@ -424,6 +429,7 @@ export function CardEditorModal({
                   label="Extra (verso, opcional)"
                   valueHtml={back}
                   onChange={setBack}
+                  hasAudio={backHasAudio}
                   deckId={deckId}                  onCtrlEnter={save}
                 />
               </>
@@ -434,25 +440,37 @@ export function CardEditorModal({
                   label="Frente (pergunta)"
                   valueHtml={front}
                   onChange={setFront}
+                  hasAudio={frontHasAudio}
                   autoFocus
                   deckId={deckId}                  onTab={focusNext}
                   onCtrlEnter={save}
                 />
                 <div>
                   <span className="field-label">Resposta (o usuário digita)</span>
-                  <input
-                    ref={answerRef}
-                    className="field"
-                    value={back.replace(/<[^>]*>/g, '')}
-                    onChange={(e) => setBack(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                        e.preventDefault();
-                        void save();
-                      }
-                    }}
-                    placeholder="Resposta exata esperada"
-                  />
+                  <div className="relative">
+                    <input
+                      ref={answerRef}
+                      className="field"
+                      value={back.replace(/<[^>]*>/g, '')}
+                      onChange={(e) => setBack(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                          e.preventDefault();
+                          void save();
+                        }
+                      }}
+                      placeholder="Resposta exata esperada"
+                    />
+                    {backHasAudio && (
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 right-2 flex items-center justify-center rounded-full pointer-events-none"
+                        title="Este campo tem áudio"
+                        style={{ width: 22, height: 22, background: 'var(--accent)', color: '#fff' }}
+                      >
+                        <Volume2 size={13} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             ) : (
@@ -462,6 +480,7 @@ export function CardEditorModal({
                   label="Frente"
                   valueHtml={front}
                   onChange={setFront}
+                  hasAudio={frontHasAudio}
                   autoFocus
                   deckId={deckId}                  onTab={focusNext}
                   onCtrlEnter={save}
@@ -472,6 +491,7 @@ export function CardEditorModal({
                   label="Verso"
                   valueHtml={back}
                   onChange={setBack}
+                  hasAudio={backHasAudio}
                   deckId={deckId}                  onCtrlEnter={save}
                 />
               </>

@@ -48,6 +48,9 @@ interface RichTextFieldProps {
   onTab?: () => void;
   /** Ctrl/Cmd+Enter submits (e.g. adds the card). */
   onCtrlEnter?: () => void;
+  /** This field carries audio (attached chip or a generated track): shows a
+   *  small speaker badge in the bottom-right corner. */
+  hasAudio?: boolean;
 }
 
 export interface RichTextFieldHandle {
@@ -103,8 +106,8 @@ function ColorPopover({
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.8, y: -4 }}
       transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      className="absolute right-0 z-50 mt-1.5 flex items-center gap-2"
-      style={{ transformOrigin: 'top right' }}
+      className="absolute left-0 z-50 mt-1.5 flex items-center gap-2"
+      style={{ transformOrigin: 'top left' }}
     >
       {colors.map((c) => (
         <button
@@ -131,7 +134,7 @@ function ColorPopover({
 /** contentEditable rich-text field with a formatting + image + audio toolbar. */
 export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>(
   function RichTextField(
-    { label, valueHtml, onChange, autoFocus, deckId, showCloze = false, onTab, onCtrlEnter },
+    { label, valueHtml, onChange, autoFocus, deckId, showCloze = false, onTab, onCtrlEnter, hasAudio },
     fwdRef,
   ) {
   const ref = useRef<HTMLDivElement>(null);
@@ -349,27 +352,38 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
           </ToolbarBtn>
         </div>
       </div>
-      <div
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={emit}
-        onPaste={onPaste}
-        onKeyDown={(e: ReactKeyboardEvent<HTMLDivElement>) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onCtrlEnter) {
-            e.preventDefault();
-            onCtrlEnter();
-          } else if (e.key === 'Tab' && !e.shiftKey && onTab) {
-            e.preventDefault();
-            onTab();
-          }
-        }}
-        role="textbox"
-        aria-multiline
-        aria-label={label}
-        className="field card-content-sm"
-        style={{ minHeight: 110, maxHeight: 280, overflowY: 'auto' }}
-      />
+      <div className="relative">
+        <div
+          ref={ref}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={emit}
+          onPaste={onPaste}
+          onKeyDown={(e: ReactKeyboardEvent<HTMLDivElement>) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onCtrlEnter) {
+              e.preventDefault();
+              onCtrlEnter();
+            } else if (e.key === 'Tab' && !e.shiftKey && onTab) {
+              e.preventDefault();
+              onTab();
+            }
+          }}
+          role="textbox"
+          aria-multiline
+          aria-label={label}
+          className="field card-content-sm"
+          style={{ minHeight: 110, maxHeight: 280, overflowY: 'auto' }}
+        />
+        {hasAudio && (
+          <div
+            className="absolute bottom-2 right-2 flex items-center justify-center rounded-full pointer-events-none"
+            title="Este campo tem áudio"
+            style={{ width: 22, height: 22, background: 'var(--accent)', color: '#fff' }}
+          >
+            <Volume2 size={13} />
+          </div>
+        )}
+      </div>
       <input ref={imageRef} type="file" accept="image/*" hidden onChange={onImageFile} />
       <input ref={audioRef} type="file" accept="audio/*" hidden onChange={onAudioFile} />
     </div>
