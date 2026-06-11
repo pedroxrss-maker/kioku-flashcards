@@ -11,6 +11,10 @@ interface ImportMetaEnv {
   /** Anthropic API key for DIRECT browser calls. Local/private testing ONLY:
    *  this value ships in the client bundle and is publicly visible. */
   readonly VITE_ANTHROPIC_API_KEY?: string;
+  /** Base URL of the TTS proxy (a Cloudflare Worker holding the Google Cloud
+   *  credential server-side). When unset, cloud audio generation is disabled and
+   *  the app shows a clear pt-BR message instead. Baked in at build time. */
+  readonly VITE_TTS_PROXY_URL?: string;
 }
 
 interface ImportMeta {

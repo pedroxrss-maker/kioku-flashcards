@@ -20,6 +20,7 @@ import {
 import type { DeckTreeNode } from '../lib/deckTree';
 import { generateDeckAudio } from '../features/tts/audioGen';
 import type { DeckAudioProgress } from '../features/tts/audioGen';
+import { isTtsConfigured } from '../features/tts/googleProvider';
 import { recordStorageUpload, warnIfStorageHigh } from '../features/media/usage';
 import { pushToast } from '../lib/toast';
 import type { Card } from '../db/types';
@@ -211,16 +212,18 @@ export function DeckDetail() {
               Adicionar card
             </Button>
             <ExportButton deckId={deck.id} size="md" />
-            <Button
-              variant="default"
-              icon={audioBusy ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
-              onClick={genDeckAudio}
-              disabled={audioBusy}
-            >
-              {audioBusy
-                ? `Gerando ${audioProg?.done ?? 0}/${audioProg?.total ?? 0}`
-                : 'Gerar áudio'}
-            </Button>
+            {isTtsConfigured() && (
+              <Button
+                variant="default"
+                icon={audioBusy ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
+                onClick={genDeckAudio}
+                disabled={audioBusy}
+              >
+                {audioBusy
+                  ? `Gerando ${audioProg?.done ?? 0}/${audioProg?.total ?? 0}`
+                  : 'Gerar áudio'}
+              </Button>
+            )}
           </div>
         </div>
       </section>

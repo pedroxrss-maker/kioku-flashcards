@@ -9,6 +9,7 @@ import { repo } from '../../db/repositories';
 import { stripHtml } from '../../lib/text';
 import { mediaObjectPath, uploadMedia } from '../media/storage';
 import { TtsProviderError } from './providers';
+import { synthesizeGoogle } from './googleProvider';
 import type { AppSettings, Card } from '../../db/types';
 
 export type AudioSide = 'front' | 'back';
@@ -17,21 +18,6 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function cardText(card: Card, side: AudioSide): string {
   return stripHtml(side === 'front' ? card.front : card.back).trim();
-}
-
-/**
- * Placeholder do produtor de bytes. No Stage 2 isto passa a chamar o provedor
- * Google (via Worker). Até lá, lança uma mensagem clara em pt-BR.
- */
-function synthesizeText(
-  _text: string,
-  _opts: { voiceName: string; languageCode: string },
-): Promise<Blob> {
-  return Promise.reject(
-    new TtsProviderError(
-      'Geração de áudio indisponível: o servidor de voz (Worker) ainda não foi configurado.',
-    ),
-  );
 }
 
 /** Sintetiza o texto de um card, envia o MP3 e persiste cards.audio_path. */
@@ -47,9 +33,10 @@ export async function generateAndStoreCardAudio(
   const text = cardText(card, side);
   if (!text) throw new TtsProviderError('Este card não tem texto para gerar áudio.');
 
-  const blob = await synthesizeText(text, {
+  const blob = await synthesizeGoogle(text, {
     voiceName,
     languageCode: settings.tts.googleLanguageCode?.trim() || 'en-US',
+    audioEncoding: 'MP3',
   });
   const path = await mediaObjectPath(card.deckId, `${card.id}.mp3`);
   await uploadMedia(path, blob, 'audio/mpeg');
