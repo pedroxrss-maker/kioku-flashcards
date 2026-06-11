@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Volume2 } from 'lucide-react';
 import { CardHtml } from '../media/CardHtml';
 import { SpeakerButton } from '../tts/SpeakerButton';
+import { PlayAudioButton } from './PlayAudioButton';
 import { stripHtml } from '../../lib/text';
 import { cn } from '../../lib/cn';
 
@@ -86,31 +86,7 @@ export function FlipCard({
     return () => ro.disconnect();
   }, [flipped, front, back]);
 
-  // The per-face audio replay control: an orange circle that plays THAT face's
-  // track, available even if the deck's TTS pronunciation is off.
-  const audioBtn = (onReplay?: () => void) => (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        onReplay?.();
-      }}
-      onMouseDown={(e) => e.preventDefault()}
-      title="Ouvir áudio"
-      aria-label="Ouvir áudio"
-      className="inline-flex items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
-      style={{
-        width: 36,
-        height: 36,
-        background: 'var(--accent)',
-        color: '#fff',
-        boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent)',
-      }}
-    >
-      <Volume2 size={18} />
-    </button>
-  );
+  const audioBtn = (onReplay?: () => void) => <PlayAudioButton onPlay={onReplay} />;
 
   return (
     <div className="flip-scene w-full max-w-2xl">

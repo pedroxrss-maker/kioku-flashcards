@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
 import { CardHtml } from '../media/CardHtml';
 import { SpeakerButton } from '../tts/SpeakerButton';
+import { PlayAudioButton } from './PlayAudioButton';
 import { stripTypeInMark, normalizeAnswer } from '../../lib/cardType';
 import { stripHtml } from '../../lib/text';
 import { cn } from '../../lib/cn';
@@ -16,10 +17,16 @@ interface TypeInCardProps {
   revealed: boolean;
   /** Reveal the answer (first Enter). */
   onReveal: () => void;
-  /** Grade the card and advance (Enter auto-grades; 1–4 grade manually). */
+  /** Grade the card and advance (Enter auto-grades; 1-4 grade manually). */
   onResolve: (rating: Rating) => void;
   height?: string;
   audioEnabled?: boolean;
+  /** The prompt (front) has its own audio track. */
+  hasFrontAudio?: boolean;
+  onReplayFrontAudio?: () => void;
+  /** The answer (back) has its own audio track. */
+  hasBackAudio?: boolean;
+  onReplayBackAudio?: () => void;
 }
 
 /**
@@ -27,10 +34,10 @@ interface TypeInCardProps {
  *   - Type the answer; pressing Enter at any point ALWAYS reveals the answer
  *     first (with a correct/incorrect indicator), which surfaces the
  *     again/hard/good/easy buttons.
- *   - Once revealed, Enter advances (auto-graded: correct → "good", wrong →
- *     "again"); 1–4 grade manually; or click a grade button.
+ *   - Once revealed, Enter advances (auto-graded: correct -> "good", wrong ->
+ *     "again"); 1-4 grade manually; or click a grade button.
  * The input keeps focus throughout, so the global review shortcuts never fire
- * here — this card owns its keyboard entirely.
+ * here, this card owns its keyboard entirely.
  */
 const KEY_RATINGS: Rating[] = ['again', 'hard', 'good', 'easy'];
 export function TypeInCard({
@@ -42,8 +49,13 @@ export function TypeInCard({
   onResolve,
   height = 'clamp(280px, 46vh, 440px)',
   audioEnabled = true,
+  hasFrontAudio = false,
+  onReplayFrontAudio,
+  hasBackAudio = false,
+  onReplayBackAudio,
 }: TypeInCardProps) {
   const promptHtml = useMemo(() => stripTypeInMark(front), [front]);
+  const promptText = useMemo(() => stripHtml(promptHtml), [promptHtml]);
   const expected = useMemo(() => stripHtml(back), [back]);
   const [typed, setTyped] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,13 +72,11 @@ export function TypeInCard({
     if (e.key === 'Enter') {
       e.preventDefault();
       // First Enter reveals; once revealed, Enter is the "Bom" (good) shortcut.
-      // It is a fixed shortcut — never auto-graded by correctness — so it can't
-      // silently mark a card "again".
       if (!revealed) onReveal();
       else onResolve('good');
       return;
     }
-    // After revealing, 1–4 grade the card manually.
+    // After revealing, 1-4 grade the card manually.
     if (revealed) {
       const n = Number(e.key);
       if (n >= 1 && n <= 4) {
@@ -79,9 +89,14 @@ export function TypeInCard({
   return (
     <div className="flip-scene w-full max-w-2xl">
       <div className="cloze-card" style={{ minHeight: height }}>
-        {audioEnabled && (
+        {/* Corner: the prompt (front) audio, else the front-text TTS. */}
+        {(hasFrontAudio || audioEnabled) && (
           <div className="absolute top-3 right-3">
-            <SpeakerButton text={expected} lang={ttsLang} size={18} onLight />
+            {hasFrontAudio ? (
+              <PlayAudioButton onPlay={onReplayFrontAudio} />
+            ) : (
+              <SpeakerButton text={promptText} lang={ttsLang} size={18} onLight />
+            )}
           </div>
         )}
         <div className="w-full max-w-xl">
@@ -114,12 +129,17 @@ export function TypeInCard({
                   <span>{correct ? 'Correto!' : 'Resposta esperada:'}</span>
                 </div>
                 <p className="typein-expected">{expected}</p>
+                {hasBackAudio && (
+                  <div className="flex justify-center mt-1 mb-2">
+                    <PlayAudioButton onPlay={onReplayBackAudio} />
+                  </div>
+                )}
                 {!correct && typed.trim() && (
                   <p className="typein-yours">
                     Você digitou: <span>{typed}</span>
                   </p>
                 )}
-                <p className="typein-hint">Enter = Bom · 1–4 para avaliar</p>
+                <p className="typein-hint">Enter = Bom · 1-4 para avaliar</p>
               </motion.div>
             )}
           </AnimatePresence>

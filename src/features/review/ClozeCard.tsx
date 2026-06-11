@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CardHtml } from '../media/CardHtml';
 import { SpeakerButton } from '../tts/SpeakerButton';
+import { PlayAudioButton } from './PlayAudioButton';
 import { buildClozeHtml, clozePlainText } from '../../lib/cloze';
 import { stripHtml } from '../../lib/text';
 import { cn } from '../../lib/cn';
@@ -15,6 +16,12 @@ interface ClozeCardProps {
   onReveal: () => void;
   height?: string;
   audioEnabled?: boolean;
+  /** The sentence (front) has its own audio track. */
+  hasFrontAudio?: boolean;
+  onReplayFrontAudio?: () => void;
+  /** The extra (back) has its own audio track. */
+  hasBackAudio?: boolean;
+  onReplayBackAudio?: () => void;
 }
 
 /**
@@ -30,6 +37,10 @@ export function ClozeCard({
   onReveal,
   height = 'clamp(280px, 46vh, 440px)',
   audioEnabled = true,
+  hasFrontAudio = false,
+  onReplayFrontAudio,
+  hasBackAudio = false,
+  onReplayBackAudio,
 }: ClozeCardProps) {
   const html = useMemo(() => buildClozeHtml(front), [front]);
   const hasBack = !!stripHtml(back);
@@ -41,9 +52,14 @@ export function ClozeCard({
         className={cn('cloze-card cursor-pointer', revealed && 'cloze-revealed')}
         style={{ minHeight: height }}
       >
-        {audioEnabled && (
+        {/* Corner: the sentence (front) audio, else the front-text TTS. */}
+        {(hasFrontAudio || audioEnabled) && (
           <div className="absolute top-3 right-3">
-            <SpeakerButton text={clozePlainText(front)} lang={ttsLang} size={18} onLight />
+            {hasFrontAudio ? (
+              <PlayAudioButton onPlay={onReplayFrontAudio} />
+            ) : (
+              <SpeakerButton text={clozePlainText(front)} lang={ttsLang} size={18} onLight />
+            )}
           </div>
         )}
         <div className="w-full max-w-xl">
@@ -60,6 +76,11 @@ export function ClozeCard({
               >
                 <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
                 <CardHtml html={back} className="card-content-sm" audioEnabled={audioEnabled} />
+                {hasBackAudio && (
+                  <div className="flex justify-center mt-2">
+                    <PlayAudioButton onPlay={onReplayBackAudio} />
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

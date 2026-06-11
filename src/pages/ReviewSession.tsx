@@ -424,6 +424,10 @@ export function ReviewSession() {
                       revealed={flipped}
                       onReveal={flip}
                       audioEnabled={audioOn}
+                      hasFrontAudio={hasFrontAudio}
+                      onReplayFrontAudio={replayFrontAudio}
+                      hasBackAudio={hasBackAudio}
+                      onReplayBackAudio={replayBackAudio}
                     />
                   );
                 }
@@ -437,6 +441,10 @@ export function ReviewSession() {
                       onReveal={flip}
                       onResolve={rate}
                       audioEnabled={audioOn}
+                      hasFrontAudio={hasFrontAudio}
+                      onReplayFrontAudio={replayFrontAudio}
+                      hasBackAudio={hasBackAudio}
+                      onReplayBackAudio={replayBackAudio}
                     />
                   );
                 }
