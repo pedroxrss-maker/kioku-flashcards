@@ -9,7 +9,7 @@ import { useVoices } from './useVoices';
 import { GoogleTtsSettings } from './GoogleTtsSettings';
 import type { AppSettings } from '../../db/types';
 
-/** TTS settings block — composed into the Settings page. */
+/** TTS settings block, composed into the Settings page. */
 export function TtsSettings() {
   const settings = useSettings();
   const voices = useVoices();
@@ -54,7 +54,7 @@ export function TtsSettings() {
                   <option value="">Automática (pelo idioma do deck)</option>
                   {voices.map((v, i) => (
                     <option key={`${v.voiceURI}-${i}`} value={v.voiceURI}>
-                      {v.name} — {v.lang}
+                      {v.name} · {v.lang}
                     </option>
                   ))}
                 </select>

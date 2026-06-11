@@ -1,0 +1,14 @@
+{
+  "name": "kioku-tts-proxy",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Cloudflare Worker que faz proxy do Google Cloud Text-to-Speech para o Kioku.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "wrangler": "^4.20.0"
+  }
+}

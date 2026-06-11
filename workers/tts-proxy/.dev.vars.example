@@ -1,0 +1,3 @@
+# Exemplo. Copie para `.dev.vars` (ignorado pelo git) e preencha para rodar
+# `wrangler dev` localmente. NUNCA cometa o arquivo .dev.vars real.
+GOOGLE_TTS_API_KEY=coloque-sua-chave-aqui
