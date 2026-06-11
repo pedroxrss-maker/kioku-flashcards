@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ClipboardList, FileText, Loader2, Sparkles, Type, Wand2 } from 'lucide-react';
+import { Check, ClipboardList, FileText, Loader2, Sparkles, Type, Wand2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
@@ -9,7 +9,8 @@ import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
 import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
 import { fileToBase64 } from '../features/ai/readFile';
-import type { CardKind, GeneratedCard, GenerateSource } from '../features/ai/cards';
+import type { GeneratedCard, GenerateSource } from '../features/ai/cards';
+import type { CardType } from '../lib/cardType';
 
 type Mode = 'topic' | 'notes' | 'pdf';
 
@@ -19,10 +20,10 @@ const MODES: Array<{ id: Mode; label: string; icon: typeof Type }> = [
   { id: 'pdf', label: 'PDF', icon: FileText },
 ];
 
-const KINDS: Array<{ id: CardKind; label: string }> = [
-  { id: 'qa', label: 'Pergunta e resposta' },
-  { id: 'cloze', label: 'Cloze (lacuna)' },
-  { id: 'reverse', label: 'Reverso (dois sentidos)' },
+const CARD_TYPES: Array<{ id: CardType; label: string }> = [
+  { id: 'basic', label: 'Básico' },
+  { id: 'cloze', label: 'Cloze' },
+  { id: 'typein', label: 'Escreva a resposta' },
 ];
 
 const COUNTS = [10, 20, 30, 50];
@@ -55,7 +56,7 @@ export function GenerateDeck() {
   const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
-  const [kind, setKind] = useState<CardKind>('qa');
+  const [types, setTypes] = useState<CardType[]>(['basic']);
   const [count, setCount] = useState(20);
   const [language, setLanguage] = useState('Portuguese (Brazil)');
   const [deckName, setDeckName] = useState('');
@@ -69,8 +70,16 @@ export function GenerateDeck() {
     setMode(m);
   }
 
+  function toggleType(t: CardType) {
+    setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  }
+
   async function generate() {
     setError(null);
+    if (types.length === 0) {
+      setError('Selecione ao menos um tipo de card.');
+      return;
+    }
     let source: GenerateSource;
     if (mode === 'pdf') {
       if (!pdf) {
@@ -100,7 +109,7 @@ export function GenerateDeck() {
     }
 
     try {
-      const result = await generateCards({ kind, count, language, source });
+      const result = await generateCards({ types, count, language, source });
       setCards(result);
       if (!deckName.trim()) {
         const fallback =
@@ -272,21 +281,39 @@ export function GenerateDeck() {
             {/* Options */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="field-label" htmlFor="g-kind">
-                  Tipo de card
-                </label>
-                <select
-                  id="g-kind"
-                  className="field"
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value as CardKind)}
-                >
-                  {KINDS.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.label}
-                    </option>
-                  ))}
-                </select>
+                <span className="field-label">Tipo de card</span>
+                <div className="flex flex-col gap-1.5">
+                  {CARD_TYPES.map((ct) => {
+                    const checked = types.includes(ct.id);
+                    return (
+                      <button
+                        key={ct.id}
+                        type="button"
+                        onClick={() => toggleType(ct.id)}
+                        aria-pressed={checked}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-[var(--r-sm)] text-left transition-colors"
+                        style={{
+                          background: 'var(--surface-2)',
+                          border: `1px solid ${checked ? 'var(--accent)' : 'var(--line)'}`,
+                        }}
+                      >
+                        <span
+                          className="flex items-center justify-center shrink-0 transition-colors"
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 5,
+                            background: checked ? 'var(--accent)' : 'transparent',
+                            border: `1px solid ${checked ? 'var(--accent)' : 'var(--line-strong)'}`,
+                          }}
+                        >
+                          {checked && <Check size={13} color="#fff" />}
+                        </span>
+                        <span className="text-sm">{ct.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div>
                 <label className="field-label" htmlFor="g-count">

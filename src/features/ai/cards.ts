@@ -6,11 +6,13 @@
  */
 import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
+import { markTypeIn } from '../../lib/cardType';
+import type { CardType } from '../../lib/cardType';
 import type { Deck } from '../../db/types';
 
-export type CardKind = 'qa' | 'cloze' | 'reverse';
-
 export interface GeneratedCard {
+  /** Which Kioku card type this becomes: basic, cloze, or type-in. */
+  type: CardType;
   front: string;
   back: string;
 }
@@ -20,7 +22,8 @@ export type GenerateSource =
   | { kind: 'pdf'; base64: string };
 
 export interface GenerateRequest {
-  kind: CardKind;
+  /** Card types the user wants the model to produce (a mix of these). */
+  types: CardType[];
   count: number;
   /** Target language of the cards, e.g. "Portuguese (Brazil)". */
   language: string;
@@ -32,24 +35,32 @@ export interface GenerateRequest {
 /** System + user prompt for one generation call. The model is told to output a
  *  bare JSON array and nothing else. */
 export function buildGeneratePrompt(req: GenerateRequest): { system: string; userText: string } {
-  const kindRules =
-    req.kind === 'cloze'
-      ? 'Make CLOZE cards: put the hidden term in "front" using the syntax {{c1::term}} ' +
-        '(exactly one cloze deletion per card, always numbered c1). "back" may hold a short ' +
-        'extra explanation or be an empty string.'
-      : req.kind === 'reverse'
-        ? 'Make REVERSIBLE cards: for each concept output TWO objects, one term -> definition ' +
-          'and one definition -> term.'
-        : 'Make QUESTION/ANSWER cards: "front" is the question, "back" is the answer.';
+  const RULES: Record<CardType, string> = {
+    basic:
+      '"basic": a question/answer (or term/definition) card. "front" is the question, "back" ' +
+      'is the answer.',
+    cloze:
+      '"cloze": a fill-in-the-blank. Put the hidden term in "front" using the syntax ' +
+      '{{c1::term}} (exactly one cloze deletion per card, always numbered c1). "back" may hold ' +
+      'a short extra note or be an empty string.',
+    typein:
+      '"typein": the learner types the answer. "front" is the prompt/question, "back" is the ' +
+      'EXACT short expected answer.',
+  };
+  const types = req.types.length > 0 ? req.types : (['basic'] as CardType[]);
+  const typesList = types.join(', ');
+  const typeRules = types.map((t) => '- ' + RULES[t]).join('\n');
 
   const system =
     'You generate study flashcards. ' +
     `Write every card in ${req.language}. ` +
-    kindRules +
-    ' ' +
+    `Produce a balanced MIX using ONLY these card types: ${typesList}. ` +
+    'Each card is a JSON object with string fields "type", "front" and "back", where "type" is ' +
+    `one of: ${typesList}. Rules per type:\n${typeRules}\n` +
     `Produce about ${req.count} high-quality, non-redundant cards. ` +
-    'Keep each side concise and self-contained. Use plain text only (no markdown, no HTML). ' +
-    'Output ONLY a JSON array of objects with string fields "front" and "back". ' +
+    'Keep each side concise and self-contained. Use plain text only (no markdown, no HTML), ' +
+    'except the {{c1::...}} cloze syntax when the type is cloze. ' +
+    'Output ONLY a JSON array of those objects. ' +
     'No prose, no explanations, no code fences, nothing before or after the array.';
 
   const avoidLine =
@@ -91,7 +102,9 @@ export function parseCardsJson(raw: string): GeneratedCard[] {
       const rec = item as Record<string, unknown>;
       const front = String(rec.front ?? '').trim();
       const back = String(rec.back ?? '').trim();
-      if (front || back) cards.push({ front, back });
+      const t = String(rec.type ?? '').trim().toLowerCase();
+      const type: CardType = t === 'cloze' ? 'cloze' : t === 'typein' ? 'typein' : 'basic';
+      if (front || back) cards.push({ type, front, back });
     }
   }
   if (cards.length === 0) {
@@ -143,7 +156,15 @@ export async function createDeckFromGenerated(
   });
   const made = cards
     .filter((c) => c.front.trim() || c.back.trim())
-    .map((c) => makeCard({ deckId: deck.id, front: toCardHtml(c.front), back: toCardHtml(c.back) }));
+    .map((c) => {
+      const front = toCardHtml(c.front);
+      return makeCard({
+        deckId: deck.id,
+        // type-in needs the hidden marker; cloze keeps its {{cN::}}; basic stays as-is.
+        front: c.type === 'typein' ? markTypeIn(front) : front,
+        back: toCardHtml(c.back),
+      });
+    });
   await repo.bulkInsertCards(made);
   return deck;
 }

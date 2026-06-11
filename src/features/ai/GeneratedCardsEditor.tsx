@@ -1,6 +1,9 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import type { GeneratedCard } from './cards';
+import type { CardType } from '../../lib/cardType';
+
+const TYPE_LABEL: Record<CardType, string> = { basic: 'Básico', cloze: 'Cloze', typein: 'Digitar' };
 
 interface GeneratedCardsEditorProps {
   cards: GeneratedCard[];
@@ -25,7 +28,7 @@ export function GeneratedCardsEditor({
   const update = (i: number, patch: Partial<GeneratedCard>) =>
     onChange(cards.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   const remove = (i: number) => onChange(cards.filter((_, idx) => idx !== i));
-  const add = () => onChange([...cards, { front: '', back: '' }]);
+  const add = () => onChange([...cards, { type: 'basic', front: '', back: '' }]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -45,7 +48,15 @@ export function GeneratedCardsEditor({
       <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
         {cards.map((c, i) => (
           <div key={i} className="surface p-3 flex gap-2 items-start">
-            <span className="mono text-[10px] text-muted pt-2 w-6 shrink-0">{i + 1}</span>
+            <div className="flex flex-col items-center gap-1 pt-2 shrink-0">
+              <span className="mono text-[10px] text-muted">{i + 1}</span>
+              <span
+                className="mono text-[9px] px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                style={{ color: 'var(--muted)', border: '1px solid var(--line)' }}
+              >
+                {TYPE_LABEL[c.type]}
+              </span>
+            </div>
             <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-2">
               <textarea
                 className="field"

@@ -87,7 +87,7 @@ function AiImportModal({ open, onClose }: { open: boolean; onClose: () => void }
       }
       setProgress('Gerando cards...');
       const result = await generateCardsBatched(
-        { kind: 'qa', language, source },
+        { types: ['basic'], language, source },
         target,
         (p) => setProgress(`Gerando cards... (etapa ${p.call}, ${p.got}/${p.target})`),
       );
