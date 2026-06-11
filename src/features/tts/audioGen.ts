@@ -99,12 +99,14 @@ export async function generateDeckAudio(
   let failed = 0;
   let bytes = 0;
   let stopped = false;
+  const doneIds: string[] = [];
 
   for (let i = 0; i < targets.length; i += 1) {
     try {
       const r = await generateAndStoreCardAudio(targets[i], settings, side, voice);
       ok += 1;
       bytes += r.bytes;
+      doneIds.push(targets[i].id);
     } catch (e) {
       failed += 1;
       if (
@@ -118,6 +120,13 @@ export async function generateDeckAudio(
     }
     onProgress({ done: i + 1, total });
     await delay(250); // gentil com limites de taxa
+  }
+
+  // Registra de uma vez o lado que cada áudio gerado fala (frente/verso).
+  if (doneIds.length > 0) {
+    const merged = { ...(settings.cardAudioSide ?? {}) };
+    for (const id of doneIds) merged[id] = side;
+    await repo.saveSettings({ cardAudioSide: merged });
   }
 
   return { total, ok, failed, skipped: cards.length - total, bytes, stopped };

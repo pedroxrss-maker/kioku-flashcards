@@ -57,9 +57,10 @@ export function CardEditorModal({
   const [previewing, setPreviewing] = useState(false);
   const [pronounce, setPronounce] = useState(true);
   // Preview mirrors the review card (flip + buttons, scaled down). Local reveal
-  // state + the front audio resolved for the preview's speaker button.
+  // state + each face's audio resolved for its speaker button.
   const [previewRevealed, setPreviewRevealed] = useState(false);
-  const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
+  const [previewFrontUrl, setPreviewFrontUrl] = useState<string | null>(null);
+  const [previewBackUrl, setPreviewBackUrl] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   // Tab from the front jumps here; both also submit on Ctrl/Cmd+Enter.
   const backRef = useRef<RichTextFieldHandle>(null);
@@ -79,24 +80,38 @@ export function CardEditorModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, card]);
 
-  // Entering the preview: start on the front and resolve the attached/stored
-  // front audio so the preview's speaker button can replay it.
+  // Side the generated audio (card.audioPath) speaks. Default 'front' (legacy).
+  const genAudioSide: 'front' | 'back' | null = card?.audioPath
+    ? settings?.cardAudioSide?.[card.id] ?? 'front'
+    : null;
+  // Each face has audio when the generated audio is for that side OR the side's
+  // (edited) HTML carries an attached chip. Known synchronously so the buttons
+  // appear instantly; the playable URL resolves in the effect below.
+  const hasPreviewFront = genAudioSide === 'front' || front.includes('kioku-audio://');
+  const hasPreviewBack = genAudioSide === 'back' || back.includes('kioku-audio://');
+
+  // Entering the preview: start on the front and resolve each face's audio URL
+  // (generated audio for that side wins over an attached chip on that side).
   useEffect(() => {
     if (!previewing) return;
     setPreviewRevealed(false);
     let cancelled = false;
-    void (async () => {
-      let url: string | null = null;
-      if (card?.audioPath) {
+    const resolve = async (side: 'front' | 'back'): Promise<string | null> => {
+      if (card?.audioPath && genAudioSide === side) {
         try {
-          url = await getSignedUrl(card.audioPath);
+          return await getSignedUrl(card.audioPath);
         } catch {
-          url = null;
+          /* não conseguiu assinar: tenta o chip abaixo */
         }
-      } else if (front.includes('kioku-audio://')) {
-        url = await firstAudioUrl(front);
       }
-      if (!cancelled) setPreviewAudioUrl(url);
+      const html = side === 'front' ? front : back;
+      return html.includes('kioku-audio://') ? firstAudioUrl(html) : null;
+    };
+    void (async () => {
+      const [f, b] = await Promise.all([resolve('front'), resolve('back')]);
+      if (cancelled) return;
+      setPreviewFrontUrl(f);
+      setPreviewBackUrl(b);
     })();
     return () => {
       cancelled = true;
@@ -112,8 +127,8 @@ export function CardEditorModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewing]);
 
-  const replayPreviewAudio = () => {
-    if (!previewAudioUrl) return;
+  const playPreview = (url: string | null) => {
+    if (!url) return;
     const a = previewAudioRef.current;
     if (a) {
       try {
@@ -122,12 +137,10 @@ export function CardEditorModal({
         /* ignore */
       }
     }
-    const next = new Audio(previewAudioUrl);
+    const next = new Audio(url);
     previewAudioRef.current = next;
     void next.play().catch(() => {});
   };
-
-  const hasPreviewAudio = !!card?.audioPath || front.includes('kioku-audio://');
 
   function switchType(t: CardType) {
     if (t === type) return;
@@ -341,8 +354,10 @@ export function CardEditorModal({
                       onFlip={() => setPreviewRevealed((v) => !v)}
                       height={h}
                       audioEnabled={audioOn}
-                      hasFrontAudio={hasPreviewAudio}
-                      onReplayFrontAudio={replayPreviewAudio}
+                      hasFrontAudio={hasPreviewFront}
+                      onReplayFrontAudio={() => playPreview(previewFrontUrl)}
+                      hasBackAudio={hasPreviewBack}
+                      onReplayBackAudio={() => playPreview(previewBackUrl)}
                     />
                   );
                 })()}

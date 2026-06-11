@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Loader2, Volume2 } from 'lucide-react';
 import { useSettings } from '../../db/hooks';
+import { repo } from '../../db/repositories';
 import { pushToast } from '../../lib/toast';
 import { recordStorageUpload } from '../media/usage';
 import { generateAndStoreCardAudio } from './audioGen';
@@ -25,6 +26,10 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
     try {
       const r = await generateAndStoreCardAudio(card, settings, side);
       await recordStorageUpload(r.bytes);
+      // Lembra de qual lado este áudio gerado fala (frente/verso).
+      await repo.saveSettings({
+        cardAudioSide: { ...(settings.cardAudioSide ?? {}), [card.id]: side },
+      });
       setHasAudio(true);
       pushToast('success', hasAudio ? 'Áudio regerado e salvo na nuvem.' : 'Áudio gerado e salvo na nuvem.');
     } catch (e) {

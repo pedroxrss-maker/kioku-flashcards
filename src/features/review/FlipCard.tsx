@@ -14,11 +14,16 @@ interface FlipCardProps {
   height?: string;
   /** When false, no speaker icon and attached audio is hidden. */
   audioEnabled?: boolean;
-  /** The front has an explicitly attached/stored audio (plays regardless of the
-   *  deck TTS toggle). Shows a replay speaker button instead of the TTS one. */
+  /** The front face has its own audio track (attached chip or generated for the
+   *  front). Shows a replay speaker button on the front instead of the TTS one. */
   hasFrontAudio?: boolean;
-  /** Replay the attached front audio from the start. */
+  /** Replay the front face audio from the start. */
   onReplayFrontAudio?: () => void;
+  /** The back face has its own audio track (attached chip or generated for the
+   *  back). Shows a replay speaker button on the back. */
+  hasBackAudio?: boolean;
+  /** Replay the back face audio from the start. */
+  onReplayBackAudio?: () => void;
 }
 
 /**
@@ -37,6 +42,8 @@ export function FlipCard({
   audioEnabled = true,
   hasFrontAudio = false,
   onReplayFrontAudio,
+  hasBackAudio = false,
+  onReplayBackAudio,
 }: FlipCardProps) {
   const [animate, setAnimate] = useState(false);
 
@@ -45,15 +52,15 @@ export function FlipCard({
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // The attached-audio replay control (top-right). Always available when the
-  // card has front audio, even if the deck's TTS pronunciation is off.
-  const frontAudioBtn = (
+  // The per-face audio replay control (top-right): an orange circle that plays
+  // THAT face's track, available even if the deck's TTS pronunciation is off.
+  const audioBtn = (onReplay?: () => void) => (
     <button
       type="button"
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
-        onReplayFrontAudio?.();
+        onReplay?.();
       }}
       onMouseDown={(e) => e.preventDefault()}
       title="Ouvir áudio"
@@ -82,12 +89,12 @@ export function FlipCard({
         )}
         style={{ height }}
       >
-        {/* Front face */}
+        {/* Front face: front audio button, else the front-text TTS. */}
         <div className="review-face flip-face">
           {(hasFrontAudio || audioEnabled) && (
             <div className="absolute top-3 right-3">
               {hasFrontAudio ? (
-                frontAudioBtn
+                audioBtn(onReplayFrontAudio)
               ) : (
                 <SpeakerButton text={stripHtml(front)} lang={ttsLang} size={18} onLight />
               )}
@@ -95,12 +102,13 @@ export function FlipCard({
           )}
           <CardHtml html={front} className="card-content" audioEnabled={audioEnabled && !hasFrontAudio} />
         </div>
-        {/* Back face */}
+        {/* Back face: back audio button, else the back-text TTS. */}
         <div className="review-face flip-face flip-face-back">
-          {(hasFrontAudio || audioEnabled) && (
-            <div className="absolute top-3 right-3 flex items-center gap-2">
-              {hasFrontAudio && frontAudioBtn}
-              {audioEnabled && (
+          {(hasBackAudio || audioEnabled) && (
+            <div className="absolute top-3 right-3">
+              {hasBackAudio ? (
+                audioBtn(onReplayBackAudio)
+              ) : (
                 <SpeakerButton text={stripHtml(back)} lang={ttsLang} size={18} onLight />
               )}
             </div>
@@ -108,7 +116,7 @@ export function FlipCard({
           <div className="w-full max-w-xl">
             <CardHtml html={front} className="card-content-sm" audioEnabled={audioEnabled && !hasFrontAudio} />
             <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
-            <CardHtml html={back} className="card-content" audioEnabled={audioEnabled} />
+            <CardHtml html={back} className="card-content" audioEnabled={audioEnabled && !hasBackAudio} />
           </div>
         </div>
       </div>

@@ -17,8 +17,7 @@ import { repo } from '../db/repositories';
 import { tts } from '../features/tts/tts';
 import { stripHtml } from '../lib/text';
 import { deckAudioEnabled } from '../lib/deckAudio';
-import { getSignedUrl } from '../features/media/storage';
-import { firstAudioUrl } from '../features/media/media';
+import { faceAudioUrl, faceHasAudio } from '../features/tts/cardAudio';
 
 // All decks use 4 answer buttons (the King of Buttons option was removed).
 const REVIEW_BUTTONS = 4 as const;
@@ -41,6 +40,7 @@ export function ReviewSession() {
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const storedAudioRef = useRef<HTMLAudioElement | null>(null);
   const [frontAudioUrl, setFrontAudioUrl] = useState<string | null>(null);
+  const [backAudioUrl, setBackAudioUrl] = useState<string | null>(null);
   const reduce = useReducedMotion();
 
   // The current card's own deck drives audio + TTS language (in a parent session
@@ -87,11 +87,18 @@ export function ReviewSession() {
         setEditOpen(true);
         return;
       }
-      // "R" replays the attached front audio (any card type, either face).
-      if ((e.key === 'r' || e.key === 'R') && frontAudioUrl) {
-        e.preventDefault();
-        replayFrontAudio();
-        return;
+      // "R" replays the visible face's audio (back when revealed, else front).
+      if (e.key === 'r' || e.key === 'R') {
+        if (flipped && backAudioUrl) {
+          e.preventDefault();
+          replayBackAudio();
+          return;
+        }
+        if (frontAudioUrl) {
+          e.preventDefault();
+          replayFrontAudio();
+          return;
+        }
       }
       // Type-in cards own their keyboard (the focused input handles Enter); the
       // global flip/rate shortcuts must not reveal or rate them.
@@ -118,25 +125,25 @@ export function ReviewSession() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen, tutorOpen, frontAudioUrl]);
+  }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen, tutorOpen, frontAudioUrl, backAudioUrl]);
 
   // Close the tutor whenever the card changes (it is about one specific card).
   useEffect(() => {
     setTutorOpen(false);
   }, [current?.id]);
 
-  // Play the front's audio as soon as a card appears:
-  //   - An EXPLICIT audio (stored cards.audio_path, or an attached
-  //     kioku-audio:// chip) is deliberate content, so it plays regardless of
-  //     the deck's TTS toggle. Resolve it to a URL and play via a dedicated
-  //     Audio (storedAudioRef), independent of any rendered <audio> element.
-  //   - With no explicit audio, fall back to Web Speech (TTS), which stays
-  //     gated by the deck audio toggle + the global "Ativar pronúncia".
-  // Both honor "Pronunciar a frente ao aparecer" and the per-card mute. The
-  // resolved URL is kept in state so the speaker button can replay it.
+  // Resolve EACH face's audio as a card appears, and auto-play the front:
+  //   - A face's audio is the generated audio (cards.audio_path) made for THAT
+  //     side, or an attached kioku-audio:// chip on that side. It is deliberate
+  //     content, so it plays regardless of the deck's TTS toggle.
+  //   - With no front audio, fall back to Web Speech (TTS), gated by the deck
+  //     audio toggle + the global "Ativar pronúncia".
+  // Both honor "Pronunciar a frente ao aparecer" and the per-card mute. Each
+  // face URL is kept in state so its speaker button can replay it.
   useEffect(() => {
     if (!current || !audioDeck || !settings) {
       setFrontAudioUrl(null);
+      setBackAudioUrl(null);
       return;
     }
     let cancelled = false;
@@ -175,20 +182,15 @@ export function ReviewSession() {
     const deckOn = deckAudioEnabled(settings, audioDeck.id);
 
     void (async () => {
-      let url: string | null = null;
-      if (current.audioPath) {
-        try {
-          url = await getSignedUrl(current.audioPath);
-        } catch {
-          url = null;
-        }
-      } else if (current.front.includes('kioku-audio://')) {
-        url = await firstAudioUrl(current.front);
-      }
+      const [frontUrl, backUrl] = await Promise.all([
+        faceAudioUrl(current, 'front', settings),
+        faceAudioUrl(current, 'back', settings),
+      ]);
       if (cancelled) return;
-      setFrontAudioUrl(url);
-      if (url) {
-        if (autoPlay) play(url); // explicit audio: bypasses the deck TTS toggle
+      setFrontAudioUrl(frontUrl);
+      setBackAudioUrl(backUrl);
+      if (frontUrl) {
+        if (autoPlay) play(frontUrl); // explicit audio: bypasses the deck TTS toggle
       } else if (autoPlay && deckOn && settings.tts.enabled) {
         speakFront();
       }
@@ -201,9 +203,9 @@ export function ReviewSession() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
-  // Replay the current front audio from the start (the speaker button).
-  const replayFrontAudio = () => {
-    if (!frontAudioUrl) return;
+  // Replay a face's audio from the start (its speaker button).
+  const playStored = (url: string | null) => {
+    if (!url) return;
     const a = storedAudioRef.current;
     if (a) {
       try {
@@ -212,13 +214,15 @@ export function ReviewSession() {
         /* ignore */
       }
     }
-    const next = new Audio(frontAudioUrl);
+    const next = new Audio(url);
     storedAudioRef.current = next;
     void next.play().catch(() => {});
   };
+  const replayFrontAudio = () => playStored(frontAudioUrl);
+  const replayBackAudio = () => playStored(backAudioUrl);
 
-  const hasFrontAudio =
-    !!current && (!!current.audioPath || current.front.includes('kioku-audio://'));
+  const hasFrontAudio = !!current && faceHasAudio(current, 'front', settings);
+  const hasBackAudio = !!current && faceHasAudio(current, 'back', settings);
 
   if (session.loading) {
     return (
@@ -437,6 +441,8 @@ export function ReviewSession() {
                     audioEnabled={audioOn}
                     hasFrontAudio={hasFrontAudio}
                     onReplayFrontAudio={replayFrontAudio}
+                    hasBackAudio={hasBackAudio}
+                    onReplayBackAudio={replayBackAudio}
                   />
                 );
               })()}
