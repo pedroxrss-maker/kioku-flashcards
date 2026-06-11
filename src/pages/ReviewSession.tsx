@@ -39,6 +39,7 @@ export function ReviewSession() {
   const [tutorOpen, setTutorOpen] = useState(false);
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const storedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastAutoPlayedId = useRef<string | null>(null);
   const [frontAudioUrl, setFrontAudioUrl] = useState<string | null>(null);
   const [backAudioUrl, setBackAudioUrl] = useState<string | null>(null);
   const reduce = useReducedMotion();
@@ -177,8 +178,14 @@ export function ReviewSession() {
       }
     };
 
+    // Auto-play only the FIRST time a card appears, not when this effect re-runs
+    // because the SAME card was re-resolved after an inline edit (audio added or
+    // removed). That keeps the speaker buttons live without replaying on edit.
+    const isNewCard = lastAutoPlayedId.current !== current.id;
     const autoPlay =
-      settings.tts.autoPronounceFront && settings.mutedCards?.[current.id] !== true;
+      isNewCard &&
+      settings.tts.autoPronounceFront &&
+      settings.mutedCards?.[current.id] !== true;
     const deckOn = deckAudioEnabled(settings, audioDeck.id);
 
     void (async () => {
@@ -189,10 +196,10 @@ export function ReviewSession() {
       if (cancelled) return;
       setFrontAudioUrl(frontUrl);
       setBackAudioUrl(backUrl);
-      if (frontUrl) {
-        if (autoPlay) play(frontUrl); // explicit audio: bypasses the deck TTS toggle
-      } else if (autoPlay && deckOn && settings.tts.enabled) {
-        speakFront();
+      if (autoPlay) {
+        lastAutoPlayedId.current = current.id;
+        if (frontUrl) play(frontUrl); // explicit audio: bypasses the deck TTS toggle
+        else if (deckOn && settings.tts.enabled) speakFront();
       }
     })();
 
@@ -200,8 +207,10 @@ export function ReviewSession() {
       cancelled = true;
       stopStored();
     };
+    // Re-resolve when the card's audio-relevant data changes (e.g. removed in the
+    // inline editor), so the buttons reflect it without a page reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id]);
+  }, [current?.id, current?.audioPath, current?.front, current?.back]);
 
   // Replay a face's audio from the start (its speaker button).
   const playStored = (url: string | null) => {
@@ -509,7 +518,13 @@ export function ReviewSession() {
           onClose={async () => {
             setEditOpen(false);
             const fresh = await repo.getCard(current.id);
-            if (fresh) updateCurrentCard({ front: fresh.front, back: fresh.back });
+            if (fresh) {
+              updateCurrentCard({
+                front: fresh.front,
+                back: fresh.back,
+                audioPath: fresh.audioPath ?? null,
+              });
+            }
           }}
           deckId={current.deckId}
           card={current}
