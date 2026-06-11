@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ClipboardList, FileText, Loader2, Sparkles, Type, Wand2 } from 'lucide-react';
+import { Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Type, Wand2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
@@ -11,15 +11,17 @@ import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
 import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
 import { fileToBase64 } from '../features/ai/readFile';
+import { extractFromUrl } from '../features/ai/url';
 import type { GeneratedCard, GenerateSource } from '../features/ai/cards';
 import type { CardType } from '../lib/cardType';
 
-type Mode = 'topic' | 'notes' | 'pdf';
+type Mode = 'topic' | 'notes' | 'pdf' | 'url';
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Type }> = [
   { id: 'topic', label: 'Tema', icon: Type },
   { id: 'notes', label: 'Anotações', icon: ClipboardList },
   { id: 'pdf', label: 'PDF', icon: FileText },
+  { id: 'url', label: 'URL', icon: Globe },
 ];
 
 const CARD_TYPES: Array<{ id: CardType; label: string }> = [
@@ -56,6 +58,8 @@ export function GenerateDeck() {
   const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
+  const [url, setUrl] = useState('');
+  const [instructions, setInstructions] = useState('');
   const [types, setTypes] = useState<CardType[]>(['basic']);
   const [count, setCount] = useState(20);
   const [language, setLanguage] = useState('Portuguese (Brazil)');
@@ -81,6 +85,7 @@ export function GenerateDeck() {
       return;
     }
     let source: GenerateSource;
+    let urlTitle = '';
     if (mode === 'pdf') {
       if (!pdf) {
         setError('Selecione um arquivo PDF.');
@@ -98,6 +103,21 @@ export function GenerateDeck() {
         setError('Não foi possível ler o PDF.');
         return;
       }
+    } else if (mode === 'url') {
+      if (!url.trim()) {
+        setError('Informe uma URL (YouTube ou página da web).');
+        return;
+      }
+      setBusy(true);
+      try {
+        const extracted = await extractFromUrl(url);
+        source = { kind: 'text', text: extracted.text };
+        urlTitle = extracted.title;
+      } catch (e) {
+        setBusy(false);
+        setError(e instanceof Error ? e.message : 'Não foi possível obter o conteúdo da URL.');
+        return;
+      }
     } else {
       const text = (mode === 'topic' ? topic : notes).trim();
       if (!text) {
@@ -109,7 +129,10 @@ export function GenerateDeck() {
     }
 
     try {
-      const result = await generateCards({ types, count, language, source });
+      // Instructions guide the AI for the content-import modes (PDF / URL).
+      const aiInstructions =
+        mode === 'pdf' || mode === 'url' ? instructions.trim() || undefined : undefined;
+      const result = await generateCards({ types, count, language, source, instructions: aiInstructions });
       setCards(result);
       if (!deckName.trim()) {
         const fallback =
@@ -117,7 +140,9 @@ export function GenerateDeck() {
             ? pdf?.name.replace(/\.pdf$/i, '') ?? 'Deck gerado por IA'
             : mode === 'topic'
               ? topic.trim().slice(0, 60)
-              : 'Deck gerado por IA';
+              : mode === 'url'
+                ? urlTitle || 'Deck gerado por IA'
+                : 'Deck gerado por IA';
         setDeckName(fallback || 'Deck gerado por IA');
       }
     } catch (e) {
@@ -273,6 +298,50 @@ export function GenerateDeck() {
                       />
                       <span className="btn btn-ghost btn-sm shrink-0">Procurar</span>
                     </label>
+                    <div className="mt-4">
+                      <label className="field-label" htmlFor="g-pdf-instr">
+                        Instruções para a IA (opcional)
+                      </label>
+                      <textarea
+                        id="g-pdf-instr"
+                        className="field"
+                        rows={2}
+                        value={instructions}
+                        placeholder="Ex.: foque no capítulo 3; ignore exemplos de código; priorize definições."
+                        onChange={(e) => setInstructions(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+                {mode === 'url' && (
+                  <div>
+                    <label className="field-label" htmlFor="g-url">
+                      URL (YouTube ou página da web)
+                    </label>
+                    <input
+                      id="g-url"
+                      className="field"
+                      value={url}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      onChange={(e) => setUrl(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted mt-1" style={{ lineHeight: 1.5 }}>
+                      Vídeos do YouTube usam a transcrição. Muitos sites bloqueiam o acesso direto
+                      (CORS); se falhar, copie o texto e use o modo Anotações.
+                    </p>
+                    <div className="mt-4">
+                      <label className="field-label" htmlFor="g-url-instr">
+                        Instruções para a IA (opcional)
+                      </label>
+                      <textarea
+                        id="g-url-instr"
+                        className="field"
+                        rows={2}
+                        value={instructions}
+                        placeholder="Ex.: foque nos conceitos principais; ignore propaganda."
+                        onChange={(e) => setInstructions(e.target.value)}
+                      />
+                    </div>
                   </div>
                 )}
               </motion.div>

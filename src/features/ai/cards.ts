@@ -30,6 +30,8 @@ export interface GenerateRequest {
   source: GenerateSource;
   /** Existing card fronts to avoid duplicating (used when chunking a big doc). */
   avoid?: string[];
+  /** Free-text guidance from the user to steer which cards are made and how. */
+  instructions?: string;
 }
 
 /** System + user prompt for one generation call. The model is told to output a
@@ -51,6 +53,10 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
   const typesList = types.join(', ');
   const typeRules = types.map((t) => '- ' + RULES[t]).join('\n');
 
+  const instrLine = req.instructions?.trim()
+    ? `IMPORTANT user instructions to follow when choosing and writing the cards: ${req.instructions.trim()} `
+    : '';
+
   const system =
     'You generate study flashcards. ' +
     `Write every card in ${req.language}. ` +
@@ -58,6 +64,7 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
     'Each card is a JSON object with string fields "type", "front" and "back", where "type" is ' +
     `one of: ${typesList}. Rules per type:\n${typeRules}\n` +
     `Produce about ${req.count} high-quality, non-redundant cards. ` +
+    instrLine +
     'Keep each side concise and self-contained. Use plain text only (no markdown, no HTML), ' +
     'except the {{c1::...}} cloze syntax when the type is cloze. ' +
     'Output ONLY a JSON array of those objects. ' +
