@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ClipboardList, FileText, Loader2, Sparkles, Type, Wand2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
@@ -38,11 +39,19 @@ const LANGS: Array<[string, string]> = [
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 
+/** Directional slide for the source panel (Tema / Anotações / PDF). */
+const SOURCE_SLIDE = {
+  enter: (d: number) => ({ opacity: 0, x: d * 18 }),
+  center: { opacity: 1, x: 0 },
+  exit: (d: number) => ({ opacity: 0, x: d * -18 }),
+};
+
 export function GenerateDeck() {
   const nav = useNavigate();
   const configured = isAiConfigured();
 
   const [mode, setMode] = useState<Mode>('topic');
+  const [sourceDir, setSourceDir] = useState(0);
   const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
@@ -54,6 +63,11 @@ export function GenerateDeck() {
   const [cards, setCards] = useState<GeneratedCard[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function selectMode(m: Mode) {
+    setSourceDir(MODES.findIndex((x) => x.id === m) > MODES.findIndex((x) => x.id === mode) ? 1 : -1);
+    setMode(m);
+  }
 
   async function generate() {
     setError(null);
@@ -160,76 +174,100 @@ export function GenerateDeck() {
                       type="button"
                       role="tab"
                       aria-selected={active}
-                      onClick={() => setMode(m.id)}
-                      className="py-1.5 px-2 rounded-[var(--r-sm)] text-center transition-colors inline-flex items-center justify-center gap-1.5"
-                      style={{
-                        background: active ? 'var(--accent)' : 'transparent',
-                        color: active ? '#fff' : 'var(--muted)',
-                      }}
+                      onClick={() => selectMode(m.id)}
+                      className="relative py-1.5 px-2 rounded-[var(--r-sm)] text-center transition-colors inline-flex items-center justify-center gap-1.5"
+                      style={{ color: active ? '#fff' : 'var(--muted)' }}
                     >
-                      <Icon size={14} />
-                      <span className="text-sm font-semibold">{m.label}</span>
+                      {active && (
+                        <motion.span
+                          layoutId="fonte-pill"
+                          transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'var(--accent)',
+                            borderRadius: 'var(--r-sm)',
+                            zIndex: 0,
+                          }}
+                        />
+                      )}
+                      <span className="relative z-[1] inline-flex items-center gap-1.5">
+                        <Icon size={14} />
+                        <span className="text-sm font-semibold">{m.label}</span>
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Source input */}
-            {mode === 'topic' && (
-              <div>
-                <label className="field-label" htmlFor="g-topic">
-                  Tema ou instrução
-                </label>
-                <textarea
-                  id="g-topic"
-                  className="field"
-                  rows={3}
-                  value={topic}
-                  placeholder="Ex.: Verbos irregulares em inglês para iniciantes"
-                  onChange={(e) => setTopic(e.target.value)}
-                />
-              </div>
-            )}
-            {mode === 'notes' && (
-              <div>
-                <label className="field-label" htmlFor="g-notes">
-                  Cole suas anotações
-                </label>
-                <textarea
-                  id="g-notes"
-                  className="field"
-                  rows={8}
-                  value={notes}
-                  placeholder="Cole aqui o texto que vira flashcards..."
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            )}
-            {mode === 'pdf' && (
-              <div>
-                <span className="field-label">Arquivo PDF</span>
-                <label
-                  className="flex items-center gap-3 cursor-pointer surface p-3"
-                  style={{ borderStyle: 'dashed' }}
-                >
-                  <FileText size={18} className="text-muted shrink-0" />
-                  <span className="text-sm flex-1 min-w-0 truncate">
-                    {pdf ? pdf.name : 'Escolher um PDF (até 15 MB)'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    hidden
-                    onChange={(e) => {
-                      setPdf(e.target.files?.[0] ?? null);
-                      e.target.value = '';
-                    }}
-                  />
-                  <span className="btn btn-ghost btn-sm shrink-0">Procurar</span>
-                </label>
-              </div>
-            )}
+            {/* Source input: slides between Tema / Anotações / PDF. */}
+            <AnimatePresence mode="wait" custom={sourceDir} initial={false}>
+              <motion.div
+                key={mode}
+                custom={sourceDir}
+                variants={SOURCE_SLIDE}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {mode === 'topic' && (
+                  <div>
+                    <label className="field-label" htmlFor="g-topic">
+                      Tema ou instrução
+                    </label>
+                    <textarea
+                      id="g-topic"
+                      className="field"
+                      rows={3}
+                      value={topic}
+                      placeholder="Ex.: Verbos irregulares em inglês para iniciantes"
+                      onChange={(e) => setTopic(e.target.value)}
+                    />
+                  </div>
+                )}
+                {mode === 'notes' && (
+                  <div>
+                    <label className="field-label" htmlFor="g-notes">
+                      Cole suas anotações
+                    </label>
+                    <textarea
+                      id="g-notes"
+                      className="field"
+                      rows={8}
+                      value={notes}
+                      placeholder="Cole aqui o texto que vira flashcards..."
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
+                  </div>
+                )}
+                {mode === 'pdf' && (
+                  <div>
+                    <span className="field-label">Arquivo PDF</span>
+                    <label
+                      className="flex items-center gap-3 cursor-pointer surface p-3"
+                      style={{ borderStyle: 'dashed' }}
+                    >
+                      <FileText size={18} className="text-muted shrink-0" />
+                      <span className="text-sm flex-1 min-w-0 truncate">
+                        {pdf ? pdf.name : 'Escolher um PDF (até 15 MB)'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        hidden
+                        onChange={(e) => {
+                          setPdf(e.target.files?.[0] ?? null);
+                          e.target.value = '';
+                        }}
+                      />
+                      <span className="btn btn-ghost btn-sm shrink-0">Procurar</span>
+                    </label>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
 
             {/* Options */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
