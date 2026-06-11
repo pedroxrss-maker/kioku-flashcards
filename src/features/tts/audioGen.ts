@@ -7,6 +7,7 @@
  */
 import { repo } from '../../db/repositories';
 import { stripHtml } from '../../lib/text';
+import { buildClozeHtml } from '../../lib/cloze';
 import { mediaObjectPath, uploadMedia } from '../media/storage';
 import { stripAudioHtml } from '../media/media';
 import { TtsProviderError } from './providers';
@@ -24,13 +25,15 @@ export interface VoiceChoice {
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Texto a falar de um card. Remove primeiro os chips de áudio anexado (e tokens
- * [sound:...]) para a TTS NUNCA ler o nome do arquivo de áudio (ex.: "04 - ...
- * .mp3"); só o texto de verdade do card é sintetizado.
+ * Texto a falar de um card. Remove os chips de áudio anexado (e tokens
+ * [sound:...]) para a TTS NUNCA ler o nome do arquivo. Em cards cloze, revela as
+ * palavras dentro de {{cN::...}} e descarta a sintaxe, então a frase é lida
+ * inteira (ex.: "je ne parle pas {{c1::bien}} le {{c2::portugais}}" vira
+ * "je ne parle pas bien le portugais"). Só o texto de verdade é sintetizado.
  */
 function cardText(card: Card, side: AudioSide): string {
   const html = side === 'front' ? card.front : card.back;
-  return stripHtml(stripAudioHtml(html)).trim();
+  return stripHtml(buildClozeHtml(stripAudioHtml(html))).trim();
 }
 
 /**
@@ -50,7 +53,7 @@ export async function generateAndStoreCardAudio(
   settings: AppSettings,
   side: AudioSide = 'front',
   voice?: VoiceChoice,
-): Promise<{ path: string; bytes: number }> {
+): Promise<{ path: string; bytes: number; blob: Blob }> {
   const voiceName = (voice?.voiceName ?? settings.tts.googleVoiceName)?.trim();
   if (!voiceName) {
     throw new TtsProviderError('Escolha uma voz do Google nas Configurações.');
@@ -63,7 +66,7 @@ export async function generateAndStoreCardAudio(
   const path = await mediaObjectPath(card.deckId, `${card.id}.mp3`);
   await uploadMedia(path, blob, 'audio/mpeg');
   await repo.updateCard(card.id, { audioPath: path });
-  return { path, bytes: blob.size };
+  return { path, bytes: blob.size, blob };
 }
 
 export interface DeckAudioProgress {

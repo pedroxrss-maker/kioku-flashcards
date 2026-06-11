@@ -68,6 +68,15 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
         cardAudioSide: { ...(settings.cardAudioSide ?? {}), [card.id]: side },
       });
       setAudioPath(r.path);
+      // Toca uma vez para o usuário confirmar que deu certo.
+      try {
+        const url = URL.createObjectURL(r.blob);
+        const a = new Audio(url);
+        a.onended = () => URL.revokeObjectURL(url);
+        void a.play().catch(() => URL.revokeObjectURL(url));
+      } catch {
+        /* ignore */
+      }
       pushToast('success', selectedHasAudio ? 'Áudio regerado e salvo na nuvem.' : 'Áudio gerado e salvo na nuvem.');
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar o áudio.');
@@ -147,10 +156,10 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
 
       <p className="mono text-[11px]" style={{ color: audioSide ? 'var(--accent-green)' : 'var(--muted)' }}>
         {audioSide === 'front'
-          ? '✓ Voz do Google salva na frente.'
+          ? '✓ Áudio salvo na frente.'
           : audioSide === 'back'
-            ? '✓ Voz do Google salva no verso.'
-            : 'Nenhuma voz do Google gerada para este card ainda.'}
+            ? '✓ Áudio salvo no verso.'
+            : 'Nenhum áudio gerado para este card ainda.'}
       </p>
 
       <div className="flex items-center gap-2">

@@ -468,17 +468,31 @@ export function CardEditorModal({
         <Toggle checked={pronounce} onChange={setPronounce} />
       </label>
 
-      {editing && card && isTtsConfigured() && (
-        <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--line)' }}>
+      {isTtsConfigured() && (
+        <div
+          className="mt-5 p-3.5 rounded-[var(--r-md)]"
+          style={{
+            border: '1px solid var(--accent)',
+            background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
+          }}
+        >
           <div className="flex items-center gap-2 mb-2">
-            <Cloud size={15} className="text-muted shrink-0" />
-            <span className="text-sm font-semibold">Áudio na nuvem (Google)</span>
+            <Cloud size={15} style={{ color: 'var(--accent)' }} className="shrink-0" />
+            <span className="text-sm font-semibold">Adicionar Áudio</span>
           </div>
-          <GenerateCardAudioButton card={card} />
-          <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
-            Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do deck
-            está ligado. Escolha a voz do Google em Configurações.
-          </p>
+          {editing && card ? (
+            <>
+              <GenerateCardAudioButton card={card} />
+              <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
+                Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do
+                deck está ligado. Escolha a voz em Configurações.
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] text-muted" style={{ lineHeight: 1.45 }}>
+              Adicione o card primeiro; depois abra-o para gerar o áudio da frente ou do verso.
+            </p>
+          )}
         </div>
       )}
     </Modal>
