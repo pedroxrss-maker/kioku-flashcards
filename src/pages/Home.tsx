@@ -22,6 +22,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useAllCards, useAllLogs, useDecks, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Heatmap } from '../features/stats/Heatmap';
 import { ProgressChart } from '../features/stats/ProgressChart';
 import { HeroBackdrop, useDayPart } from '../features/home/HeroBackdrop';
@@ -208,6 +209,7 @@ export function Home() {
   const [createOpen, setCreateOpen] = useState(false);
   const [menuDeckId, setMenuDeckId] = useState<string | null>(null);
   const [settingsDeck, setSettingsDeck] = useState<Deck | null>(null);
+  const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const name = displayName;
@@ -429,12 +431,7 @@ export function Home() {
               query={query}
               maxRows={8}
               onConfig={(d) => setSettingsDeck(d)}
-              onDelete={(d) => {
-                // eslint-disable-next-line no-alert
-                if (window.confirm(`Excluir o deck "${d.name}" e todos os cards?`)) {
-                  void repo.deleteDeck(d.id);
-                }
-              }}
+              onDelete={(d) => setDeckToDelete(d)}
             />
           ) : (
             <div className="flex flex-col gap-1">
@@ -449,14 +446,7 @@ export function Home() {
                   onMenu={() => setMenuDeckId((id) => (id === r.deck.id ? null : r.deck.id))}
                   onCloseMenu={() => setMenuDeckId(null)}
                   onConfig={() => setSettingsDeck(r.deck)}
-                  onDelete={() => {
-                    if (
-                      // eslint-disable-next-line no-alert
-                      window.confirm(`Excluir o deck "${r.deck.name}" e todos os cards?`)
-                    ) {
-                      void repo.deleteDeck(r.deck.id);
-                    }
-                  }}
+                  onDelete={() => setDeckToDelete(r.deck)}
                 />
               ))}
             </div>
@@ -486,6 +476,19 @@ export function Home() {
       {settingsDeck && (
         <DeckSettingsModal open onClose={() => setSettingsDeck(null)} deck={settingsDeck} />
       )}
+      <ConfirmDialog
+        open={!!deckToDelete}
+        onClose={() => setDeckToDelete(null)}
+        onConfirm={() => {
+          if (deckToDelete) void repo.deleteDeck(deckToDelete.id);
+        }}
+        title="Excluir deck"
+        message={
+          deckToDelete
+            ? `Excluir o deck "${deckToDelete.name}" e todos os cards? Esta ação não pode ser desfeita.`
+            : ''
+        }
+      />
     </div>
   );
 }

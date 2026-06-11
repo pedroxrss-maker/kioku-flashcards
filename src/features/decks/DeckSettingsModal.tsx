@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RotateCcw, Trash2, VolumeX } from 'lucide-react';
 import { Modal } from '../../components/Modal';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
 import { cn } from '../../lib/cn';
@@ -46,6 +47,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
   const [ttsLang, setTtsLang] = useState(deck.ttsLang);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [stripping, setStripping] = useState(false);
+  const [confirmStrip, setConfirmStrip] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const audioOn = settings?.deckAudio?.[deck.id] !== false;
@@ -124,10 +126,6 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
    *  áudios deste deck" really clears the whole subtree). */
   async function stripAllAudio() {
     if (stripping) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm('Isto vai remover o áudio de todos os cards deste deck (e dos subdecks). Esta ação não pode ser desfeita. Continuar?')) {
-      return;
-    }
     setStripping(true);
     try {
       const allDecks = await repo.listDecks();
@@ -293,7 +291,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
           </div>
           <button
             type="button"
-            onClick={stripAllAudio}
+            onClick={() => setConfirmStrip(true)}
             disabled={stripping}
             className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors mt-3 disabled:opacity-50"
             title="Apaga arquivos de áudio anexados aos cards. Não afeta a voz (TTS) — para isso use o botão acima."
@@ -380,6 +378,15 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
           Esta ação não pode ser desfeita. O conteúdo dos cards (frente/verso) é mantido.
         </p>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmStrip}
+        onClose={() => setConfirmStrip(false)}
+        onConfirm={() => void stripAllAudio()}
+        title="Remover áudios anexados"
+        message="Isto vai remover o áudio anexado de todos os cards deste deck (e dos subdecks). Esta ação não pode ser desfeita. Continuar?"
+        confirmLabel="Remover"
+      />
     </>
   );
 }

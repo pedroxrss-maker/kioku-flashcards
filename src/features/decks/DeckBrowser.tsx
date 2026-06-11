@@ -6,6 +6,7 @@ import { repo } from '../../db/repositories';
 import { groupCardsByDeck } from '../../lib/deckStats';
 import { hasHierarchy } from '../../lib/deckTree';
 import { Panel } from '../../components/Panel';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DeckCard } from './DeckCard';
 import { DeckTree } from './DeckTree';
 import { CreateDeckModal } from './CreateDeckModal';
@@ -20,6 +21,7 @@ export function DeckBrowser() {
   const [category, setCategory] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsDeck, setSettingsDeck] = useState<Deck | null>(null);
+  const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
   const byDeck = useMemo(() => groupCardsByDeck(allCards), [allCards]);
   const categories = useMemo(() => {
@@ -38,10 +40,7 @@ export function DeckBrowser() {
   );
 
   function deleteDeck(deck: Deck) {
-    // eslint-disable-next-line no-alert
-    if (window.confirm(`Excluir o deck "${deck.name}" e todos os cards?`)) {
-      void repo.deleteDeck(deck.id);
-    }
+    setDeckToDelete(deck);
   }
 
   return (
@@ -155,6 +154,19 @@ export function DeckBrowser() {
       {settingsDeck && (
         <DeckSettingsModal open onClose={() => setSettingsDeck(null)} deck={settingsDeck} />
       )}
+      <ConfirmDialog
+        open={!!deckToDelete}
+        onClose={() => setDeckToDelete(null)}
+        onConfirm={() => {
+          if (deckToDelete) void repo.deleteDeck(deckToDelete.id);
+        }}
+        title="Excluir deck"
+        message={
+          deckToDelete
+            ? `Excluir o deck "${deckToDelete.name}" e todos os cards? Esta ação não pode ser desfeita.`
+            : ''
+        }
+      />
     </div>
   );
 }
