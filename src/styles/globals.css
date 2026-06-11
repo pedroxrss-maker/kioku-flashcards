@@ -474,7 +474,7 @@ button.pill.pill-active:hover {
   border-radius: var(--r-sm);
 }
 
-/* Stored-audio chip (ElevenLabs / attached audio) — soft, Manrope label. */
+/* Stored-audio chip (generated or attached audio). Soft, Manrope label. */
 .kioku-audio-chip {
   display: inline-flex;
   flex-direction: column;

@@ -110,10 +110,6 @@ export function DeckDetail() {
 
   async function genDeckAudio() {
     if (!deck || !settings || audioBusy) return;
-    if (!settings.tts.elevenLabsApiKey?.trim()) {
-      pushToast('error', 'Configure a chave da ElevenLabs nas Configurações para gerar áudio.');
-      return;
-    }
     setAudioBusy(true);
     setAudioProg({ done: 0, total: 0 });
     try {
@@ -127,8 +123,8 @@ export function DeckDetail() {
       } else {
         let msg = `Áudio gerado para ${res.ok} ${res.ok === 1 ? 'card' : 'cards'}.`;
         if (res.failed > 0) msg += ` ${res.failed} ${res.failed === 1 ? 'falhou' : 'falharam'}.`;
-        if (res.quotaHit) msg += ' Cota da ElevenLabs esgotada.';
-        pushToast(res.failed > 0 || res.quotaHit ? 'info' : 'success', msg);
+        if (res.stopped) msg += ' Geração interrompida (servidor de voz indisponível ou limite atingido).';
+        pushToast(res.failed > 0 || res.stopped ? 'info' : 'success', msg);
       }
     } catch (e) {
       pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar áudio do deck.');
@@ -215,18 +211,16 @@ export function DeckDetail() {
               Adicionar card
             </Button>
             <ExportButton deckId={deck.id} size="md" />
-            {!!settings?.tts.elevenLabsApiKey?.trim() && (
-              <Button
-                variant="default"
-                icon={audioBusy ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
-                onClick={genDeckAudio}
-                disabled={audioBusy}
-              >
-                {audioBusy
-                  ? `Gerando ${audioProg?.done ?? 0}/${audioProg?.total ?? 0}`
-                  : 'Gerar áudio'}
-              </Button>
-            )}
+            <Button
+              variant="default"
+              icon={audioBusy ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
+              onClick={genDeckAudio}
+              disabled={audioBusy}
+            >
+              {audioBusy
+                ? `Gerando ${audioProg?.done ?? 0}/${audioProg?.total ?? 0}`
+                : 'Gerar áudio'}
+            </Button>
           </div>
         </div>
       </section>
@@ -319,7 +313,6 @@ export function DeckDetail() {
         onClose={() => setEditorOpen(false)}
         deckId={deck.id}
         card={editingCard}
-        ttsLang={deck.ttsLang}
       />
       <DeckSettingsModal
         open={settingsOpen}

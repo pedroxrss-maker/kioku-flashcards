@@ -12,7 +12,6 @@ import {
 import { recordStorageUpload } from '../media/usage';
 import { clozeNumbers } from '../../lib/cloze';
 import { pushToast } from '../../lib/toast';
-import { ElevenLabsDialog } from '../tts/ElevenLabsDialog';
 
 interface RichTextFieldProps {
   label: string;
@@ -22,8 +21,6 @@ interface RichTextFieldProps {
   /** Deck id. When set, inserted images upload to Supabase Storage; without it
    *  they fall back to the local IndexedDB store (legacy behavior). */
   deckId?: string;
-  /** Deck language (e.g. 'en-US'), used to seed the ElevenLabs dialog. */
-  ttsLang?: string;
   /** Show the "Cloze" button (lights up when text is selected). */
   showCloze?: boolean;
   /** Tab (without Shift) jumps to the next field instead of the toolbar. */
@@ -72,16 +69,13 @@ function ToolbarBtn({
 /** contentEditable rich-text field with a formatting + image + audio toolbar. */
 export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>(
   function RichTextField(
-    { label, valueHtml, onChange, autoFocus, deckId, ttsLang = 'en-US', showCloze = false, onTab, onCtrlEnter },
+    { label, valueHtml, onChange, autoFocus, deckId, showCloze = false, onTab, onCtrlEnter },
     fwdRef,
   ) {
   const ref = useRef<HTMLDivElement>(null);
   useImperativeHandle(fwdRef, () => ({ focus: () => ref.current?.focus() }), []);
   const imageRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
-  const [audioMenu, setAudioMenu] = useState(false);
-  const [elOpen, setElOpen] = useState(false);
-  const [dialogText, setDialogText] = useState('');
   const [canCloze, setCanCloze] = useState(false);
 
   // The Cloze button lights up only while text is selected inside THIS field.
@@ -138,15 +132,6 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
     ref.current?.focus();
     document.execCommand(command, false);
     emit();
-  }
-
-  /** Plain text of the field, excluding audio chip labels. */
-  function plainText(): string {
-    const el = ref.current;
-    if (!el) return '';
-    const clone = el.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('.kioku-audio-chip').forEach((n) => n.remove());
-    return (clone.textContent ?? '').replace(/\s+/g, ' ').trim();
   }
 
   function insertAudioChip(audio: { id: string; url: string; label: string }) {
@@ -216,43 +201,9 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
           <ToolbarBtn onClick={() => imageRef.current?.click()} title="Inserir imagem">
             <ImageIcon size={14} />
           </ToolbarBtn>
-          <div className="relative">
-            <ToolbarBtn onClick={() => setAudioMenu((o) => !o)} title="Áudio">
-              <Volume2 size={14} />
-            </ToolbarBtn>
-            {audioMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setAudioMenu(false)} />
-                <div
-                  className="absolute right-0 z-50 mt-1"
-                  style={{ border: '1px solid var(--line)', background: 'var(--surface)', minWidth: 210 }}
-                >
-                  <button
-                    type="button"
-                    className="block w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
-                    onClick={() => {
-                      setAudioMenu(false);
-                      audioRef.current?.click();
-                    }}
-                  >
-                    Anexar áudio
-                  </button>
-                  <button
-                    type="button"
-                    className="block w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
-                    style={{ borderTop: '1px solid var(--line)' }}
-                    onClick={() => {
-                      setAudioMenu(false);
-                      setDialogText(plainText());
-                      setElOpen(true);
-                    }}
-                  >
-                    Gerar com ElevenLabs
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <ToolbarBtn onClick={() => audioRef.current?.click()} title="Anexar áudio">
+            <Volume2 size={14} />
+          </ToolbarBtn>
         </div>
       </div>
       <div
@@ -277,14 +228,6 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
       />
       <input ref={imageRef} type="file" accept="image/*" hidden onChange={onImageFile} />
       <input ref={audioRef} type="file" accept="audio/*" hidden onChange={onAudioFile} />
-
-      <ElevenLabsDialog
-        open={elOpen}
-        onClose={() => setElOpen(false)}
-        defaultText={dialogText}
-        defaultLang={ttsLang}
-        onInsert={insertAudioChip}
-      />
     </div>
   );
   },

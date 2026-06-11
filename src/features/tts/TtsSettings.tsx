@@ -6,7 +6,6 @@ import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { tts } from './tts';
 import { useVoices } from './useVoices';
-import { ElevenLabsSettings } from './ElevenLabsSettings';
 import type { AppSettings } from '../../db/types';
 
 /** TTS settings block — composed into the Settings page. */
@@ -97,9 +96,6 @@ export function TtsSettings() {
           )}
         </div>
       )}
-
-      {/* ElevenLabs works regardless of Web Speech support. */}
-      <ElevenLabsSettings />
     </section>
   );
 }

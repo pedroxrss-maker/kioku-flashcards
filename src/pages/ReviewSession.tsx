@@ -118,7 +118,7 @@ export function ReviewSession() {
   }, [current?.id]);
 
   // Pronounce the front as soon as a card appears, in priority order:
-  //   1) a stored audio FILE (cards.audio_path, e.g. ElevenLabs) via a signed URL
+  //   1) a stored audio FILE (cards.audio_path, gerado na nuvem) via a signed URL
   //   2) an attached audio chip in the front HTML (kioku-audio://)
   //   3) Web Speech (TTS) as the fallback when there is no stored audio
   // Stored audio is preferred over TTS. The audio chip's object URL resolves
@@ -490,7 +490,6 @@ export function ReviewSession() {
           }}
           deckId={current.deckId}
           card={current}
-          ttsLang={(audioDeck ?? deck).ttsLang}
         />
       )}
 

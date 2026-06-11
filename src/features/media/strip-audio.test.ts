@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { stripAudioHtml } from './media';
 
 describe('stripAudioHtml', () => {
-  it('removes an ElevenLabs audio chip (span + <audio>) but keeps the text', () => {
+  it('removes an attached audio chip (span + <audio>) but keeps the text', () => {
     const html =
       'Olá <span class="kioku-audio-chip"><span class="kioku-audio-lbl">🔊 ouvir</span>' +
       '<audio controls src="kioku-audio://abc"></audio></span> mundo';

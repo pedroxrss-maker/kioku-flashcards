@@ -100,10 +100,11 @@ export interface AppSettings {
     voiceURI: string | null;
     rate: number; // 0.5 – 1.5
     autoPronounceFront: boolean;
-    // ElevenLabs cloud TTS (generate-and-store). Key lives only in IndexedDB.
-    elevenLabsApiKey: string;
-    elevenLabsModel: string; // model_id, default 'eleven_multilingual_v2'
-    elevenLabsVoiceId: string; // default voice_id
+    // TTS na nuvem do Google (gera e salva MP3). A credencial fica no servidor
+    // (Worker), nunca no aplicativo.
+    provider: 'google';
+    googleVoiceName: string; // ex.: 'en-US-Neural2-D'
+    googleLanguageCode: string; // ex.: 'en-US'
   };
   seededAt: number | null; // first-run seed marker
   /** Per-deck logo: deckId -> preset icon id OR a data: URL (custom image). */

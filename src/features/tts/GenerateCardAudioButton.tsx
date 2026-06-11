@@ -8,8 +8,8 @@ import type { AudioSide } from './audioGen';
 import type { Card } from '../../db/types';
 
 /**
- * Per-card control to generate (or regenerate) ElevenLabs audio into Storage.
- * Front by default, with a Frente/Verso choice. Requires a configured key.
+ * Per-card control to generate (or regenerate) cloud audio (Google) into
+ * Storage. Front by default, with a Frente/Verso choice.
  */
 export function GenerateCardAudioButton({ card }: { card: Card }) {
   const settings = useSettings();
@@ -18,14 +18,9 @@ export function GenerateCardAudioButton({ card }: { card: Card }) {
   const [hasAudio, setHasAudio] = useState<boolean>(!!card.audioPath);
 
   if (!settings) return null;
-  const hasKey = !!settings.tts.elevenLabsApiKey?.trim();
 
   async function generate() {
     if (busy || !settings) return;
-    if (!hasKey) {
-      pushToast('error', 'Configure a chave da ElevenLabs nas Configurações para gerar áudio.');
-      return;
-    }
     setBusy(true);
     try {
       const r = await generateAndStoreCardAudio(card, settings, side);

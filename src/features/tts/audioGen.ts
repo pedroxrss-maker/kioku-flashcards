@@ -1,13 +1,14 @@
 /**
- * ElevenLabs audio generation that lands in Supabase Storage. Synthesize the
- * card text to MP3, upload it to "{user_id}/{deck_id}/{card_id}.mp3", then set
- * cards.audio_path so review can play it offline (via a signed URL). Per-card
- * and per-deck (batch) helpers live here.
+ * Geração de áudio que termina no Supabase Storage. Sintetiza o texto do card
+ * para MP3, envia para "{user_id}/{deck_id}/{card_id}.mp3" e grava
+ * cards.audio_path para a revisão tocar offline (via URL assinada). Helpers por
+ * card e por deck (em lote) vivem aqui. O provedor concreto (Google, via Worker)
+ * produz os bytes; este módulo é agnóstico de provedor.
  */
 import { repo } from '../../db/repositories';
 import { stripHtml } from '../../lib/text';
 import { mediaObjectPath, uploadMedia } from '../media/storage';
-import { DEFAULT_ELEVEN_MODEL, ElevenLabsProvider, TtsProviderError } from './providers';
+import { TtsProviderError } from './providers';
 import type { AppSettings, Card } from '../../db/types';
 
 export type AudioSide = 'front' | 'back';
@@ -18,24 +19,37 @@ function cardText(card: Card, side: AudioSide): string {
   return stripHtml(side === 'front' ? card.front : card.back).trim();
 }
 
-/** Synthesize one card's text, upload the mp3, and persist cards.audio_path. */
+/**
+ * Placeholder do produtor de bytes. No Stage 2 isto passa a chamar o provedor
+ * Google (via Worker). Até lá, lança uma mensagem clara em pt-BR.
+ */
+function synthesizeText(
+  _text: string,
+  _opts: { voiceName: string; languageCode: string },
+): Promise<Blob> {
+  return Promise.reject(
+    new TtsProviderError(
+      'Geração de áudio indisponível: o servidor de voz (Worker) ainda não foi configurado.',
+    ),
+  );
+}
+
+/** Sintetiza o texto de um card, envia o MP3 e persiste cards.audio_path. */
 export async function generateAndStoreCardAudio(
   card: Card,
   settings: AppSettings,
   side: AudioSide = 'front',
 ): Promise<{ path: string; bytes: number }> {
-  const key = settings.tts.elevenLabsApiKey?.trim();
-  if (!key) throw new TtsProviderError('Configure a chave da ElevenLabs nas Configurações.');
-  const voiceId = settings.tts.elevenLabsVoiceId?.trim();
-  if (!voiceId) {
-    throw new TtsProviderError('Escolha uma voz padrão da ElevenLabs nas Configurações.');
+  const voiceName = settings.tts.googleVoiceName?.trim();
+  if (!voiceName) {
+    throw new TtsProviderError('Escolha uma voz do Google nas Configurações.');
   }
   const text = cardText(card, side);
   if (!text) throw new TtsProviderError('Este card não tem texto para gerar áudio.');
 
-  const blob = await new ElevenLabsProvider(key).synthesize(text, {
-    voiceId,
-    modelId: settings.tts.elevenLabsModel || DEFAULT_ELEVEN_MODEL,
+  const blob = await synthesizeText(text, {
+    voiceName,
+    languageCode: settings.tts.googleLanguageCode?.trim() || 'en-US',
   });
   const path = await mediaObjectPath(card.deckId, `${card.id}.mp3`);
   await uploadMedia(path, blob, 'audio/mpeg');
@@ -48,18 +62,19 @@ export interface DeckAudioProgress {
   total: number;
 }
 export interface DeckAudioResult {
-  total: number; // cards that needed audio
+  total: number; // cards que precisavam de áudio
   ok: number;
   failed: number;
-  skipped: number; // already had audio or had no text
+  skipped: number; // já tinham áudio ou não tinham texto
   bytes: number;
-  quotaHit: boolean;
+  stopped: boolean; // um erro que atingiria todos os cards interrompeu o lote
 }
 
 /**
- * Generate audio for every card in a deck that has no audio yet. Sequential to
- * respect ElevenLabs rate limits; a single card's failure does not abort the
- * batch, but a quota/429 (which would hit every remaining card) stops it early.
+ * Gera áudio para todo card do deck que ainda não tem áudio. Sequencial para ser
+ * gentil com limites de taxa; a falha de um card não aborta o lote, mas um erro
+ * que atingiria todos os cards (ex.: Worker não configurado, cota esgotada)
+ * interrompe cedo.
  */
 export async function generateDeckAudio(
   deckId: string,
@@ -73,7 +88,7 @@ export async function generateDeckAudio(
   let ok = 0;
   let failed = 0;
   let bytes = 0;
-  let quotaHit = false;
+  let stopped = false;
 
   for (let i = 0; i < targets.length; i += 1) {
     try {
@@ -82,15 +97,18 @@ export async function generateDeckAudio(
       bytes += r.bytes;
     } catch (e) {
       failed += 1;
-      if (e instanceof TtsProviderError && /cota|quota|429|esgotad/i.test(e.message)) {
-        quotaHit = true;
+      if (
+        e instanceof TtsProviderError &&
+        /cota|quota|429|esgotad|indispon|worker|configurad/i.test(e.message)
+      ) {
+        stopped = true;
         onProgress({ done: i + 1, total });
         break;
       }
     }
     onProgress({ done: i + 1, total });
-    await delay(250); // gentle on rate limits
+    await delay(250); // gentil com limites de taxa
   }
 
-  return { total, ok, failed, skipped: cards.length - total, bytes, quotaHit };
+  return { total, ok, failed, skipped: cards.length - total, bytes, stopped };
 }

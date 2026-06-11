@@ -22,8 +22,6 @@ interface CardEditorModalProps {
   deckId: string;
   /** When set, edits this card; otherwise creates a new one. */
   card?: Card | null;
-  /** Deck language, forwarded to the audio (ElevenLabs) dialog. */
-  ttsLang?: string;
 }
 
 function isEmptyHtml(html: string): boolean {
@@ -41,7 +39,6 @@ export function CardEditorModal({
   onClose,
   deckId,
   card,
-  ttsLang = 'en-US',
 }: CardEditorModalProps) {
   const editing = !!card;
   const reduce = useReducedMotion();
@@ -287,9 +284,7 @@ export function CardEditorModal({
                   valueHtml={front}
                   onChange={setFront}
                   autoFocus
-                  deckId={deckId}
-                  ttsLang={ttsLang}
-                  showCloze
+                  deckId={deckId}                  showCloze
                   onTab={focusNext}
                   onCtrlEnter={save}
                 />
@@ -303,9 +298,7 @@ export function CardEditorModal({
                   label="Extra (verso, opcional)"
                   valueHtml={back}
                   onChange={setBack}
-                  deckId={deckId}
-                  ttsLang={ttsLang}
-                  onCtrlEnter={save}
+                  deckId={deckId}                  onCtrlEnter={save}
                 />
               </>
             ) : type === 'typein' ? (
@@ -316,9 +309,7 @@ export function CardEditorModal({
                   valueHtml={front}
                   onChange={setFront}
                   autoFocus
-                  deckId={deckId}
-                  ttsLang={ttsLang}
-                  onTab={focusNext}
+                  deckId={deckId}                  onTab={focusNext}
                   onCtrlEnter={save}
                 />
                 <div>
@@ -346,9 +337,7 @@ export function CardEditorModal({
                   valueHtml={front}
                   onChange={setFront}
                   autoFocus
-                  deckId={deckId}
-                  ttsLang={ttsLang}
-                  onTab={focusNext}
+                  deckId={deckId}                  onTab={focusNext}
                   onCtrlEnter={save}
                 />
                 <RichTextField
@@ -357,9 +346,7 @@ export function CardEditorModal({
                   label="Verso"
                   valueHtml={back}
                   onChange={setBack}
-                  deckId={deckId}
-                  ttsLang={ttsLang}
-                  onCtrlEnter={save}
+                  deckId={deckId}                  onCtrlEnter={save}
                 />
               </>
             )}
@@ -385,12 +372,12 @@ export function CardEditorModal({
         <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--line)' }}>
           <div className="flex items-center gap-2 mb-2">
             <Cloud size={15} className="text-muted shrink-0" />
-            <span className="text-sm font-semibold">Áudio na nuvem (ElevenLabs)</span>
+            <span className="text-sm font-semibold">Áudio na nuvem (Google)</span>
           </div>
           <GenerateCardAudioButton card={card} />
           <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
             Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do deck
-            está ligado. Configure a chave da ElevenLabs em Configurações.
+            está ligado. Escolha a voz do Google em Configurações.
           </p>
         </div>
       )}

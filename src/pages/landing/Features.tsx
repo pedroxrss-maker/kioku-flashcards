@@ -5,7 +5,7 @@ import { Reveal, StaggerCard, StaggerGroup } from './anim';
 const FEATURES: Array<{ icon: LucideIcon; title: string; desc: string }> = [
   { icon: Layers, title: 'Crie cards com texto, imagem e áudio', desc: 'Texto formatado, imagens e áudio direto no card.' },
   { icon: Brain, title: 'Dois algoritmos: SM-2 e FSRS', desc: 'Escolha por deck qual algoritmo de repetição usar.' },
-  { icon: Volume2, title: 'Áudio em qualquer idioma', desc: 'Voz do navegador ou ElevenLabs, em qualquer língua.' },
+  { icon: Volume2, title: 'Áudio em qualquer idioma', desc: 'Voz do navegador ou áudio gerado na nuvem, em qualquer língua.' },
   { icon: BarChart3, title: 'Estatísticas e heatmap', desc: 'Acompanhe revisões, acertos, mapa de calor e sequências.' },
   { icon: Download, title: 'Importe do Anki (.apkg)', desc: 'Traga seus baralhos do Anki em poucos cliques.' },
   { icon: RefreshCw, title: 'Sincroniza entre dispositivos', desc: 'Sua conta guarda tudo e sincroniza entre aparelhos.' },

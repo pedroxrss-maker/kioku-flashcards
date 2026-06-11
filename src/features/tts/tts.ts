@@ -1,7 +1,7 @@
 /**
  * Text-to-speech service. v1 uses the browser Web Speech API (no key). The
- * `TtsService` interface lets a cloud provider (ElevenLabs / Azure / Google)
- * be plugged in later for higher-quality voices.
+ * `TtsService` interface lets a cloud provider (Google, via Worker) be plugged
+ * in later for higher-quality voices.
  */
 
 export interface SpeakOptions {
