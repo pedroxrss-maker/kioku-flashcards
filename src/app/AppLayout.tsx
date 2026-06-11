@@ -58,7 +58,7 @@ export function AppLayout() {
         onTouchEnd={onTouchEnd}
       >
         <MobileTopBar />
-        {/* overflow-x: clip so the horizontal page-slide never shows a scrollbar */}
+        {/* overflow-x: clip guards against any accidental horizontal scrollbar */}
         <main
           className="flex-1 w-full max-w-[1200px] mx-auto px-5 md:px-8 py-7 md:py-9"
           style={{ overflowX: 'clip' }}
@@ -75,15 +75,16 @@ export function AppLayout() {
               <p className="mono text-muted text-sm">Carregando…</p>
             </div>
           ) : (
-            // Horizontal slide + fade between pages. mode="wait" so the chrome
-            // (sidebar/top bar) stays put and only the page content animates.
+            // Calm vertical fade + rise between pages (no left/right slide).
+            // mode="wait" so the chrome (sidebar/top bar) stays put and only the
+            // page content animates: the old page fades out, the new one rises in.
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={loc.pathname}
-                initial={reduce ? false : { opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={reduce ? { opacity: 0 } : { opacity: 0, x: -12 }}
-                transition={{ duration: reduce ? 0 : 0.12, ease: 'easeOut' }}
+                initial={reduce ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduce ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
               >
                 {outlet}
               </motion.div>
