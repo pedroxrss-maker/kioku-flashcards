@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Volume2 } from 'lucide-react';
 import { CardHtml } from '../media/CardHtml';
 import { SpeakerButton } from '../tts/SpeakerButton';
@@ -11,6 +11,7 @@ interface FlipCardProps {
   ttsLang: string;
   flipped: boolean;
   onFlip: () => void;
+  /** Minimum card height. The card grows beyond this to fit its content. */
   height?: string;
   /** When false, no speaker icon and attached audio is hidden. */
   audioEnabled?: boolean;
@@ -31,6 +32,10 @@ interface FlipCardProps {
  * on every card change, always starting on the front. The rotateY transition is
  * disabled on mount and enabled only after first paint, so an incoming card
  * never animates from its back face, only user-initiated flips animate.
+ *
+ * The card height tracks the VISIBLE face's content (measured via refs +
+ * ResizeObserver, so it also reacts to images loading) and grows above the
+ * minimum, animating the change as a smooth vertical slide. Nothing is clipped.
  */
 export function FlipCard({
   front,
@@ -46,14 +51,43 @@ export function FlipCard({
   onReplayBackAudio,
 }: FlipCardProps) {
   const [animate, setAnimate] = useState(false);
+  const frontRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLDivElement>(null);
+  const [innerH, setInnerH] = useState<number | null>(null);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setAnimate(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // The per-face audio replay control (top-right): an orange circle that plays
-  // THAT face's track, available even if the deck's TTS pronunciation is off.
+  // Grow the card to fit the visible face's content (front when showing, back
+  // when flipped), so the divider, buttons, text and any image all fit without
+  // clipping. ResizeObserver re-measures when content (e.g. an image) resizes.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = flipped ? backRef.current : frontRef.current;
+      if (!el) return;
+      const face = el.parentElement;
+      let pad = 0;
+      if (face) {
+        const cs = getComputedStyle(face);
+        pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      }
+      const h = el.offsetHeight + pad;
+      if (h > 0) setInnerH(Math.ceil(h)); // 0 in non-layout envs (jsdom): keep min
+    };
+    measure();
+    // ResizeObserver is absent in some test environments; the one-shot measure
+    // above is enough there, the observer just keeps it live as images load.
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    if (frontRef.current) ro.observe(frontRef.current);
+    if (backRef.current) ro.observe(backRef.current);
+    return () => ro.disconnect();
+  }, [flipped, front, back]);
+
+  // The per-face audio replay control: an orange circle that plays THAT face's
+  // track, available even if the deck's TTS pronunciation is off.
   const audioBtn = (onReplay?: () => void) => (
     <button
       type="button"
@@ -87,14 +121,14 @@ export function FlipCard({
           !animate && 'no-flip-anim',
           flipped && 'is-flipped',
         )}
-        style={{ height }}
+        style={{ height: innerH ?? undefined, minHeight: height, maxHeight: '82vh' }}
       >
         {/* The top-right corner is ALWAYS the front control (front audio, else the
             front-text TTS), on both faces. */}
         {/* Front face */}
         <div className="review-face flip-face">
           {(hasFrontAudio || audioEnabled) && (
-            <div className="absolute top-3 right-3">
+            <div className="absolute top-3 right-3 z-10">
               {hasFrontAudio ? (
                 audioBtn(onReplayFrontAudio)
               ) : (
@@ -102,13 +136,15 @@ export function FlipCard({
               )}
             </div>
           )}
-          <CardHtml html={front} className="card-content" audioEnabled={audioEnabled && !hasFrontAudio} />
+          <div ref={frontRef} className="w-full shrink-0">
+            <CardHtml html={front} className="card-content" audioEnabled={audioEnabled && !hasFrontAudio} />
+          </div>
         </div>
-        {/* Back face: corner stays the FRONT audio; a dedicated button under the
-            divider plays the BACK audio, shown only when there is one. */}
+        {/* Back face: corner stays the FRONT audio; a dedicated button on the
+            right under the divider plays the BACK audio, only when there is one. */}
         <div className="review-face flip-face flip-face-back">
           {(hasFrontAudio || audioEnabled) && (
-            <div className="absolute top-3 right-3">
+            <div className="absolute top-3 right-3 z-10">
               {hasFrontAudio ? (
                 audioBtn(onReplayFrontAudio)
               ) : (
@@ -116,11 +152,11 @@ export function FlipCard({
               )}
             </div>
           )}
-          <div className="w-full max-w-xl">
+          <div ref={backRef} className="w-full max-w-xl shrink-0">
             <CardHtml html={front} className="card-content-sm" audioEnabled={audioEnabled && !hasFrontAudio} />
             <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
             {hasBackAudio && (
-              <div className="flex justify-center mb-3">{audioBtn(onReplayBackAudio)}</div>
+              <div className="flex justify-end mb-3">{audioBtn(onReplayBackAudio)}</div>
             )}
             <CardHtml html={back} className="card-content" audioEnabled={audioEnabled && !hasBackAudio} />
           </div>
