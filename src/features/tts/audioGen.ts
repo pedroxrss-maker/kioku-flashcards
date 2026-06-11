@@ -8,6 +8,7 @@
 import { repo } from '../../db/repositories';
 import { stripHtml } from '../../lib/text';
 import { mediaObjectPath, uploadMedia } from '../media/storage';
+import { stripAudioHtml } from '../media/media';
 import { TtsProviderError } from './providers';
 import { synthesizeGoogle } from './googleProvider';
 import type { AppSettings, Card } from '../../db/types';
@@ -22,8 +23,14 @@ export interface VoiceChoice {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Texto a falar de um card. Remove primeiro os chips de áudio anexado (e tokens
+ * [sound:...]) para a TTS NUNCA ler o nome do arquivo de áudio (ex.: "04 - ...
+ * .mp3"); só o texto de verdade do card é sintetizado.
+ */
 function cardText(card: Card, side: AudioSide): string {
-  return stripHtml(side === 'front' ? card.front : card.back).trim();
+  const html = side === 'front' ? card.front : card.back;
+  return stripHtml(stripAudioHtml(html)).trim();
 }
 
 /**
