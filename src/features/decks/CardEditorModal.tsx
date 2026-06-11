@@ -482,7 +482,9 @@ export function CardEditorModal({
           </div>
           {editing && card ? (
             <>
-              <GenerateCardAudioButton card={card} />
+              {/* Pass the CURRENT edited front/back so generation reads the live
+                  text, not the stale saved card (e.g. words added after opening). */}
+              <GenerateCardAudioButton card={{ ...card, front: stored().f, back }} />
               <p className="text-[11px] text-muted mt-2" style={{ lineHeight: 1.45 }}>
                 Gera um MP3 do texto e salva na sua conta. É tocado na revisão quando o áudio do
                 deck está ligado. Escolha a voz em Configurações.

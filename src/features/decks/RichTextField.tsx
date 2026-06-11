@@ -5,6 +5,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
 } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Baseline,
   Bold,
@@ -86,7 +87,7 @@ function ToolbarBtn({
   );
 }
 
-/** Small swatch grid shown under the text-color / highlight toolbar buttons. */
+/** Horizontal transparent swatch balloon for the text-color / highlight buttons. */
 function ColorPopover({
   colors,
   onPick,
@@ -97,14 +98,13 @@ function ColorPopover({
   round?: boolean;
 }) {
   return (
-    <div
-      className="absolute right-0 z-50 mt-1 p-2 grid grid-cols-3 gap-1.5"
-      style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--line-strong)',
-        borderRadius: 'var(--r-sm)',
-        boxShadow: 'var(--shadow-pop)',
-      }}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8, y: -4 }}
+      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      className="absolute right-0 z-50 mt-1.5 flex items-center gap-2"
+      style={{ transformOrigin: 'top right' }}
     >
       {colors.map((c) => (
         <button
@@ -113,17 +113,18 @@ function ColorPopover({
           // Keep the editable selection while picking a color.
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onPick(c)}
-          className="transition-transform hover:scale-110"
+          className="transition-transform hover:scale-125"
           style={{
-            width: 22,
-            height: 22,
+            width: 20,
+            height: 20,
             borderRadius: round ? '50%' : 6,
             background: c,
-            border: '1px solid rgba(0, 0, 0, 0.2)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.4)',
           }}
         />
       ))}
-    </div>
+    </motion.div>
   );
 }
 
@@ -311,7 +312,9 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
             >
               <Baseline size={14} />
             </ToolbarBtn>
-            {colorMenu === 'text' && <ColorPopover colors={TEXT_COLORS} onPick={applyTextColor} round />}
+            <AnimatePresence>
+              {colorMenu === 'text' && <ColorPopover colors={TEXT_COLORS} onPick={applyTextColor} round />}
+            </AnimatePresence>
           </div>
           <div className="relative">
             <ToolbarBtn
@@ -321,7 +324,9 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
             >
               <Highlighter size={14} />
             </ToolbarBtn>
-            {colorMenu === 'hl' && <ColorPopover colors={HL_COLORS} onPick={applyHighlight} />}
+            <AnimatePresence>
+              {colorMenu === 'hl' && <ColorPopover colors={HL_COLORS} onPick={applyHighlight} />}
+            </AnimatePresence>
           </div>
           {colorMenu && (
             <div className="fixed inset-0 z-40" onMouseDown={() => setColorMenu(null)} />
