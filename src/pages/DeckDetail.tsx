@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Folder, Loader2, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
+import { ArrowLeft, Folder, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
 import { useAllCards, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
@@ -18,11 +18,8 @@ import {
   groupReviewToken,
 } from '../lib/deckTree';
 import type { DeckTreeNode } from '../lib/deckTree';
-import { generateDeckAudio } from '../features/tts/audioGen';
-import type { DeckAudioProgress } from '../features/tts/audioGen';
 import { isTtsConfigured } from '../features/tts/googleProvider';
-import { recordStorageUpload, warnIfStorageHigh } from '../features/media/usage';
-import { pushToast } from '../lib/toast';
+import { GenerateDeckAudioDialog } from '../features/tts/GenerateDeckAudioDialog';
 import type { Card } from '../db/types';
 
 export function DeckDetail() {
@@ -36,8 +33,7 @@ export function DeckDetail() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [audioBusy, setAudioBusy] = useState(false);
-  const [audioProg, setAudioProg] = useState<DeckAudioProgress | null>(null);
+  const [audioDialogOpen, setAudioDialogOpen] = useState(false);
 
   const counts = useMemo(
     () => countCards(cards, Date.now(), deck),
@@ -109,31 +105,6 @@ export function DeckDetail() {
     setEditorOpen(true);
   }
 
-  async function genDeckAudio() {
-    if (!deck || !settings || audioBusy) return;
-    setAudioBusy(true);
-    setAudioProg({ done: 0, total: 0 });
-    try {
-      const res = await generateDeckAudio(deck.id, settings, (p) => setAudioProg(p));
-      if (res.bytes > 0) {
-        const total = await recordStorageUpload(res.bytes);
-        warnIfStorageHigh(total);
-      }
-      if (res.total === 0) {
-        pushToast('info', 'Todos os cards com texto já têm áudio neste deck.');
-      } else {
-        let msg = `Áudio gerado para ${res.ok} ${res.ok === 1 ? 'card' : 'cards'}.`;
-        if (res.failed > 0) msg += ` ${res.failed} ${res.failed === 1 ? 'falhou' : 'falharam'}.`;
-        if (res.stopped) msg += ' Geração interrompida (servidor de voz indisponível ou limite atingido).';
-        pushToast(res.failed > 0 || res.stopped ? 'info' : 'success', msg);
-      }
-    } catch (e) {
-      pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar áudio do deck.');
-    } finally {
-      setAudioBusy(false);
-      setAudioProg(null);
-    }
-  }
 
   return (
     <div className="rise flex flex-col gap-7">
@@ -215,13 +186,10 @@ export function DeckDetail() {
             {isTtsConfigured() && (
               <Button
                 variant="default"
-                icon={audioBusy ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
-                onClick={genDeckAudio}
-                disabled={audioBusy}
+                icon={<Volume2 size={16} />}
+                onClick={() => setAudioDialogOpen(true)}
               >
-                {audioBusy
-                  ? `Gerando ${audioProg?.done ?? 0}/${audioProg?.total ?? 0}`
-                  : 'Gerar áudio'}
+                Gerar áudio
               </Button>
             )}
           </div>
@@ -321,6 +289,12 @@ export function DeckDetail() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         deck={deck}
+      />
+      <GenerateDeckAudioDialog
+        open={audioDialogOpen}
+        onClose={() => setAudioDialogOpen(false)}
+        deckId={deck.id}
+        deckName={deck.name}
       />
     </div>
   );
