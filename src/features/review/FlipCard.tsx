@@ -89,7 +89,9 @@ export function FlipCard({
         )}
         style={{ height }}
       >
-        {/* Front face: front audio button, else the front-text TTS. */}
+        {/* The top-right corner is ALWAYS the front control (front audio, else the
+            front-text TTS), on both faces. */}
+        {/* Front face */}
         <div className="review-face flip-face">
           {(hasFrontAudio || audioEnabled) && (
             <div className="absolute top-3 right-3">
@@ -102,20 +104,24 @@ export function FlipCard({
           )}
           <CardHtml html={front} className="card-content" audioEnabled={audioEnabled && !hasFrontAudio} />
         </div>
-        {/* Back face: back audio button, else the back-text TTS. */}
+        {/* Back face: corner stays the FRONT audio; a dedicated button under the
+            divider plays the BACK audio, shown only when there is one. */}
         <div className="review-face flip-face flip-face-back">
-          {(hasBackAudio || audioEnabled) && (
+          {(hasFrontAudio || audioEnabled) && (
             <div className="absolute top-3 right-3">
-              {hasBackAudio ? (
-                audioBtn(onReplayBackAudio)
+              {hasFrontAudio ? (
+                audioBtn(onReplayFrontAudio)
               ) : (
-                <SpeakerButton text={stripHtml(back)} lang={ttsLang} size={18} onLight />
+                <SpeakerButton text={stripHtml(front)} lang={ttsLang} size={18} onLight />
               )}
             </div>
           )}
           <div className="w-full max-w-xl">
             <CardHtml html={front} className="card-content-sm" audioEnabled={audioEnabled && !hasFrontAudio} />
             <div className="my-4 h-px w-full" style={{ background: '#0f0f0f22' }} />
+            {hasBackAudio && (
+              <div className="flex justify-center mb-3">{audioBtn(onReplayBackAudio)}</div>
+            )}
             <CardHtml html={back} className="card-content" audioEnabled={audioEnabled && !hasBackAudio} />
           </div>
         </div>
