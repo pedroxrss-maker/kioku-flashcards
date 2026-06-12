@@ -264,7 +264,7 @@ export function DeckDetail() {
           <CalendarDays size={16} className="text-muted" />
           <h2 className="mono text-sm text-muted">Mapa de revisões deste deck</h2>
         </div>
-        <Heatmap logs={deckLogs} />
+        <Heatmap logs={deckLogs} fill />
       </Panel>
 
       {/* Card list */}

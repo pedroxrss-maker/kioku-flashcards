@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Brain, Camera, Check, Database, Eye, Palette, SlidersHorizontal, User } from 'lucide-react';
+import { Brain, Camera, Check, Database, Eye, Palette, SlidersHorizontal, Trash2, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
+import { Modal } from '../components/Modal';
 import { Toggle } from '../components/Toggle';
 import { SmoothSlider } from '../components/SmoothSlider';
 import { ProfilePhotoEditor } from '../features/profile/ProfilePhotoEditor';
@@ -38,6 +39,8 @@ export function Settings() {
   const settings = useSettings();
   const [confirmReset, setConfirmReset] = useState(false);
   const [editorSrc, setEditorSrc] = useState<string | null>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const reduce = useReducedMotion();
 
@@ -70,53 +73,102 @@ export function Settings() {
       {/* Profile */}
       <Section icon={<User size={16} />} title="Perfil">
         <div className="flex flex-col sm:flex-row items-start gap-5">
-          {/* Circular profile photo + actions */}
+          {/* Circular profile photo with a click menu (Ver / Alterar / Remover). */}
           <div className="shrink-0 flex flex-col items-center gap-1.5">
-            <button
-              type="button"
-              onClick={pickPhoto}
-              className="group relative rounded-full overflow-hidden"
-              style={{
-                width: 76,
-                height: 76,
-                background: 'var(--surface-2)',
-                boxShadow: '0 0 0 2px var(--line-strong)',
-              }}
-              title="Alterar foto de perfil"
-              aria-label="Alterar foto de perfil"
-            >
-              {photo ? (
-                <img src={photo} alt="" draggable={false} className="w-full h-full object-cover" />
-              ) : (
-                <span className="w-full h-full flex items-center justify-center text-muted">
-                  <User size={30} />
-                </span>
-              )}
-              <span
-                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ background: 'rgba(0,0,0,0.45)' }}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => (photo ? setAvatarMenuOpen((o) => !o) : pickPhoto())}
+                className="group relative rounded-full overflow-hidden block"
+                style={{
+                  width: 76,
+                  height: 76,
+                  background: 'var(--surface-2)',
+                  boxShadow: '0 0 0 2px var(--line-strong)',
+                }}
+                title="Foto de perfil"
+                aria-haspopup={photo ? 'menu' : undefined}
+                aria-expanded={photo ? avatarMenuOpen : undefined}
+                aria-label="Foto de perfil"
               >
-                <Camera size={20} color="#fff" />
-              </span>
-            </button>
-            <div className="flex items-center gap-2">
+                {photo ? (
+                  <img src={photo} alt="" draggable={false} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="w-full h-full flex items-center justify-center text-muted">
+                    <User size={30} />
+                  </span>
+                )}
+                <span
+                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ background: 'rgba(0,0,0,0.45)' }}
+                >
+                  <Camera size={20} color="#fff" />
+                </span>
+              </button>
+
+              {photo && avatarMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAvatarMenuOpen(false)} />
+                  <AnimatePresence>
+                    <motion.div
+                      key="avatar-menu"
+                      className="absolute left-0 top-full z-50 mt-2 w-44 py-1"
+                      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.97 }}
+                      transition={{ duration: reduce ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}
+                      style={{
+                        transformOrigin: 'top left',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--line-strong)',
+                        borderRadius: 'var(--r-md)',
+                        boxShadow: 'var(--shadow-pop)',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                        onClick={() => {
+                          setAvatarMenuOpen(false);
+                          setViewerOpen(true);
+                        }}
+                      >
+                        <Eye size={14} /> Ver foto
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                        onClick={() => {
+                          setAvatarMenuOpen(false);
+                          pickPhoto();
+                        }}
+                      >
+                        <Camera size={14} /> Alterar foto
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-[color:var(--surface-2)] transition-colors"
+                        onClick={() => {
+                          setAvatarMenuOpen(false);
+                          void repo.saveSettings({ profilePhoto: '' });
+                        }}
+                      >
+                        <Trash2 size={14} /> Remover
+                      </button>
+                    </motion.div>
+                  </AnimatePresence>
+                </>
+              )}
+            </div>
+            {!photo && (
               <button
                 type="button"
                 onClick={pickPhoto}
                 className="text-[11px] text-muted hover:text-fg transition-colors"
               >
-                {photo ? 'Alterar' : 'Adicionar'}
+                Adicionar foto
               </button>
-              {photo && (
-                <button
-                  type="button"
-                  onClick={() => repo.saveSettings({ profilePhoto: '' })}
-                  className="text-[11px] text-muted hover:text-fg transition-colors"
-                >
-                  Remover
-                </button>
-              )}
-            </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4 flex-1 w-full">
@@ -393,6 +445,22 @@ export function Settings() {
           setEditorSrc(null);
         }}
       />
+
+      <Modal
+        open={viewerOpen && !!photo}
+        onClose={() => setViewerOpen(false)}
+        title="Foto de perfil"
+        width={360}
+      >
+        <div className="flex justify-center">
+          <img
+            src={photo ?? undefined}
+            alt="Foto de perfil"
+            className="rounded-full object-cover"
+            style={{ width: 240, height: 240, boxShadow: '0 0 0 2px var(--line-strong)' }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

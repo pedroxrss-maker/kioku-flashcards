@@ -29,7 +29,7 @@ function BrandLockup({ size = 30 }: { size?: number }) {
 }
 
 export function AuthPage() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const reduce = useReducedMotion();
   // Tab is driven by the URL: /entrar?mode=signup opens "Criar conta",
   // /entrar (or ?mode=login) opens "Entrar". When signups are disabled we ignore
@@ -46,6 +46,8 @@ export function AuthPage() {
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const isSignup = mode === 'signup';
 
@@ -87,6 +89,26 @@ export function AuthPage() {
     }
   }
 
+  async function onForgotSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+    setError(null);
+    const mail = email.trim();
+    if (!mail) {
+      setError('Informe seu e-mail.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await resetPassword(mail);
+      setResetSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível enviar o e-mail.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div
       className="min-h-screen flex items-center justify-center px-5 py-10"
@@ -99,6 +121,68 @@ export function AuthPage() {
         </div>
 
         <div className="surface p-6 md:p-7">
+          {forgot ? (
+            <div className="flex flex-col">
+              <h2 className="display mb-1" style={{ fontSize: 18 }}>
+                Redefinir senha
+              </h2>
+              <p className="text-sm text-muted mb-4">
+                Enviaremos um link para você criar uma nova senha.
+              </p>
+              {resetSent ? (
+                <p className="text-sm mb-2" style={{ color: 'var(--accent-green)' }}>
+                  Link enviado para <b>{email.trim()}</b>. Verifique seu e-mail (e a caixa de spam).
+                </p>
+              ) : (
+                <form onSubmit={onForgotSubmit} className="flex flex-col" noValidate>
+                  <div style={{ marginBottom: 16 }}>
+                    <label className="field-label" htmlFor="forgot-email">
+                      E-mail
+                    </label>
+                    <input
+                      id="forgot-email"
+                      className="field"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="voce@exemplo.com"
+                    />
+                  </div>
+                  {error && (
+                    <p
+                      className="text-sm"
+                      style={{ color: 'var(--accent)', marginBottom: 16 }}
+                      role="alert"
+                    >
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    className="btn btn-accent w-full"
+                    disabled={submitting}
+                    style={{ marginTop: 4 }}
+                  >
+                    {submitting && <Loader2 size={16} className="animate-spin" />}
+                    Enviar link de redefinição
+                  </button>
+                </form>
+              )}
+              <button
+                type="button"
+                className="text-sm text-muted text-center mt-5 hover:text-fg transition-colors"
+                onClick={() => {
+                  setForgot(false);
+                  setResetSent(false);
+                  setError(null);
+                }}
+              >
+                ← Voltar ao login
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Tabs (login + signup): the accent pill slides between options. Hidden
               entirely when signups are disabled, leaving only the login form. */}
           {SIGNUPS_ENABLED && (
@@ -216,6 +300,20 @@ export function AuthPage() {
               </AnimatePresence>
             </div>
 
+            {!isSignup && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForgot(true);
+                  setError(null);
+                }}
+                className="self-end text-xs text-muted hover:text-fg transition-colors"
+                style={{ marginTop: -6, marginBottom: 14 }}
+              >
+                Esqueceu a senha?
+              </button>
+            )}
+
             {error && (
               <p className="text-sm" style={{ color: 'var(--accent)', marginBottom: 16 }} role="alert">
                 {error}
@@ -250,6 +348,86 @@ export function AuthPage() {
               Cadastros temporariamente fechados.
             </p>
           )}
+          </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Shown when a password-recovery link is opened: set a new password, which then
+ *  signs the user in with it (recovery state clears and the app loads). */
+export function ResetPasswordPage() {
+  const { updatePassword } = useAuth();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+    setError(null);
+    if (password.length < 6) {
+      setError('A senha precisa de ao menos 6 caracteres');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updatePassword(password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível redefinir a senha.');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center px-5 py-10"
+      style={{ background: 'var(--bg)' }}
+    >
+      <div className="w-full max-w-[420px] rise">
+        <div className="text-center mb-6">
+          <BrandLockup size={34} />
+          <p className="text-muted text-sm mt-3">Defina uma nova senha.</p>
+        </div>
+        <div className="surface p-6 md:p-7">
+          <h2 className="display mb-4" style={{ fontSize: 18 }}>
+            Nova senha
+          </h2>
+          <form onSubmit={onSubmit} className="flex flex-col" noValidate>
+            <div style={{ marginBottom: 16 }}>
+              <label className="field-label" htmlFor="new-password">
+                Nova senha
+              </label>
+              <input
+                id="new-password"
+                className="field"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <p className="text-xs text-muted" style={{ marginTop: 6 }}>
+                Mínimo de 6 caracteres.
+              </p>
+            </div>
+            {error && (
+              <p className="text-sm" style={{ color: 'var(--accent)', marginBottom: 16 }} role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn btn-accent w-full"
+              disabled={submitting}
+              style={{ marginTop: 4 }}
+            >
+              {submitting && <Loader2 size={16} className="animate-spin" />}
+              Salvar nova senha
+            </button>
+          </form>
         </div>
       </div>
     </div>

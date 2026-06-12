@@ -225,6 +225,7 @@ export function Home() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const name = displayName;
+  const photo = settings?.profilePhoto || null;
   // Drives both the time-of-day hero image and the greeting, live across boundaries.
   const dayPart = useDayPart();
 
@@ -297,7 +298,7 @@ export function Home() {
           <button
             type="button"
             aria-label="Notificações"
-            className="p-2.5 rounded-[var(--r-sm)] text-muted hover:text-fg transition-colors shrink-0"
+            className="hidden md:inline-flex items-center justify-center p-2.5 rounded-[var(--r-sm)] text-muted hover:text-fg transition-colors shrink-0"
             style={{ background: 'var(--surface-2)' }}
           >
             <Bell size={18} />
@@ -311,12 +312,22 @@ export function Home() {
               aria-haspopup="menu"
               aria-expanded={userMenuOpen}
             >
-              <span
-                className="flex items-center justify-center rounded-full font-bold text-white"
-                style={{ width: 34, height: 34, background: 'var(--accent)', fontSize: 13 }}
-              >
-                {initials(name)}
-              </span>
+              {photo ? (
+                <img
+                  src={photo}
+                  alt=""
+                  draggable={false}
+                  className="rounded-full object-cover shrink-0"
+                  style={{ width: 34, height: 34 }}
+                />
+              ) : (
+                <span
+                  className="flex items-center justify-center rounded-full font-bold text-white"
+                  style={{ width: 34, height: 34, background: 'var(--accent)', fontSize: 13 }}
+                >
+                  {initials(name)}
+                </span>
+              )}
               <span className="text-sm hidden sm:inline">Olá, {name}</span>
               <ChevronDown size={15} className="text-muted hidden sm:inline" />
             </button>

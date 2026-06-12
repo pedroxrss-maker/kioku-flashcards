@@ -14,7 +14,7 @@ import { Settings } from '../pages/Settings';
 import { Landing } from '../pages/landing/Landing';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
-import { AuthLoading, AuthPage, SupabaseConfigNotice } from '../features/auth/AuthPage';
+import { AuthLoading, AuthPage, ResetPasswordPage, SupabaseConfigNotice } from '../features/auth/AuthPage';
 
 export function App() {
   return (
@@ -30,10 +30,11 @@ export function App() {
 
 /** Decide what the app renders based on auth state (no flash of app/login). */
 function RootGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, recovery } = useAuth();
 
   if (!isSupabaseConfigured) return <SupabaseConfigNotice />;
   if (loading) return <AuthLoading />;
+  if (recovery) return <ResetPasswordPage />;
   return user ? <AuthedApp /> : <PublicApp />;
 }
 

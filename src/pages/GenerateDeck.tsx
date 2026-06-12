@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Type, Wand2 } from 'lucide-react';
+import { Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Type, Volume2, Wand2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
+import { Toggle } from '../components/Toggle';
 import { NumberRoller } from '../components/NumberRoller';
 import { Select } from '../components/Select';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
@@ -12,6 +13,12 @@ import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
 import { fileToBase64 } from '../features/ai/readFile';
 import { extractFromUrl } from '../features/ai/url';
+import { generateDeckAudio } from '../features/tts/audioGen';
+import type { AudioSide } from '../features/tts/audioGen';
+import { GOOGLE_VOICES, groupGoogleVoices, isTtsConfigured } from '../features/tts/googleProvider';
+import { useSettings } from '../db/hooks';
+import { repo } from '../db/repositories';
+import { pushToast } from '../lib/toast';
 import type { GeneratedCard, GenerateSource } from '../features/ai/cards';
 import type { CardType } from '../lib/cardType';
 
@@ -63,6 +70,15 @@ export function GenerateDeck() {
   const [count, setCount] = useState(20);
   const [language, setLanguage] = useState('Portuguese (Brazil)');
   const [deckName, setDeckName] = useState('');
+
+  // Audio (TTS) options, applied to the cards right after the deck is created.
+  const settings = useSettings();
+  const [genAudio, setGenAudio] = useState(false);
+  const [audioSide, setAudioSide] = useState<'front' | 'back' | 'both'>('front');
+  const [audioVoice, setAudioVoice] = useState('');
+  const [audioCross, setAudioCross] = useState(false);
+  const [audioProgress, setAudioProgress] = useState<string | null>(null);
+  const effVoice = audioVoice || settings?.tts.googleVoiceName || GOOGLE_VOICES[0]?.id || '';
 
   const [cards, setCards] = useState<GeneratedCard[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -159,10 +175,48 @@ export function GenerateDeck() {
     setError(null);
     try {
       const deck = await createDeckFromGenerated(deckName, cards, { language });
+
+      if (genAudio && isTtsConfigured()) {
+        const s = await repo.getSettings();
+        const v = GOOGLE_VOICES.find((x) => x.id === effVoice);
+        const voice = v ? { voiceName: v.id, languageCode: v.lang ?? 'en-US' } : undefined;
+        const sides: AudioSide[] = audioSide === 'both' ? ['front', 'back'] : [audioSide];
+        let stopped = false;
+        for (const side of sides) {
+          const label = side === 'front' ? 'frente' : 'verso';
+          const r = await generateDeckAudio(
+            deck.id,
+            s,
+            (p) => setAudioProgress(`Gerando áudio (${label}) ${p.done}/${p.total}...`),
+            side,
+            voice,
+          );
+          if (r.stopped) stopped = true;
+        }
+        // Cross-side ("fonte"): the generated side's audio also plays on the other.
+        if (audioCross && audioSide !== 'both') {
+          const other: AudioSide = audioSide === 'front' ? 'back' : 'front';
+          const cur = await repo.getSettings();
+          const deckCards = await repo.listCards(deck.id);
+          const map = { ...(cur.cardAudio ?? {}) };
+          for (const c of deckCards) {
+            const e = map[c.id];
+            if (e && e[audioSide] && !e[other]) map[c.id] = { ...e, [other]: e[audioSide] };
+          }
+          await repo.saveSettings({ cardAudio: map });
+        }
+        setAudioProgress(null);
+        pushToast(
+          stopped ? 'error' : 'success',
+          stopped ? 'Alguns áudios não foram gerados (verifique o TTS).' : 'Áudio gerado para os cards.',
+        );
+      }
+
       nav(`/decks/${deck.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao criar o deck.');
       setBusy(false);
+      setAudioProgress(null);
     }
   }
 
@@ -427,6 +481,108 @@ export function GenerateDeck() {
                 <Sparkles size={16} className="text-accent" />
                 <h2 className="mono text-sm text-muted">Revise antes de criar</h2>
               </div>
+
+              {isTtsConfigured() && (
+                <div className="mb-4 pb-4 border-b" style={{ borderColor: 'var(--line)' }}>
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <Volume2 size={16} className="text-muted shrink-0" />
+                    <span className="text-sm flex-1 min-w-0">
+                      Gerar áudio para os cards
+                      <span className="block text-xs text-muted" style={{ lineHeight: 1.4 }}>
+                        Sintetiza a voz (TTS) e anexa aos cards ao criar o deck.
+                      </span>
+                    </span>
+                    <Toggle checked={genAudio} onChange={setGenAudio} />
+                  </label>
+
+                  <AnimatePresence initial={false}>
+                    {genAudio && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <span className="field-label">Onde inserir o áudio</span>
+                            <div
+                              className="grid grid-cols-3 gap-1 p-1"
+                              style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-sm)' }}
+                            >
+                              {(['front', 'back', 'both'] as const).map((sd) => {
+                                const active = audioSide === sd;
+                                return (
+                                  <button
+                                    key={sd}
+                                    type="button"
+                                    onClick={() => setAudioSide(sd)}
+                                    className="relative py-1.5 text-sm rounded-[var(--r-sm)] transition-colors"
+                                    style={{ color: active ? '#fff' : 'var(--muted)' }}
+                                  >
+                                    {active && (
+                                      <motion.span
+                                        layoutId="audioside-pill"
+                                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                                        style={{ position: 'absolute', inset: 0, background: 'var(--accent)', borderRadius: 'var(--r-sm)', zIndex: 0 }}
+                                      />
+                                    )}
+                                    <span style={{ position: 'relative', zIndex: 1 }}>
+                                      {sd === 'front' ? 'Frente' : sd === 'back' ? 'Verso' : 'Ambos'}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="field-label" htmlFor="g-voice">
+                              Voz
+                            </label>
+                            <select
+                              id="g-voice"
+                              className="field"
+                              value={effVoice}
+                              onChange={(e) => setAudioVoice(e.target.value)}
+                            >
+                              {groupGoogleVoices().map((g) => (
+                                <optgroup key={g.lang} label={g.label}>
+                                  {g.items.map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                      {v.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </div>
+                          {audioSide !== 'both' && (
+                            <label className="sm:col-span-2 flex items-center gap-2.5 cursor-pointer select-none">
+                              <span className="text-sm flex-1 min-w-0">
+                                Tocar o mesmo áudio nos dois lados
+                                <span className="block text-xs text-muted" style={{ lineHeight: 1.4 }}>
+                                  {audioSide === 'front'
+                                    ? 'O áudio gerado na frente também toca no verso.'
+                                    : 'O áudio gerado no verso também toca na frente.'}
+                                </span>
+                              </span>
+                              <Toggle checked={audioCross} onChange={setAudioCross} />
+                            </label>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {audioProgress && (
+                    <p className="text-xs mt-3" style={{ color: 'var(--accent)' }}>
+                      {audioProgress}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <GeneratedCardsEditor
                 cards={cards}
                 onChange={setCards}

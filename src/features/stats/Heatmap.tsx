@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buildYearMonths } from './compute';
 import type { ReviewLog } from '../../db/types';
 
 const TIER_PCT = [0, 25, 45, 70, 100];
 const DOW_MON = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']; // Monday-first weekday labels
+// Compact defaults (Home/Stats). `fill` grows the cells to span the container.
 const CELL = 9;
 const GAP = 2; // between cells
 const MONTH_GAP = 6; // between month blocks
@@ -24,11 +25,13 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 interface HeatmapProps {
   logs: ReviewLog[];
+  /** Grow the cells to fill the container's full width (used on a deck page). */
+  fill?: boolean;
 }
 
 /** Review calendar: the full year split into month blocks (Jan->Dec), with an
  *  Anki-style hover tooltip (per-day counts) and the daily average. */
-export function Heatmap({ logs }: HeatmapProps) {
+export function Heatmap({ logs, fill = false }: HeatmapProps) {
   // Anki-style hover tooltip: which day + how many cards were reviewed.
   const [tip, setTip] = useState<{ x: number; y: number; date: number; count: number } | null>(null);
   const showTip = (e: React.MouseEvent, date: number, count: number) => {
@@ -52,8 +55,36 @@ export function Heatmap({ logs }: HeatmapProps) {
     return days ? sum / days : 0;
   }, [months]);
 
+  // When `fill`, measure the container and grow the cells so the 12 month blocks
+  // span its full width (square cells, fixed gaps, clamped to a sane range).
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  const totalCols = useMemo(() => months.reduce((s, m) => s + m.weeks.length, 0), [months]);
+  useLayoutEffect(() => {
+    if (!fill) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setWidth(el.clientWidth);
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fill]);
+
+  let cell = CELL;
+  let gap = GAP;
+  let monthGap = MONTH_GAP;
+  if (fill && width > 0 && totalCols > 0) {
+    gap = 3;
+    monthGap = 8;
+    const LABEL_W = 18; // weekday labels column + its right margin
+    const c = Math.floor((width - LABEL_W - (totalCols - 12) * gap - 11 * monthGap) / totalCols);
+    cell = Math.max(CELL, Math.min(18, c));
+  }
+
   return (
-    <div>
+    <div ref={wrapRef}>
       <div className="min-w-0">
         <div className="mb-3">
           <span className="mono text-sm font-semibold">{year}</span>
@@ -62,41 +93,41 @@ export function Heatmap({ logs }: HeatmapProps) {
         <div className="overflow-x-auto pb-1">
           <div className="flex items-start" style={{ minWidth: 'min-content' }}>
             {/* Weekday labels (Monday-first), once on the left. */}
-            <div className="flex flex-col mr-1.5" style={{ gap: GAP }}>
+            <div className="flex flex-col mr-1.5" style={{ gap }}>
               {DOW_MON.map((d, i) => (
                 <span
                   key={i}
                   className="mono text-[8px] text-muted"
-                  style={{ height: CELL, lineHeight: `${CELL}px`, width: 10 }}
+                  style={{ height: cell, lineHeight: `${cell}px`, width: 10 }}
                 >
                   {d}
                 </span>
               ))}
             </div>
             {/* One block per month, Jan -> Dec, separated by a gap. */}
-            <div className="flex" style={{ gap: MONTH_GAP }}>
+            <div className="flex" style={{ gap: monthGap }}>
               {months.map((blk) => (
                 <div key={blk.month} className="flex flex-col">
-                  <div className="flex" style={{ gap: GAP }}>
+                  <div className="flex" style={{ gap }}>
                     {blk.weeks.map((week, wi) => (
-                      <div key={wi} className="flex flex-col" style={{ gap: GAP }}>
-                        {week.map((cell, ci) =>
-                          cell ? (
+                      <div key={wi} className="flex flex-col" style={{ gap }}>
+                        {week.map((c, ci) =>
+                          c ? (
                             <div
-                              key={cell.key}
-                              onMouseEnter={cell.future ? undefined : (e) => showTip(e, cell.date, cell.count)}
+                              key={c.key}
+                              onMouseEnter={c.future ? undefined : (e) => showTip(e, c.date, c.count)}
                               onMouseLeave={hideTip}
                               style={{
-                                width: CELL,
-                                height: CELL,
+                                width: cell,
+                                height: cell,
                                 borderRadius: 2,
-                                background: cell.future ? 'transparent' : tierBg(cell.tier),
+                                background: c.future ? 'transparent' : tierBg(c.tier),
                                 border: '1px solid var(--bg)',
-                                opacity: cell.future ? 0.3 : 1,
+                                opacity: c.future ? 0.3 : 1,
                               }}
                             />
                           ) : (
-                            <div key={`e${wi}-${ci}`} style={{ width: CELL, height: CELL }} />
+                            <div key={`e${wi}-${ci}`} style={{ width: cell, height: cell }} />
                           ),
                         )}
                       </div>

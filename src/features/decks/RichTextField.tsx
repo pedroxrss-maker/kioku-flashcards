@@ -372,8 +372,8 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
           role="textbox"
           aria-multiline
           aria-label={label}
-          className="field card-content-sm"
-          style={{ minHeight: 110, maxHeight: 280, overflowY: 'auto' }}
+          className="field card-content-sm rte-area"
+          style={{ maxHeight: 280, overflowY: 'auto' }}
         />
         {hasAudio && (
           <div

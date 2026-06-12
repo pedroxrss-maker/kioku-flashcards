@@ -275,7 +275,8 @@ function HeroCard({
       />
       {/* Ink-drop fill that floods the surface on hover (see .hero-ink in globals.css). */}
       <span aria-hidden className="hero-ink" style={{ '--ink': color } as CSSProperties} />
-      <span className="relative flex flex-col items-center text-center gap-3">
+      {/* Mobile: compact horizontal row (about half height); sm+: centered stack. */}
+      <span className="relative flex flex-row sm:flex-col items-center text-left sm:text-center gap-3">
         <span
           className="flex items-center justify-center"
           style={{
@@ -309,13 +310,13 @@ function HeroCard({
   const style = {
     position: 'relative' as const,
     overflow: 'hidden' as const,
-    minHeight: 150,
-    padding: '28px 24px',
     borderRadius: 'var(--r-md)',
     border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
     background: `linear-gradient(160deg, color-mix(in srgb, ${color} 12%, var(--surface)) 0%, var(--surface) 70%)`,
   };
-  const className = 'hero-card hover-lift flex items-center justify-center';
+  // Half-height on mobile (compact padding, no min-height); full card on sm+.
+  const className =
+    'hero-card hover-lift flex items-center justify-center px-5 py-3 sm:px-6 sm:py-7 sm:min-h-[150px]';
 
   return to ? (
     <Link to={to} className={className} style={style}>

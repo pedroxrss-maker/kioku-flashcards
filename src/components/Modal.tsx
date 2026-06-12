@@ -105,13 +105,13 @@ export function Modal({
               <X size={20} />
             </button>
             {title && (
-              <h2 className="display mb-5" style={{ fontSize: 24 }}>
+              <h2 className="display mb-4 sm:mb-5" style={{ fontSize: 24 }}>
                 {title}
               </h2>
             )}
             {children}
             {footer && (
-              <div className="mt-6 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+              <div className="mt-4 sm:mt-6 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                 {footer}
               </div>
             )}

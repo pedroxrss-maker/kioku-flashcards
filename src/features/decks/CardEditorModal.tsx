@@ -296,7 +296,7 @@ export function CardEditorModal({
       }
     >
       {/* Card-type selector */}
-      <div className="mb-4">
+      <div className="mb-3 sm:mb-4">
         <span className="field-label">Tipo de carta</span>
         <div
           className="grid grid-cols-3 gap-1 p-1"
@@ -394,7 +394,7 @@ export function CardEditorModal({
         ) : (
           <motion.div
             key={`edit-${type}`}
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-3 sm:gap-4"
             initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -495,7 +495,7 @@ export function CardEditorModal({
       </AnimatePresence>
 
       <label
-        className="flex items-center gap-2.5 mt-5 pt-4 border-t cursor-pointer select-none"
+        className="flex items-center gap-2.5 mt-3 pt-3 sm:mt-5 sm:pt-4 border-t cursor-pointer select-none"
         style={{ borderColor: 'var(--line)' }}
       >
         <Volume2 size={16} className="text-muted shrink-0" />
@@ -510,7 +510,7 @@ export function CardEditorModal({
 
       {isTtsConfigured() && (
         <div
-          className="mt-5 p-3.5 rounded-[var(--r-md)]"
+          className="mt-3 p-3 sm:mt-5 sm:p-3.5 rounded-[var(--r-md)]"
           style={{
             border: '1px solid var(--accent)',
             background: 'color-mix(in srgb, var(--accent) 8%, transparent)',

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { RotateCcw, Trash2, VolumeX } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -312,32 +313,46 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
         </div>
 
         <div className="pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
-          {confirmDelete ? (
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted">Excluir o deck e todos os cards?</span>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
-                  Não
-                </Button>
-                <button
-                  type="button"
-                  onClick={remove}
-                  className="btn btn-sm"
-                  style={{ borderColor: 'var(--accent)', background: 'var(--accent)', color: 'var(--fg)' }}
-                >
-                  Sim, excluir
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
-            >
-              <Trash2 size={15} /> Excluir deck
-            </button>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {confirmDelete ? (
+              <motion.div
+                key="confirm-delete"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 16 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-center justify-between gap-3"
+              >
+                <span className="text-sm text-muted">Excluir o deck e todos os cards?</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
+                    Não
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={remove}
+                    className="btn btn-sm"
+                    style={{ borderColor: 'var(--accent)', background: 'var(--accent)', color: 'var(--fg)' }}
+                  >
+                    Sim, excluir
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.button
+                key="trigger-delete"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.14, ease: 'easeOut' }}
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
+              >
+                <Trash2 size={15} /> Excluir deck
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </Modal>

@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Bell } from 'lucide-react';
 import { useAllLogs, useDecks, useSettings } from '../db/hooks';
 import { studiedToday } from '../features/stats/compute';
 import { cn } from '../lib/cn';
@@ -42,40 +44,52 @@ function DailyGoalMini() {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
-    <div className="mt-auto px-4 pt-4 flex items-center gap-3">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - pct)}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: 'stroke-dashoffset .5s ease' }}
-        />
-        <text
-          x="50%"
-          y="50%"
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontFamily="var(--display)"
-          fontWeight={700}
-          fontSize="13"
-          fill="var(--fg)"
-        >
-          {today}
-        </text>
-      </svg>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold leading-tight">Meta diária</p>
-        <p className="mono text-[10px] text-muted">
-          {today}/{goal} cards
-        </p>
+    <div className="mt-auto px-4 pt-4">
+      <div
+        className="flex items-center gap-3 p-3 rounded-[var(--r-md)]"
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+      >
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="rgba(255,255,255,0.14)"
+            strokeWidth={stroke}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - pct)}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            style={{ transition: 'stroke-dashoffset .5s ease' }}
+          />
+          <text
+            x="50%"
+            y="50%"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontFamily="var(--display)"
+            fontWeight={700}
+            fontSize="14"
+            fill="var(--fg)"
+          >
+            {today}
+          </text>
+        </svg>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-tight">Meta diária</p>
+          <p className="text-xs text-muted mt-0.5">
+            {today}/{goal} cards
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -161,15 +175,25 @@ export function Sidebar() {
   );
 }
 
-/** Mobile top bar — the sidebar collapses into this on small screens. */
+/** Mobile top bar — the sidebar collapses into this on small screens: a brand
+ *  row (wordmark + bell) above a 4-tab icon nav with a sliding active underline. */
 export function MobileTopBar() {
   return (
     <header
-      className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b"
+      className="md:hidden sticky top-0 z-40 border-b"
       style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
     >
-      <Wordmark />
-      <nav className="flex items-center gap-1">
+      <div className="flex items-center justify-between px-4 h-14">
+        <Wordmark />
+        <button
+          type="button"
+          aria-label="Notificações"
+          className="p-2 -mr-2 rounded-[var(--r-sm)] text-muted hover:text-fg transition-colors"
+        >
+          <Bell size={20} />
+        </button>
+      </div>
+      <nav className="grid grid-cols-4">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -180,12 +204,33 @@ export function MobileTopBar() {
               aria-label={item.label}
               className={({ isActive }) =>
                 cn(
-                  'p-2 transition-colors',
+                  'relative flex items-center justify-center py-3 transition-colors',
                   isActive ? 'text-accent' : 'text-muted hover:text-fg',
                 )
               }
             >
-              <Icon size={20} />
+              {({ isActive }) => (
+                <>
+                  <Icon size={20} />
+                  {isActive && (
+                    <motion.span
+                      layoutId="mobilenav-underline"
+                      transition={{ type: 'spring', stiffness: 480, damping: 40 }}
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        marginInline: 'auto',
+                        width: 26,
+                        height: 2,
+                        background: 'var(--accent)',
+                        borderRadius: 2,
+                      }}
+                    />
+                  )}
+                </>
+              )}
             </NavLink>
           );
         })}

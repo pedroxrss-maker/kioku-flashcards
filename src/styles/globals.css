@@ -361,6 +361,31 @@ button.pill.pill-active:hover {
   }
 }
 
+/* Review card "balloon" minimum height — smaller on phones so the rating
+   buttons (the priority) stay in view with less scrolling. */
+:root {
+  --review-card-min: clamp(280px, 46vh, 440px);
+}
+@media (max-width: 640px) {
+  :root {
+    --review-card-min: clamp(180px, 34vh, 340px);
+  }
+}
+
+/* Compact modals + shorter rich-text editors on phones, so tall forms (e.g. the
+   card editor) fit the screen with little or no scrolling. */
+.rte-area {
+  min-height: 110px;
+}
+@media (max-width: 640px) {
+  .modal-box {
+    padding: 16px 16px 18px;
+  }
+  .rte-area {
+    min-height: 72px;
+  }
+}
+
 /* Rounded-square icon tile (accent by default; color override via --tile). */
 .icon-tile {
   display: inline-flex;

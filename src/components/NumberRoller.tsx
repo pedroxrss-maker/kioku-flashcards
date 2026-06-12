@@ -66,7 +66,8 @@ export function NumberRoller({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      set(valueRef.current + (e.deltaY < 0 ? step : -step));
+      // Scroll up moves toward the smaller value shown above (decrease).
+      set(valueRef.current + (e.deltaY < 0 ? -step : step));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);

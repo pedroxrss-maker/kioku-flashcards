@@ -48,7 +48,7 @@ export function TutorButton({ front, back }: TutorButtonProps) {
       <button
         type="button"
         onClick={teach}
-        className="w-full px-4 py-3 rounded-[var(--r-sm)] text-sm font-semibold text-center transition-colors"
+        className="w-full px-4 py-2 text-xs sm:py-3 sm:text-sm rounded-[var(--r-sm)] font-semibold text-center transition-colors"
         style={{
           background: open ? `color-mix(in srgb, ${PURPLE} 14%, transparent)` : 'var(--surface)',
           border: `1px solid ${open ? PURPLE : 'var(--line)'}`,

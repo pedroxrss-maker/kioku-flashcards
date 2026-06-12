@@ -63,7 +63,7 @@ export function CardAssistBar({ front, back }: CardAssistBarProps) {
               type="button"
               onClick={() => pick(a.id)}
               disabled={loading && !on}
-              className="px-3 py-2 rounded-[var(--r-sm)] text-sm text-center transition-colors disabled:opacity-50"
+              className="px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm rounded-[var(--r-sm)] text-center transition-colors disabled:opacity-50"
               style={{
                 background: on ? 'var(--accent-soft)' : 'var(--surface)',
                 border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,

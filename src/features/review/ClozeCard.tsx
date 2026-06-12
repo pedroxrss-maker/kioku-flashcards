@@ -32,7 +32,7 @@ export function ClozeCard({
   back,
   revealed,
   onReveal,
-  height = 'clamp(280px, 46vh, 440px)',
+  height = 'var(--review-card-min)',
   audioEnabled = true,
   hasFrontAudio = false,
   onReplayFrontAudio,
