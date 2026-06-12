@@ -54,16 +54,19 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
   const typeRules = types.map((t) => '- ' + RULES[t]).join('\n');
 
   const instrLine = req.instructions?.trim()
-    ? `IMPORTANT user instructions to follow when choosing and writing the cards: ${req.instructions.trim()} `
+    ? 'The user instructions below take PRIORITY over the default count and balance above: if ' +
+      'they specify how many cards of each type (or any other distribution), follow that EXACTLY ' +
+      `(still using only the allowed types). User instructions: ${req.instructions.trim()} `
     : '';
 
   const system =
     'You generate study flashcards. ' +
     `Write every card in ${req.language}. ` +
-    `Produce a balanced MIX using ONLY these card types: ${typesList}. ` +
+    `Use ONLY these card types: ${typesList}. ` +
     'Each card is a JSON object with string fields "type", "front" and "back", where "type" is ' +
     `one of: ${typesList}. Rules per type:\n${typeRules}\n` +
-    `Produce about ${req.count} high-quality, non-redundant cards. ` +
+    `By default, produce about ${req.count} high-quality, non-redundant cards in a balanced mix ` +
+    'of the allowed types. ' +
     instrLine +
     'Keep each side concise and self-contained. Use plain text only (no markdown, no HTML), ' +
     'except the {{c1::...}} cloze syntax when the type is cloze. ' +

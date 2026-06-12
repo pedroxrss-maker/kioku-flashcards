@@ -129,9 +129,7 @@ export function GenerateDeck() {
     }
 
     try {
-      // Instructions guide the AI for the content-import modes (PDF / URL).
-      const aiInstructions =
-        mode === 'pdf' || mode === 'url' ? instructions.trim() || undefined : undefined;
+      const aiInstructions = instructions.trim() || undefined;
       const result = await generateCards({ types, count, language, source, instructions: aiInstructions });
       setCards(result);
       if (!deckName.trim()) {
@@ -298,19 +296,6 @@ export function GenerateDeck() {
                       />
                       <span className="btn btn-ghost btn-sm shrink-0">Procurar</span>
                     </label>
-                    <div className="mt-4">
-                      <label className="field-label" htmlFor="g-pdf-instr">
-                        Instruções para a IA (opcional)
-                      </label>
-                      <textarea
-                        id="g-pdf-instr"
-                        className="field"
-                        rows={2}
-                        value={instructions}
-                        placeholder="Ex.: foque no capítulo 3; ignore exemplos de código; priorize definições."
-                        onChange={(e) => setInstructions(e.target.value)}
-                      />
-                    </div>
                   </div>
                 )}
                 {mode === 'url' && (
@@ -329,23 +314,26 @@ export function GenerateDeck() {
                       Vídeos do YouTube usam a transcrição. Muitos sites bloqueiam o acesso direto
                       (CORS); se falhar, copie o texto e use o modo Anotações.
                     </p>
-                    <div className="mt-4">
-                      <label className="field-label" htmlFor="g-url-instr">
-                        Instruções para a IA (opcional)
-                      </label>
-                      <textarea
-                        id="g-url-instr"
-                        className="field"
-                        rows={2}
-                        value={instructions}
-                        placeholder="Ex.: foque nos conceitos principais; ignore propaganda."
-                        onChange={(e) => setInstructions(e.target.value)}
-                      />
-                    </div>
                   </div>
                 )}
               </motion.div>
             </AnimatePresence>
+
+            {/* Instructions (all modes). They also override the default per-type mix:
+                e.g. asking for an exact number of each card type is obeyed. */}
+            <div>
+              <label className="field-label" htmlFor="g-instructions">
+                Instruções para a IA (opcional)
+              </label>
+              <textarea
+                id="g-instructions"
+                className="field"
+                rows={2}
+                value={instructions}
+                placeholder="Ex.: faça 10 básicos, 5 cloze e 5 de escrever a resposta; foque no capítulo 3."
+                onChange={(e) => setInstructions(e.target.value)}
+              />
+            </div>
 
             {/* Options */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
