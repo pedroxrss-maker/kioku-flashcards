@@ -1,25 +1,35 @@
 import { useMemo, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Search, Sparkles } from 'lucide-react';
-import { useAllCards, useDecks, useSettings } from '../../db/hooks';
+import { LayoutGrid, Plus, Search, Sparkles } from 'lucide-react';
+import { useAllCards, useDecks } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { groupCardsByDeck } from '../../lib/deckStats';
-import { hasHierarchy } from '../../lib/deckTree';
 import { Panel } from '../../components/Panel';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { DeckCard } from './DeckCard';
-import { DeckTree } from './DeckTree';
+import { DeckTree, DECK_TABLE } from './DeckTree';
 import { CreateDeckModal } from './CreateDeckModal';
 import { DeckSettingsModal } from './DeckSettingsModal';
+import { cn } from '../../lib/cn';
 import type { Deck } from '../../db/types';
+
+/** Violet used only for the "Gerar deck com IA" tile (the app accent is orange). */
+const AI_PURPLE = '#8b5cf6';
+
+/** Directional slide between category sections (enters from the side you moved toward). */
+const SECTION_SLIDE = {
+  enter: (d: number) => ({ x: d * 28, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (d: number) => ({ x: d * -28, opacity: 0 }),
+};
 
 export function DeckBrowser() {
   const decks = useDecks();
   const allCards = useAllCards();
-  const settings = useSettings();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  const [catDir, setCatDir] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsDeck, setSettingsDeck] = useState<Deck | null>(null);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
@@ -31,21 +41,24 @@ export function DeckBrowser() {
     return [...set].sort();
   }, [decks]);
 
-  // Tree view kicks in only when at least one deck has a hierarchical path; with
-  // purely flat decks the original card grid renders unchanged.
-  const tree = hasHierarchy(decks, settings?.deckPaths);
-
   const byCategory = decks.filter((d) => !category || d.category === category);
   const filtered = byCategory.filter((d) =>
     d.name.toLowerCase().includes(query.toLowerCase().trim()),
   );
 
-  function deleteDeck(deck: Deck) {
-    setDeckToDelete(deck);
+  const orderedCats = [null, ...categories];
+  // Slide the section toward the side of the pill that was picked.
+  function selectCategory(c: string | null) {
+    if (c === category) return;
+    const to = orderedCats.indexOf(c);
+    const from = orderedCats.indexOf(category);
+    setCatDir(to > from ? 1 : -1);
+    setCategory(c);
   }
 
   return (
     <div>
+      {/* Category filters + search */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
         <div className="flex flex-wrap gap-2 flex-1">
           {[null, ...categories].map((c) => {
@@ -54,7 +67,7 @@ export function DeckBrowser() {
               <button
                 key={c ?? '__all'}
                 type="button"
-                onClick={() => setCategory(c)}
+                onClick={() => selectCategory(c)}
                 className="pill"
                 style={{
                   position: 'relative',
@@ -67,10 +80,22 @@ export function DeckBrowser() {
                   <motion.span
                     layoutId="cat-pill"
                     transition={{ type: 'spring', stiffness: 460, damping: 38 }}
-                    style={{ position: 'absolute', inset: 0, background: 'var(--accent)', borderRadius: 'var(--r-full)', zIndex: 0 }}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'var(--accent)',
+                      borderRadius: 'var(--r-full)',
+                      zIndex: 0,
+                    }}
                   />
                 )}
-                <span style={{ position: 'relative', zIndex: 1 }}>{c ?? 'Todos'}</span>
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  style={{ position: 'relative', zIndex: 1 }}
+                >
+                  {c === null && <LayoutGrid size={14} />}
+                  {c ?? 'Todos'}
+                </span>
               </button>
             );
           })}
@@ -82,74 +107,123 @@ export function DeckBrowser() {
           />
           <input
             className="field"
-            style={{ minWidth: 200, paddingLeft: '2.25rem' }}
+            style={{ minWidth: 220, paddingLeft: '2.25rem', paddingRight: '3rem' }}
             placeholder="Buscar deck..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <kbd
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] mono pointer-events-none"
+            style={{
+              color: 'var(--muted)',
+              border: '1px solid var(--line-strong)',
+              borderRadius: 6,
+              padding: '1px 6px',
+            }}
+          >
+            ⌘K
+          </kbd>
         </div>
       </div>
 
-      {/* Deck creation: two matching dashed tiles, above the existing decks. */}
+      {/* Create / generate — two prominent cards */}
       <div className="grid gap-4 sm:grid-cols-2 mb-5">
-        <button
-          type="button"
+        <HeroCard
+          color="var(--accent)"
           onClick={() => setCreateOpen(true)}
-          className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[110px] sm:min-h-[140px] transition-colors"
-          style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
-        >
-          <Plus size={26} />
-          <span className="mono text-xs">Criar novo deck</span>
-        </button>
-        <Link
+          icon={<Plus size={26} />}
+          iconShape="circle"
+          title="Criar novo deck"
+          subtitle="Comece do zero"
+        />
+        <HeroCard
+          color={AI_PURPLE}
           to="/generate"
-          className="hover-lift flex flex-col items-center justify-center gap-2 p-6 text-muted hover:text-fg min-h-[110px] sm:min-h-[140px] transition-colors"
-          style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--r-md)' }}
-        >
-          <Sparkles size={26} />
-          <span className="mono text-xs">Gerar deck com IA</span>
-        </Link>
+          icon={<Sparkles size={24} />}
+          iconShape="tile"
+          title="Gerar deck com IA"
+          subtitle="Descreva o que você quer estudar"
+        />
       </div>
 
-      {tree ? (
-        /* ---- hierarchical tree view ---- */
-        <div className="flex flex-col gap-4">
-          <Panel className="p-2 sm:p-3">
-            <DeckTree
-              decks={byCategory}
-              cardsByDeck={byDeck}
-              query={query}
-              onConfig={(d) => setSettingsDeck(d)}
-              onDelete={deleteDeck}
-            />
-          </Panel>
-          {query && filtered.length === 0 && (
-            <p className="text-muted text-sm">Nenhum deck encontrado para “{query}”.</p>
-          )}
-        </div>
-      ) : (
-        /* ---- flat grid view ---- */
-        <>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={category ?? '__all'}
-              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      {/* Deck table */}
+      <Panel className="p-1.5 sm:p-2">
+        {decks.length === 0 ? (
+          <p className="text-muted text-sm text-center py-10">
+            Você ainda não tem decks. Crie o primeiro acima.
+          </p>
+        ) : (
+          <>
+            {/* Column header (desktop only) */}
+            <div
+              className="hidden sm:flex items-center gap-2 sm:gap-3 px-3 pt-2 pb-2.5"
+              style={{ borderBottom: '1px solid var(--line)' }}
             >
-              {filtered.map((deck) => (
-                <DeckCard key={deck.id} deck={deck} cards={byDeck.get(deck.id) ?? []} />
-              ))}
-            </motion.div>
-          </AnimatePresence>
+              <span className="flex-1 text-[11px] font-semibold" style={{ color: 'var(--muted)' }}>
+                Nome do deck
+              </span>
+              <div className={DECK_TABLE.countGroup}>
+                <span
+                  className={cn(DECK_TABLE.countCell, 'text-[11px] font-semibold')}
+                  style={{ color: 'var(--accent-blue)' }}
+                >
+                  Novas
+                </span>
+                <span
+                  className={cn(DECK_TABLE.countCell, 'text-[11px] font-semibold')}
+                  style={{ color: 'var(--accent)' }}
+                >
+                  Aprender
+                </span>
+                <span
+                  className={cn(DECK_TABLE.countCell, 'text-[11px] font-semibold')}
+                  style={{ color: 'var(--accent-green)' }}
+                >
+                  Revisar
+                </span>
+              </div>
+              <span
+                className={cn(DECK_TABLE.actionsW, 'text-center text-[11px] font-semibold')}
+                style={{ color: 'var(--muted)' }}
+              >
+                Ações
+              </span>
+            </div>
 
-          {filtered.length === 0 && query && (
-            <p className="text-muted text-sm mt-4">Nenhum deck encontrado para “{query}”.</p>
-          )}
-        </>
-      )}
+            {/* Sliding sections: a directional swap when the category changes.
+                overflow-x clip hides the horizontal slide; overflow-y stays
+                visible so an open row "⋮" menu can spill past the panel. */}
+            <div style={{ position: 'relative', overflowX: 'clip' }}>
+              <AnimatePresence mode="popLayout" custom={catDir} initial={false}>
+                <motion.div
+                  key={category ?? '__all'}
+                  custom={catDir}
+                  variants={SECTION_SLIDE}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  className="pt-1"
+                >
+                  <DeckTree
+                    variant="table"
+                    decks={byCategory}
+                    cardsByDeck={byDeck}
+                    query={query}
+                    onConfig={(d) => setSettingsDeck(d)}
+                    onDelete={(d) => setDeckToDelete(d)}
+                  />
+                  {query && filtered.length === 0 && (
+                    <p className="text-muted text-sm text-center py-8">
+                      Nenhum deck encontrado para “{query}”.
+                    </p>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </>
+        )}
+      </Panel>
 
       <CreateDeckModal open={createOpen} onClose={() => setCreateOpen(false)} />
       {settingsDeck && (
@@ -169,5 +243,87 @@ export function DeckBrowser() {
         }
       />
     </div>
+  );
+}
+
+/* ----------------------------------------------------------------- hero --- */
+function HeroCard({
+  color,
+  to,
+  onClick,
+  icon,
+  iconShape,
+  title,
+  subtitle,
+}: {
+  color: string;
+  to?: string;
+  onClick?: () => void;
+  icon: ReactNode;
+  iconShape: 'circle' | 'tile';
+  title: string;
+  subtitle: string;
+}) {
+  const inner = (
+    <>
+      <span
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, ${color} 22%, transparent), transparent 60%)`,
+        }}
+      />
+      {/* Ink-drop fill that floods the surface on hover (see .hero-ink in globals.css). */}
+      <span aria-hidden className="hero-ink" style={{ '--ink': color } as CSSProperties} />
+      <span className="relative flex flex-col items-center text-center gap-3">
+        <span
+          className="flex items-center justify-center"
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: iconShape === 'circle' ? '50%' : 'var(--r-md)',
+            background:
+              iconShape === 'circle' ? color : `color-mix(in srgb, ${color} 22%, var(--surface-2))`,
+            color: iconShape === 'circle' ? '#fff' : color,
+            border:
+              iconShape === 'tile'
+                ? `1px solid color-mix(in srgb, ${color} 45%, transparent)`
+                : undefined,
+            boxShadow: `0 10px 26px color-mix(in srgb, ${color} 40%, transparent)`,
+          }}
+        >
+          {icon}
+        </span>
+        <span>
+          <span className="block font-bold" style={{ fontSize: 18, color: 'var(--fg)' }}>
+            {title}
+          </span>
+          <span className="block text-sm mt-1" style={{ color: 'var(--muted)' }}>
+            {subtitle}
+          </span>
+        </span>
+      </span>
+    </>
+  );
+
+  const style = {
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
+    minHeight: 150,
+    padding: '28px 24px',
+    borderRadius: 'var(--r-md)',
+    border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+    background: `linear-gradient(160deg, color-mix(in srgb, ${color} 12%, var(--surface)) 0%, var(--surface) 70%)`,
+  };
+  const className = 'hero-card hover-lift flex items-center justify-center';
+
+  return to ? (
+    <Link to={to} className={className} style={style}>
+      {inner}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} className={className} style={style}>
+      {inner}
+    </button>
   );
 }

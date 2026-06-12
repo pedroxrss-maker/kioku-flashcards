@@ -55,7 +55,6 @@ export function GenerateDeck() {
 
   const [mode, setMode] = useState<Mode>('topic');
   const [sourceDir, setSourceDir] = useState(0);
-  const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
   const [url, setUrl] = useState('');
@@ -119,9 +118,13 @@ export function GenerateDeck() {
         return;
       }
     } else {
-      const text = (mode === 'topic' ? topic : notes).trim();
+      const text = (mode === 'topic' ? instructions : notes).trim();
       if (!text) {
-        setError(mode === 'topic' ? 'Descreva o tema do deck.' : 'Cole o conteúdo para gerar os cards.');
+        setError(
+          mode === 'topic'
+            ? 'Descreva o tema e as instruções para a IA.'
+            : 'Cole o conteúdo para gerar os cards.',
+        );
         return;
       }
       source = { kind: 'text', text };
@@ -137,7 +140,7 @@ export function GenerateDeck() {
           mode === 'pdf'
             ? pdf?.name.replace(/\.pdf$/i, '') ?? 'Deck gerado por IA'
             : mode === 'topic'
-              ? topic.trim().slice(0, 60)
+              ? instructions.trim().slice(0, 60)
               : mode === 'url'
                 ? urlTitle || 'Deck gerado por IA'
                 : 'Deck gerado por IA';
@@ -244,21 +247,6 @@ export function GenerateDeck() {
                 exit="exit"
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               >
-                {mode === 'topic' && (
-                  <div>
-                    <label className="field-label" htmlFor="g-topic">
-                      Tema ou instrução
-                    </label>
-                    <textarea
-                      id="g-topic"
-                      className="field"
-                      rows={3}
-                      value={topic}
-                      placeholder="Ex.: Verbos irregulares em inglês para iniciantes"
-                      onChange={(e) => setTopic(e.target.value)}
-                    />
-                  </div>
-                )}
                 {mode === 'notes' && (
                   <div>
                     <label className="field-label" htmlFor="g-notes">
@@ -319,18 +307,25 @@ export function GenerateDeck() {
               </motion.div>
             </AnimatePresence>
 
-            {/* Instructions (all modes). They also override the default per-type mix:
-                e.g. asking for an exact number of each card type is obeyed. */}
+            {/* Instructions. In Tema mode this is the primary (required) input; in
+                other modes it is optional guidance. It also overrides the default
+                per-type mix: asking for an exact number of each card type is obeyed. */}
             <div>
               <label className="field-label" htmlFor="g-instructions">
-                Instruções para a IA (opcional)
+                {mode === 'topic'
+                  ? 'Tema e instruções para a IA'
+                  : 'Instruções para a IA (opcional)'}
               </label>
               <textarea
                 id="g-instructions"
                 className="field"
-                rows={2}
+                rows={mode === 'topic' ? 3 : 2}
                 value={instructions}
-                placeholder="Ex.: faça 10 básicos, 5 cloze e 5 de escrever a resposta; foque no capítulo 3."
+                placeholder={
+                  mode === 'topic'
+                    ? 'Ex.: Verbos irregulares em inglês para iniciantes; faça 10 básicos e 10 cloze.'
+                    : 'Ex.: faça 10 básicos, 5 cloze e 5 de escrever a resposta; foque no capítulo 3.'
+                }
                 onChange={(e) => setInstructions(e.target.value)}
               />
             </div>

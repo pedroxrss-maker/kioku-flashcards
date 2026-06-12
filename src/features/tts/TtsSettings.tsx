@@ -80,7 +80,7 @@ export function TtsSettings() {
           <>
             <div>
               <label className="field-label" htmlFor="tts-voice">
-                Voz (Google)
+                Voz
               </label>
               <select
                 id="tts-voice"

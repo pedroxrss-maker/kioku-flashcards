@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Minus, Plus } from 'lucide-react';
 
-/** Vertical roll: the value enters from the side it grew toward and exits opposite. */
+const ROW_H = 40;
+
+/** The trio slides one row and crossfades, entering from the side it grew toward. */
 const ROLL = {
-  enter: (d: number) => ({ y: d * 24, opacity: 0 }),
+  enter: (d: number) => ({ y: d * ROW_H, opacity: 0 }),
   center: { y: 0, opacity: 1 },
-  exit: (d: number) => ({ y: d * -24, opacity: 0 }),
+  exit: (d: number) => ({ y: d * -ROW_H, opacity: 0 }),
 };
 
 interface NumberRollerProps {
@@ -15,15 +16,16 @@ interface NumberRollerProps {
   min?: number;
   max?: number;
   step?: number;
-  /** Text shown after the number, e.g. "cards". */
+  /** Small muted unit shown next to the center number, e.g. "cards". */
   suffix?: string;
   ariaLabel?: string;
 }
 
 /**
- * A compact number "roller": the value slides vertically (up when it grows, down
- * when it shrinks) on every change. Change it with the minus/plus buttons or by
- * scrolling the wheel over it. Clamped to [min, max].
+ * A vertical number wheel: the previous and next values sit dimmed above and
+ * below the bold current value, fading out at the edges. Spin it by scrolling or
+ * dragging vertically, tap a neighbour to step, or click the center to type a
+ * value. Clamped to [min, max].
  */
 export function NumberRoller({
   value,
@@ -58,7 +60,7 @@ export function NumberRoller({
     setEditing(false);
   }
 
-  // Wheel must be a non-passive listener to roll the number (and not the page).
+  // Scroll over the wheel to change it (non-passive so the page stays put).
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -71,89 +73,160 @@ export function NumberRoller({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, min, max]);
 
+  // Drag to spin: each ROW_H of vertical travel is one step (drag up = increase).
+  // movedRef survives pointerup so a drag does not also fire a neighbour tap.
+  const dragY = useRef<number | null>(null);
+  const movedRef = useRef(false);
+  function onPointerDown(e: React.PointerEvent) {
+    if (editing) return;
+    dragY.current = e.clientY;
+    movedRef.current = false;
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (dragY.current === null) return;
+    const dy = dragY.current - e.clientY; // moving up (dy > 0) increases
+    if (Math.abs(dy) >= ROW_H) {
+      const steps = Math.trunc(dy / ROW_H);
+      set(valueRef.current + steps * step);
+      dragY.current -= steps * ROW_H;
+      movedRef.current = true;
+    }
+  }
+  function endDrag() {
+    dragY.current = null;
+  }
+  /** Run a click action only if the pointer did not drag into a spin. */
+  function tap(fn: () => void) {
+    return () => {
+      if (movedRef.current) return;
+      fn();
+    };
+  }
+
+  const prev = value - step;
+  const next = value + step;
+  const hasPrev = prev >= min;
+  const hasNext = next <= max;
+
   return (
     <div
       ref={rootRef}
-      className="flex items-stretch overflow-hidden select-none"
       role="spinbutton"
       aria-label={ariaLabel}
       aria-valuenow={value}
       aria-valuemin={min}
       aria-valuemax={max}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          set(value + step);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          set(value - step);
+        }
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onPointerLeave={endDrag}
+      className="relative select-none overflow-hidden outline-none"
       style={{
-        height: 42,
+        height: ROW_H * 3,
         background: 'var(--surface-2)',
         border: '1px solid var(--line)',
-        borderRadius: 'var(--r-sm)',
+        borderRadius: 'var(--r-md)',
+        cursor: editing ? 'text' : 'grab',
+        touchAction: 'none',
       }}
     >
-      <button
-        type="button"
-        aria-label="Diminuir"
-        onClick={() => set(value - step)}
-        disabled={value <= min}
-        className="px-3 flex items-center text-muted hover:text-fg disabled:opacity-30 transition-colors"
-      >
-        <Minus size={16} />
-      </button>
-      <div className="relative flex-1 overflow-hidden">
-        {editing ? (
-          <input
-            autoFocus
-            type="text"
-            inputMode="numeric"
-            value={draft}
-            aria-label={ariaLabel}
-            onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
-            onBlur={commitEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitEdit();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                setEditing(false);
-              }
-            }}
-            className="absolute inset-0 w-full bg-transparent text-center text-sm font-semibold outline-none"
-          />
-        ) : (
-          <>
-            <AnimatePresence custom={dir} initial={false}>
-              <motion.div
-                key={value}
-                custom={dir}
-                variants={ROLL}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute inset-0 flex items-center justify-center text-sm font-semibold"
+      {/* Selected-slot highlight behind the center row. */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: 8,
+          right: 8,
+          top: ROW_H,
+          height: ROW_H,
+          borderRadius: 'var(--r-sm)',
+          background: 'rgba(255,255,255,0.05)',
+        }}
+      />
+      {editing ? (
+        <input
+          autoFocus
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          aria-label={ariaLabel}
+          onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitEdit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setEditing(false);
+            }
+          }}
+          className="absolute inset-x-0 bg-transparent text-center font-bold outline-none"
+          style={{ top: ROW_H, height: ROW_H, fontSize: 22, color: 'var(--fg)' }}
+        />
+      ) : (
+        <div
+          className="absolute inset-0"
+          style={{
+            WebkitMaskImage:
+              'linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent)',
+            maskImage: 'linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent)',
+          }}
+        >
+          <AnimatePresence custom={dir} initial={false}>
+            <motion.div
+              key={value}
+              custom={dir}
+              variants={ROLL}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0 flex flex-col"
+            >
+              <div
+                onClick={tap(() => set(prev))}
+                className="flex items-center justify-center cursor-pointer"
+                style={{ height: ROW_H, color: 'var(--muted)', fontSize: 17, opacity: hasPrev ? 0.5 : 0 }}
               >
-                {value}
-                {suffix ? ` ${suffix}` : ''}
-              </motion.div>
-            </AnimatePresence>
-            {/* Transparent overlay: click the number to type it directly. */}
-            <button
-              type="button"
-              onClick={startEdit}
-              aria-label="Digitar a quantidade"
-              title="Clique para digitar"
-              className="absolute inset-0 cursor-text"
-            />
-          </>
-        )}
-      </div>
-      <button
-        type="button"
-        aria-label="Aumentar"
-        onClick={() => set(value + step)}
-        disabled={value >= max}
-        className="px-3 flex items-center text-muted hover:text-fg disabled:opacity-30 transition-colors"
-      >
-        <Plus size={16} />
-      </button>
+                {hasPrev ? prev : ''}
+              </div>
+              <div
+                onClick={tap(startEdit)}
+                className="flex items-center justify-center cursor-text"
+                style={{ height: ROW_H }}
+                title="Clique para digitar"
+              >
+                <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--fg)', lineHeight: 1 }}>
+                  {value}
+                </span>
+                {suffix && (
+                  <span className="ml-1.5" style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {suffix}
+                  </span>
+                )}
+              </div>
+              <div
+                onClick={tap(() => set(next))}
+                className="flex items-center justify-center cursor-pointer"
+                style={{ height: ROW_H, color: 'var(--muted)', fontSize: 17, opacity: hasNext ? 0.5 : 0 }}
+              >
+                {hasNext ? next : ''}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

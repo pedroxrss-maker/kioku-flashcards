@@ -305,6 +305,45 @@ button.pill.pill-active:hover {
   border-color: var(--line-strong);
 }
 
+/* "Ink drop" hover fill for the deck create/generate cards: a soft tinted circle
+   (color via --ink) that grows from the center to flood the surface on hover. */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+}
+.hero-ink {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 900px;
+  height: 900px;
+  margin-left: -450px;
+  margin-top: -450px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: scale(0);
+  transform-origin: center;
+  opacity: 0;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s ease;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ink) 20%, transparent) 0%,
+    color-mix(in srgb, var(--ink) 15%, transparent) 55%,
+    color-mix(in srgb, var(--ink) 6%, transparent) 78%,
+    transparent 90%
+  );
+}
+.hero-card:hover .hero-ink {
+  transform: scale(1);
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-ink {
+    transform: scale(1);
+    transition: opacity 0.3s ease;
+  }
+}
+
 /* Rounded-square icon tile (accent by default; color override via --tile). */
 .icon-tile {
   display: inline-flex;

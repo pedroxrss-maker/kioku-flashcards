@@ -16,7 +16,18 @@ import {
   isStudiable,
 } from '../../lib/deckTree';
 import type { DeckTreeNode } from '../../lib/deckTree';
+import { cn } from '../../lib/cn';
 import type { Card, Deck } from '../../db/types';
+
+/**
+ * Shared column classes for the Decks "table" layout, so the header row rendered
+ * by DeckBrowser lines up with the deck rows here at every breakpoint.
+ */
+export const DECK_TABLE = {
+  countGroup: 'flex items-center gap-1 sm:gap-2 shrink-0',
+  countCell: 'w-9 sm:w-16 text-center tabular-nums',
+  actionsW: 'w-[80px] sm:w-[150px] shrink-0',
+};
 
 interface DeckTreeProps {
   decks: Deck[];
@@ -25,6 +36,8 @@ interface DeckTreeProps {
   query?: string;
   /** Cap the number of rendered rows (used on Home). */
   maxRows?: number;
+  /** 'table' = aligned columns + dividers for the Decks page; 'plain' elsewhere. */
+  variant?: 'plain' | 'table';
   onConfig?: (deck: Deck) => void;
   onDelete?: (deck: Deck) => void;
 }
@@ -89,7 +102,15 @@ function Collapse({
   );
 }
 
-export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelete }: DeckTreeProps) {
+export function DeckTree({
+  decks,
+  cardsByDeck,
+  query,
+  maxRows,
+  variant = 'plain',
+  onConfig,
+  onDelete,
+}: DeckTreeProps) {
   const settings = useSettings();
   const deckPaths = settings?.deckPaths;
   const collapsed = useMemo(
@@ -97,6 +118,9 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
     [settings?.deckTreeCollapsed],
   );
   const [menuPath, setMenuPath] = useState<string | null>(null);
+  const table = variant === 'table';
+  // Table rows are flush (separated by hairlines); the plain list keeps a gap.
+  const listClass = table ? 'flex flex-col' : 'flex flex-col gap-1';
 
   const roots = useMemo(
     () => buildDeckTree(decks, deckPaths, cardsByDeck),
@@ -121,7 +145,7 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
       .map((d) => ({ deck: d, path: deckPathOf(d, deckPaths) }));
     if (matches.length === 0) return null;
     return (
-      <div className="flex flex-col gap-1">
+      <div className={listClass}>
         {matches.map(({ deck, path }) => {
           const counts = aggregateCounts(
             { path, name: deck.name, depth: 0, deck, ownCards: cardsByDeck.get(deck.id) ?? [], children: [] },
@@ -132,6 +156,7 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
               key={deck.id}
               node={{ path, name: deck.name, depth: 0, deck, ownCards: cardsByDeck.get(deck.id) ?? [], children: [] }}
               counts={counts}
+              variant={variant}
               expanded={false}
               fullPath={path}
               onToggle={() => {}}
@@ -163,6 +188,7 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
           <DeckTreeRow
             node={node}
             counts={aggregateCounts(node, Date.now())}
+            variant={variant}
             expanded={expanded}
             fullPath={node.path}
             onToggle={() => toggle(node.path)}
@@ -175,8 +201,8 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
           {node.children.length > 0 && (
             // Gate the recursion on `expanded` so collapsed subtrees neither
             // render nor spend the row budget; Collapse caches them for the
-            // slide-up. The pt-1 lives inside so it clips away with the rows.
-            <Collapse open={expanded} className="flex flex-col gap-1 pt-1">
+            // slide-up. The padding lives inside so it clips away with the rows.
+            <Collapse open={expanded} className={table ? 'flex flex-col' : 'flex flex-col gap-1 pt-1'}>
               {expanded ? renderNodes(node.children) : null}
             </Collapse>
           )}
@@ -186,13 +212,14 @@ export function DeckTree({ decks, cardsByDeck, query, maxRows, onConfig, onDelet
     return out;
   };
 
-  return <div className="flex flex-col gap-1">{renderNodes(roots)}</div>;
+  return <div className={listClass}>{renderNodes(roots)}</div>;
 }
 
 /* ------------------------------------------------------------------- row --- */
 function DeckTreeRow({
   node,
   counts,
+  variant,
   expanded,
   fullPath,
   onToggle,
@@ -204,6 +231,7 @@ function DeckTreeRow({
 }: {
   node: DeckTreeNode;
   counts: ReturnType<typeof aggregateCounts>;
+  variant: 'plain' | 'table';
   expanded: boolean;
   fullPath: string;
   onToggle: () => void;
@@ -216,14 +244,97 @@ function DeckTreeRow({
   const nav = useNavigate();
   const hasChildren = node.children.length > 0;
   const studiable = isStudiable(node);
+  const table = variant === 'table';
+
+  const studyBtn = studiable ? (
+    <Link
+      to={`/review/${encodeURIComponent(reviewTarget(node))}`}
+      className="btn btn-accent btn-sm shrink-0"
+      aria-label={`Estudar ${node.name}`}
+    >
+      <Play size={14} /> <span className="hidden sm:inline">Estudar</span>
+    </Link>
+  ) : null;
+
+  const kebab = node.deck ? (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label="Mais opções"
+        className="p-2 rounded-[var(--r-sm)] text-muted hover:text-fg hover:bg-[color:var(--surface-2)] transition-colors"
+      >
+        <MoreVertical size={18} />
+      </button>
+      {menuOpen && <div className="fixed inset-0 z-40" onClick={onCloseMenu} />}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            key="treemenu"
+            className="absolute right-0 z-50 mt-1 w-44 py-1"
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              transformOrigin: 'top right',
+              background: 'var(--surface)',
+              border: '1px solid var(--line-strong)',
+              borderRadius: 'var(--r-md)',
+              boxShadow: 'var(--shadow-pop)',
+            }}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+              onClick={() => {
+                onCloseMenu();
+                if (node.deck) nav(`/decks/${node.deck.id}`);
+              }}
+            >
+              <Pencil size={14} /> Editar
+            </button>
+            {onConfig && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                onClick={() => {
+                  onCloseMenu();
+                  if (node.deck) onConfig(node.deck);
+                }}
+              >
+                <Settings2 size={14} /> Configurações
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-[color:var(--surface-2)] transition-colors"
+                onClick={() => {
+                  onCloseMenu();
+                  if (node.deck) onDelete(node.deck);
+                }}
+              >
+                <Trash2 size={14} /> Excluir
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  ) : null;
 
   return (
     <div
-      className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)] min-w-0"
+      className={cn(
+        'flex items-center gap-2 sm:gap-3 transition-colors hover:bg-[color:var(--surface-2)] min-w-0',
+        table ? 'px-2 sm:px-3 py-2.5' : 'p-2.5 sm:p-3 rounded-[var(--r-sm)]',
+      )}
       style={{
-        marginLeft: node.depth * 18,
+        marginLeft: node.depth * (table ? 16 : 18),
         borderLeft: node.depth > 0 ? '1px solid var(--line)' : undefined,
         paddingLeft: node.depth > 0 ? 12 : undefined,
+        borderBottom: table ? '1px solid var(--line)' : undefined,
       }}
       title={fullPath}
     >
@@ -270,91 +381,42 @@ function DeckTreeRow({
         </div>
       </button>
 
-      {/* Three aligned count columns (Anki layout): new · learning · due.
-          On a parent these are the aggregate sums across all descendants. */}
-      <CardCounts newCount={counts.newCount} learning={counts.learning} reviewDue={counts.reviewDue} />
-
-      {studiable && (
-        <Link
-          to={`/review/${encodeURIComponent(reviewTarget(node))}`}
-          className="btn btn-accent btn-sm shrink-0"
-          aria-label={`Estudar ${node.name}`}
-        >
-          <Play size={14} /> <span className="hidden sm:inline">Estudar</span>
-        </Link>
-      )}
-
-      {/* Overflow menu only for real decks (grouping nodes aren't editable) */}
-      {node.deck ? (
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={onMenu}
-            aria-label="Mais opções"
-            className="p-2 rounded-[var(--r-sm)] text-muted hover:text-fg hover:bg-[color:var(--surface-2)] transition-colors"
-          >
-            <MoreVertical size={18} />
-          </button>
-          {menuOpen && <div className="fixed inset-0 z-40" onClick={onCloseMenu} />}
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                key="treemenu"
-                className="absolute right-0 z-50 mt-1 w-44 py-1"
-                initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                style={{
-                  transformOrigin: 'top right',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line-strong)',
-                  borderRadius: 'var(--r-md)',
-                  boxShadow: 'var(--shadow-pop)',
-                }}
-              >
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
-                  onClick={() => {
-                    onCloseMenu();
-                    if (node.deck) nav(`/decks/${node.deck.id}`);
-                  }}
-                >
-                  <Pencil size={14} /> Editar
-                </button>
-                {onConfig && (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
-                    onClick={() => {
-                      onCloseMenu();
-                      if (node.deck) onConfig(node.deck);
-                    }}
-                  >
-                    <Settings2 size={14} /> Configurações
-                  </button>
-                )}
-                {onDelete && (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-[color:var(--surface-2)] transition-colors"
-                    onClick={() => {
-                      onCloseMenu();
-                      if (node.deck) onDelete(node.deck);
-                    }}
-                  >
-                    <Trash2 size={14} /> Excluir
-                  </button>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+      {/* Counts: new · learning · due (aggregated across a parent's subtree). */}
+      {table ? (
+        <>
+          <div className={DECK_TABLE.countGroup}>
+            <span
+              className={cn(DECK_TABLE.countCell, 'text-sm')}
+              style={{ color: counts.newCount > 0 ? 'var(--accent-blue)' : 'var(--line-strong)' }}
+            >
+              {counts.newCount}
+            </span>
+            <span
+              className={cn(DECK_TABLE.countCell, 'text-sm')}
+              style={{ color: counts.learning > 0 ? 'var(--accent)' : 'var(--line-strong)' }}
+            >
+              {counts.learning}
+            </span>
+            <span
+              className={cn(DECK_TABLE.countCell, 'text-sm')}
+              style={{ color: counts.reviewDue > 0 ? 'var(--accent-green)' : 'var(--line-strong)' }}
+            >
+              {counts.reviewDue}
+            </span>
+          </div>
+          <div className={cn(DECK_TABLE.actionsW, 'flex items-center justify-end gap-1.5')}>
+            {studyBtn}
+            {/* Spacer keeps a group's Estudar aligned with deck rows that have a "⋮". */}
+            {kebab ?? <span className="w-[34px] shrink-0" aria-hidden />}
+          </div>
+        </>
       ) : (
-        <span className="w-[34px] shrink-0" aria-hidden />
+        <>
+          <CardCounts newCount={counts.newCount} learning={counts.learning} reviewDue={counts.reviewDue} />
+          {studyBtn}
+          {kebab ?? <span className="w-[34px] shrink-0" aria-hidden />}
+        </>
       )}
     </div>
   );
 }
-
