@@ -107,6 +107,8 @@ export interface AppSettings {
   seededAt: number | null; // first-run seed marker
   /** Per-deck logo: deckId -> preset icon id OR a data: URL (custom image). */
   deckIcons?: Record<string, string>;
+  /** Circular profile photo as a data: URL (cropped/centered in the editor). */
+  profilePhoto?: string;
   /** Show the interval preview (e.g. "1 min", "6 d") under each answer button. */
   showAnswerIntervals?: boolean;
   /** Show how many reviews remain ("Card X de Y") during a study session. */

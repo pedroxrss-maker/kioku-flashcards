@@ -115,7 +115,7 @@ export function Sidebar() {
               <li key={d.id}>
                 <NavLink
                   to={`/decks/${d.id}`}
-                  className="flex items-center gap-2.5 text-[13px] text-muted hover:text-fg transition-colors py-1"
+                  className="recent-deck flex items-center gap-2.5 text-[13px] text-muted hover:text-fg py-1"
                 >
                   <span
                     className="shrink-0 rounded-full"

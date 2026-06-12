@@ -1,8 +1,11 @@
-import { BarChart3, Brain, Download, Layers, RefreshCw, Volume2 } from 'lucide-react';
+import { BarChart3, Bot, Brain, Download, Layers, Link, RefreshCw, Sparkles, Volume2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Reveal, StaggerCard, StaggerGroup } from './anim';
 
 const FEATURES: Array<{ icon: LucideIcon; title: string; desc: string }> = [
+  { icon: Sparkles, title: 'Geração de cards por IA', desc: 'Descreva um tema, cole anotações ou um PDF e a IA monta o deck pronto.' },
+  { icon: Link, title: 'Importar de YouTube e links', desc: 'Transforme vídeos do YouTube e páginas da web em decks de estudo.' },
+  { icon: Bot, title: 'Tutor de IA em cada card', desc: 'Peça exemplos, analogias e explicações na hora, sem sair da revisão.' },
   { icon: Layers, title: 'Crie cards com texto, imagem e áudio', desc: 'Texto formatado, imagens e áudio direto no card.' },
   { icon: Brain, title: 'Dois algoritmos: SM-2 e FSRS', desc: 'Escolha por deck qual algoritmo de repetição usar.' },
   { icon: Volume2, title: 'Áudio em qualquer idioma', desc: 'Voz do navegador ou áudio gerado na nuvem, em qualquer língua.' },

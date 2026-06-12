@@ -1,13 +1,10 @@
-import { Bot, ClipboardCheck, Link, Mic, Sparkles } from 'lucide-react';
+import { ClipboardCheck, FileAudio } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Reveal, StaggerCard, StaggerGroup } from './anim';
 
 const SOON: Array<{ icon: LucideIcon; title: string; desc: string }> = [
-  { icon: Sparkles, title: 'Geração de cards por IA', desc: 'Descreva um tema ou cole um PDF e o Kioku monta o deck.' },
-  { icon: Mic, title: 'Gravação e transcrição de aula', desc: 'Grave a aula e gere cards do que realmente importa.' },
+  { icon: FileAudio, title: 'Transcreva áudios em flashcards', desc: 'Anexe um arquivo de áudio, revise a transcrição em um editor e gere os cards do texto corrigido.' },
   { icon: ClipboardCheck, title: 'Simulador de provas adaptativo', desc: 'Provas que se ajustam ao seu nível conforme você avança.' },
-  { icon: Link, title: 'Importar de YouTube e links', desc: 'Transforme vídeos e páginas da web em decks.' },
-  { icon: Bot, title: 'Tutor de IA em cada card', desc: 'Peça explicações e exemplos na hora, sem sair do estudo.' },
 ];
 
 /** Clearly labeled pill so no visitor mistakes these for current features. */
@@ -42,7 +39,7 @@ export function ComingSoon() {
         <p className="text-muted mt-3" style={{ lineHeight: 1.6 }}>O que estamos construindo a seguir.</p>
       </Reveal>
 
-      <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mt-10">
+      <StaggerGroup className="grid sm:grid-cols-2 gap-4 md:gap-5 mt-10 max-w-3xl">
         {SOON.map(({ icon: Icon, title, desc }) => (
           <StaggerCard
             key={title}

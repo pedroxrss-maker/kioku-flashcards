@@ -344,6 +344,23 @@ button.pill.pill-active:hover {
   }
 }
 
+/* Recent decks (sidebar): a gentle forward "jump" as the mouse passes each one. */
+.recent-deck {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), color 0.16s ease;
+  transform-origin: left center;
+}
+.recent-deck:hover {
+  transform: translateX(6px) scale(1.03);
+}
+@media (prefers-reduced-motion: reduce) {
+  .recent-deck {
+    transition: color 0.16s ease;
+  }
+  .recent-deck:hover {
+    transform: none;
+  }
+}
+
 /* Rounded-square icon tile (accent by default; color override via --tile). */
 .icon-tile {
   display: inline-flex;

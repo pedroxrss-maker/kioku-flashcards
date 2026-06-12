@@ -1,17 +1,15 @@
-import faviconSrc from '../../neurofluency-favicon.png';
+import faviconSrc from '../../kioku-favicon.png';
 
 /**
- * Build a rounded-corner favicon at runtime: the brain image is drawn centered
- * on a white rounded-rect tile (transparent corners) and set as the page icon.
- * Done in-canvas so the non-square source picks up curved borders without any
- * image pre-processing.
+ * Build a rounded-corner favicon at runtime: the source image fills a rounded-rect
+ * tile (transparent corners) and is set as the page icon. No white background —
+ * the image's own colors show edge to edge, only the corners are curved.
  */
 export function applyRoundedFavicon(): void {
   if (typeof document === 'undefined') return;
 
   const size = 128;
   const radius = 28; // ~22% — curved corners
-  const pad = 16;
 
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -38,13 +36,9 @@ export function applyRoundedFavicon(): void {
     ctx.clearRect(0, 0, size, size);
     roundRect(0, 0, size, size, radius);
     ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
     ctx.clip();
-    // Contain the image inside the padded tile, centered.
-    const maxW = size - pad * 2;
-    const maxH = size - pad * 2;
-    const scale = Math.min(maxW / img.width, maxH / img.height);
+    // Cover the whole rounded tile with the image — no white background, no padding.
+    const scale = Math.max(size / img.width, size / img.height);
     const w = img.width * scale;
     const h = img.height * scale;
     ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);

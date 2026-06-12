@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Brain, Check, Database, Eye, Palette, SlidersHorizontal, User } from 'lucide-react';
+import { Brain, Camera, Check, Database, Eye, Palette, SlidersHorizontal, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { Toggle } from '../components/Toggle';
 import { SmoothSlider } from '../components/SmoothSlider';
+import { ProfilePhotoEditor } from '../features/profile/ProfilePhotoEditor';
 import { TtsSettings } from '../features/tts/TtsSettings';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
@@ -36,6 +37,8 @@ function Section({
 export function Settings() {
   const settings = useSettings();
   const [confirmReset, setConfirmReset] = useState(false);
+  const [editorSrc, setEditorSrc] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const reduce = useReducedMotion();
 
   if (!settings) {
@@ -54,6 +57,11 @@ export function Settings() {
   }
 
   const reviewsUnlimited = settings.reviewsPerDay >= UNLIMITED_PER_DAY;
+  const photo = settings.profilePhoto || null;
+
+  function pickPhoto() {
+    fileRef.current?.click();
+  }
 
   return (
     <div className="rise flex flex-col gap-6 max-w-3xl mx-auto">
@@ -61,29 +69,94 @@ export function Settings() {
 
       {/* Profile */}
       <Section icon={<User size={16} />} title="Perfil">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="field-label" htmlFor="s-name">Nome de exibição</label>
-            <input
-              id="s-name"
-              className="field"
-              placeholder="Estudante"
-              value={settings.displayName}
-              onChange={(e) => repo.saveSettings({ displayName: e.target.value })}
-            />
+        <div className="flex flex-col sm:flex-row items-start gap-5">
+          {/* Circular profile photo + actions */}
+          <div className="shrink-0 flex flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={pickPhoto}
+              className="group relative rounded-full overflow-hidden"
+              style={{
+                width: 76,
+                height: 76,
+                background: 'var(--surface-2)',
+                boxShadow: '0 0 0 2px var(--line-strong)',
+              }}
+              title="Alterar foto de perfil"
+              aria-label="Alterar foto de perfil"
+            >
+              {photo ? (
+                <img src={photo} alt="" draggable={false} className="w-full h-full object-cover" />
+              ) : (
+                <span className="w-full h-full flex items-center justify-center text-muted">
+                  <User size={30} />
+                </span>
+              )}
+              <span
+                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: 'rgba(0,0,0,0.45)' }}
+              >
+                <Camera size={20} color="#fff" />
+              </span>
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={pickPhoto}
+                className="text-[11px] text-muted hover:text-fg transition-colors"
+              >
+                {photo ? 'Alterar' : 'Adicionar'}
+              </button>
+              {photo && (
+                <button
+                  type="button"
+                  onClick={() => repo.saveSettings({ profilePhoto: '' })}
+                  className="text-[11px] text-muted hover:text-fg transition-colors"
+                >
+                  Remover
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="field-label" htmlFor="s-goal">Meta diária de cards</label>
-            <input
-              id="s-goal"
-              type="number"
-              min={1}
-              className="field"
-              value={settings.dailyGoal}
-              onChange={(e) => repo.saveSettings({ dailyGoal: Math.max(1, Number(e.target.value) || 1) })}
-            />
+
+          <div className="grid grid-cols-2 gap-4 flex-1 w-full">
+            <div>
+              <label className="field-label" htmlFor="s-name">Nome de exibição</label>
+              <input
+                id="s-name"
+                className="field"
+                placeholder="Estudante"
+                value={settings.displayName}
+                onChange={(e) => repo.saveSettings({ displayName: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="s-goal">Meta diária de cards</label>
+              <input
+                id="s-goal"
+                type="number"
+                min={1}
+                className="field"
+                value={settings.dailyGoal}
+                onChange={(e) => repo.saveSettings({ dailyGoal: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            </div>
           </div>
         </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            const fr = new FileReader();
+            fr.onload = () => setEditorSrc(String(fr.result));
+            fr.readAsDataURL(file);
+          }}
+        />
       </Section>
 
       {/* Study defaults */}
@@ -310,6 +383,16 @@ export function Settings() {
       </Section>
 
       <p className="mono text-[10px] text-muted text-center pb-4">Kioku v1.0.0 · feito com foco em memória</p>
+
+      <ProfilePhotoEditor
+        open={!!editorSrc}
+        src={editorSrc}
+        onCancel={() => setEditorSrc(null)}
+        onSave={(dataUrl) => {
+          void repo.saveSettings({ profilePhoto: dataUrl });
+          setEditorSrc(null);
+        }}
+      />
     </div>
   );
 }

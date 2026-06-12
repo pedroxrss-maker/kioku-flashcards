@@ -40,13 +40,16 @@ describe('Landing page', () => {
     // Hero headline (text node split from the accent period).
     expect(screen.getByText(/A cura para o esquecimento/)).toBeTruthy();
 
-    // A real, available-now feature (no "Em breve" badge on these).
+    // Available-now features in "Recursos", including the AI ones now live.
     expect(screen.getByText(/Importe do Anki/)).toBeTruthy();
     expect(screen.getByText(/Dois algoritmos: SM-2 e FSRS/)).toBeTruthy();
-
-    // Every coming-soon feature carries a visible "Em breve" badge (5 items).
-    expect(screen.getAllByText('Em breve').length).toBeGreaterThanOrEqual(5);
     expect(screen.getByText(/Geração de cards por IA/)).toBeTruthy();
+    expect(screen.getByText(/Tutor de IA em cada card/)).toBeTruthy();
+
+    // Coming-soon section: now two badged items (audio transcription + exam sim).
+    expect(screen.getAllByText('Em breve').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Transcreva áudios em flashcards/)).toBeTruthy();
+    expect(screen.getByText(/Simulador de provas adaptativo/)).toBeTruthy();
 
     // Primary CTA present.
     expect(screen.getAllByText(/Criar conta/).length).toBeGreaterThan(0);
