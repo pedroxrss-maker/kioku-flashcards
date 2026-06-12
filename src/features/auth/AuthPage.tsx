@@ -121,8 +121,16 @@ export function AuthPage() {
         </div>
 
         <div className="surface p-6 md:p-7">
+          <AnimatePresence mode="wait" initial={false}>
           {forgot ? (
-            <div className="flex flex-col">
+            <motion.div
+              key="forgot-view"
+              initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduce ? 0 : 6 }}
+              transition={{ duration: reduce ? 0 : 0.16, ease: EASE }}
+              className="flex flex-col"
+            >
               <h2 className="display mb-1" style={{ fontSize: 18 }}>
                 Redefinir senha
               </h2>
@@ -180,9 +188,15 @@ export function AuthPage() {
               >
                 ← Voltar ao login
               </button>
-            </div>
+            </motion.div>
           ) : (
-          <>
+            <motion.div
+              key="auth-view"
+              initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduce ? 0 : 6 }}
+              transition={{ duration: reduce ? 0 : 0.16, ease: EASE }}
+            >
           {/* Tabs (login + signup): the accent pill slides between options. Hidden
               entirely when signups are disabled, leaving only the login form. */}
           {SIGNUPS_ENABLED && (
@@ -348,8 +362,9 @@ export function AuthPage() {
               Cadastros temporariamente fechados.
             </p>
           )}
-          </>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

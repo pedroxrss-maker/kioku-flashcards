@@ -18,6 +18,7 @@ import { db } from './db';
 import { defaultSettings, makeCard, makeDeck, newFsrsFields, newSm2Fields } from './factories';
 import { getQueryData, invalidate, setQueryData } from './store';
 import { pushToast } from '../lib/toast';
+import { startOfLocalDay } from '../lib/date';
 import type { KiokuRepository } from './repositories';
 import type {
   Algorithm,
@@ -274,8 +275,14 @@ export class SupabaseRepository implements KiokuRepository {
     };
     const cardRes = await supabase.from('cards').update(row).eq('deck_id', id);
     if (cardRes.error) writeFail(cardRes.error, 'Não foi possível reiniciar o deck. Tente novamente.');
-    // …and the review history for this deck is cleared (daily counts + stats).
-    const logRes = await supabase.from('review_logs').delete().eq('deck_id', id);
+    // …and only TODAY's logs are cleared, so the daily new/review counter resets
+    // and the deck can be studied again today. Older history is KEPT so resetting
+    // a deck never erases your activity record (streak, heatmap, global stats).
+    const logRes = await supabase
+      .from('review_logs')
+      .delete()
+      .eq('deck_id', id)
+      .gte('reviewed_at', toIso(startOfLocalDay()));
     if (logRes.error) writeFail(logRes.error, 'Não foi possível reiniciar o deck. Tente novamente.');
     invalidate();
   }
@@ -408,12 +415,22 @@ export class SupabaseRepository implements KiokuRepository {
     return { newDone, reviewsDone };
   }
   async allLogs(): Promise<ReviewLog[]> {
-    const { data, error } = await supabase
-      .from('review_logs')
-      .select('*')
-      .order('reviewed_at', { ascending: true });
-    if (error) readFail(error);
-    return ((data ?? []) as LogRow[]).map(rowToLog);
+    // Page through so we never silently drop logs past the API's row cap — the
+    // streak/heatmap/stats must see EVERY review, not just the first ~1000.
+    const PAGE = 1000;
+    const rows: LogRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('review_logs')
+        .select('*')
+        .order('reviewed_at', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) readFail(error);
+      const batch = (data ?? []) as LogRow[];
+      rows.push(...batch);
+      if (batch.length < PAGE) break;
+    }
+    return rows.map(rowToLog);
   }
   async logsSince(ts: number): Promise<ReviewLog[]> {
     const { data, error } = await supabase

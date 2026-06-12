@@ -83,6 +83,22 @@ export function GenerateDeck() {
   const [cards, setCards] = useState<GeneratedCard[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pdfDragOver, setPdfDragOver] = useState(false);
+
+  /** Validate + accept a PDF from the picker OR a drag-and-drop. */
+  function acceptPdf(file: File) {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('Selecione um arquivo PDF.');
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError('O PDF excede 15 MB.');
+      return;
+    }
+    setError(null);
+    setPdf(file);
+  }
 
   function selectMode(m: Mode) {
     setSourceDir(MODES.findIndex((x) => x.id === m) > MODES.findIndex((x) => x.id === mode) ? 1 : -1);
@@ -320,19 +336,43 @@ export function GenerateDeck() {
                   <div>
                     <span className="field-label">Arquivo PDF</span>
                     <label
-                      className="flex items-center gap-3 cursor-pointer surface p-3"
-                      style={{ borderStyle: 'dashed' }}
+                      className="flex items-center gap-3 cursor-pointer surface p-3 transition-colors"
+                      style={{
+                        borderStyle: 'dashed',
+                        borderColor: pdfDragOver ? 'var(--accent)' : undefined,
+                        background: pdfDragOver ? 'var(--accent-soft)' : undefined,
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (!pdfDragOver) setPdfDragOver(true);
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                          setPdfDragOver(false);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setPdfDragOver(false);
+                        const f = e.dataTransfer.files?.[0];
+                        if (f) acceptPdf(f);
+                      }}
                     >
                       <FileText size={18} className="text-muted shrink-0" />
                       <span className="text-sm flex-1 min-w-0 truncate">
-                        {pdf ? pdf.name : 'Escolher um PDF (até 15 MB)'}
+                        {pdfDragOver
+                          ? 'Solte o PDF aqui'
+                          : pdf
+                            ? pdf.name
+                            : 'Escolher um PDF ou arraste aqui (até 15 MB)'}
                       </span>
                       <input
                         type="file"
                         accept="application/pdf,.pdf"
                         hidden
                         onChange={(e) => {
-                          setPdf(e.target.files?.[0] ?? null);
+                          const f = e.target.files?.[0];
+                          if (f) acceptPdf(f);
                           e.target.value = '';
                         }}
                       />

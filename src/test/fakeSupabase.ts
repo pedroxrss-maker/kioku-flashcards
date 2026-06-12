@@ -25,6 +25,7 @@ class Query {
   private orderSpec: { col: string; ascending: boolean } | null = null;
   private single = false;
   private count = false;
+  private rangeSpec: { from: number; to: number } | null = null;
 
   constructor(
     private readonly rows: Record<string, unknown>[],
@@ -72,6 +73,10 @@ class Query {
   limit() {
     return this;
   }
+  range(from: number, to: number) {
+    this.rangeSpec = { from, to };
+    return this;
+  }
 
   private matches(r: Record<string, unknown>): boolean {
     return this.filters.every((f) => {
@@ -117,6 +122,9 @@ class Query {
         const cmp = av < bv ? -1 : av > bv ? 1 : 0;
         return ascending ? cmp : -cmp;
       });
+    }
+    if (this.rangeSpec) {
+      result = result.slice(this.rangeSpec.from, this.rangeSpec.to + 1);
     }
     if (this.count) return { data: null, count: result.length, error: null };
     if (this.single) return { data: result[0] ? { ...result[0] } : null, error: null };

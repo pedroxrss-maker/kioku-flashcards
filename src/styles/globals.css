@@ -659,6 +659,12 @@ button.pill.pill-active:hover {
    the real word in (color transparent -> inherit) while the placeholder fades. */
 .cloze {
   position: relative;
+  /* inline-block + nowrap keeps the blank as ONE box on a single line, so the
+     absolutely-positioned "[...]" placeholder stays centered instead of breaking
+     across two wrapped fragments (the mobile cloze bug). It still wraps to the
+     next line as a whole unit when it doesn't fit. */
+  display: inline-block;
+  white-space: nowrap;
   color: transparent;
   background: color-mix(in srgb, var(--accent) 13%, transparent);
   border-radius: 6px;
@@ -680,6 +686,8 @@ button.pill.pill-active:hover {
 .cloze-revealed .cloze {
   color: inherit;
   background: color-mix(in srgb, var(--accent-green) 18%, transparent);
+  /* Once revealed, the placeholder is gone, so a long answer may wrap freely. */
+  white-space: normal;
 }
 .cloze-revealed .cloze::after {
   opacity: 0;
