@@ -195,7 +195,7 @@ export function GenerateDeck() {
             <div>
               <span className="field-label">Fonte</span>
               <div
-                className="grid grid-cols-3 gap-1 p-1"
+                className="grid grid-cols-4 gap-1 p-1"
                 style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-sm)' }}
                 role="tablist"
               >
