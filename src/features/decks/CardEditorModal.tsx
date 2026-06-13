@@ -24,6 +24,7 @@ import { deckAudioEnabled } from '../../lib/deckAudio';
 import { clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
 import { cardTypeOf, markTypeIn, stripTypeInMark } from '../../lib/cardType';
 import { pushToast } from '../../lib/toast';
+import { scheduleAchievementCheck } from '../gamification/achievements';
 import type { CardType } from '../../lib/cardType';
 import type { Card } from '../../db/types';
 
@@ -215,6 +216,7 @@ export function CardEditorModal({
       const created = await repo.createCard({ deckId, front: f, back: b });
       await applyPronounce(created.id);
     }
+    scheduleAchievementCheck(); // cards_1 / feat_image / feat_audio
   }
 
   /** Add a new card but KEEP the modal open + cleared, so several cards can be
@@ -244,6 +246,7 @@ export function CardEditorModal({
         'success',
         cards.length > 1 ? `${cards.length} cards adicionados.` : 'Card adicionado.',
       );
+      scheduleAchievementCheck(); // cards_1 / feat_image / feat_audio
       setFront('');
       setBack('');
       setNonce((n) => n + 1);

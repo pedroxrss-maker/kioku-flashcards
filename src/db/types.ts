@@ -116,6 +116,10 @@ export interface AppSettings {
   /** Play a sound + confetti when leveling up and finishing a session. Unset =
    *  enabled (default-on); set false to mute the celebration sound/confetti. */
   celebrationSound?: boolean;
+  /** Epoch ms of the first-ever achievement evaluation. Until set, the next
+   *  evaluation seeds already-earned achievements silently (one summary banner)
+   *  instead of firing dozens; afterwards new unlocks celebrate individually. */
+  achievementsSeededAt?: number;
   /** Card ids that should NOT be auto-pronounced (cardId -> true). Stored here
    *  (settings jsonb) so no card-table column / migration is needed. */
   mutedCards?: Record<string, boolean>;

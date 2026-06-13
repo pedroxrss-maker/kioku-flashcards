@@ -1,7 +1,14 @@
 import { useQuery } from './store';
 import type { QueryResult } from './store';
 import { repo } from './repositories';
-import type { AppSettings, Card, Deck, GamificationState, ReviewLog } from './types';
+import type {
+  AchievementUnlock,
+  AppSettings,
+  Card,
+  Deck,
+  GamificationState,
+  ReviewLog,
+} from './types';
 
 /**
  * Reactive read hooks backed by Supabase (via the keyed query store). The public
@@ -55,6 +62,14 @@ export function useSettings(): AppSettings | undefined {
 export function useGamification(): GamificationState | undefined {
   return useQuery<GamificationState | undefined>('gamification', () => repo.getGamification(), undefined)
     .data;
+}
+
+const EMPTY_ACHIEVEMENTS: AchievementUnlock[] = [];
+
+/** The user's unlocked achievements (key + unlockedAt). Refreshes on invalidate,
+ *  so a new unlock from evaluateAchievements() reflects on the Awards page. */
+export function useAchievements(): AchievementUnlock[] {
+  return useQuery('achievements', () => repo.listAchievements(), EMPTY_ACHIEVEMENTS).data;
 }
 
 /**

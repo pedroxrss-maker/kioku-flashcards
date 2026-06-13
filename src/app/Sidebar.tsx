@@ -195,7 +195,7 @@ export function MobileTopBar() {
           <Bell size={20} />
         </button>
       </div>
-      <nav className="grid grid-cols-4">
+      <nav className="grid grid-cols-5">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (

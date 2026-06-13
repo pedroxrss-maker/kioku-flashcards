@@ -11,7 +11,9 @@ import { DeckDetail } from '../pages/DeckDetail';
 import { ReviewHub } from '../pages/ReviewHub';
 import { ReviewSession } from '../pages/ReviewSession';
 import { Stats } from '../pages/Stats';
+import { Awards } from '../pages/Awards';
 import { Settings } from '../pages/Settings';
+import { scheduleAchievementCheck } from '../features/gamification/achievements';
 import { Landing } from '../pages/landing/Landing';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
@@ -54,8 +56,11 @@ function PublicApp() {
 /** The existing app, mounted only for a signed-in user. */
 function AuthedApp() {
   useEffect(() => {
-    // Seed sample decks into THIS user's Supabase account on first run.
-    seedForUserIfEmpty().catch((err) => console.error('seed failed', err));
+    // Seed sample decks into THIS user's Supabase account on first run, then run
+    // the achievement evaluation (after seeding, so seeded decks/cards count).
+    seedForUserIfEmpty()
+      .catch((err) => console.error('seed failed', err))
+      .finally(() => scheduleAchievementCheck(800));
   }, []);
 
   return (
@@ -75,6 +80,7 @@ function AuthedApp() {
           <Route path="/decks/:id" element={<DeckDetail />} />
           <Route path="/review" element={<ReviewHub />} />
           <Route path="/stats" element={<Stats />} />
+          <Route path="/conquistas" element={<Awards />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

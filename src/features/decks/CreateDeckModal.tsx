@@ -4,6 +4,7 @@ import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { cn } from '../../lib/cn';
 import { pushToast } from '../../lib/toast';
+import { scheduleAchievementCheck } from '../gamification/achievements';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
@@ -59,6 +60,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
         deckAudio: { ...(settings?.deckAudio ?? {}), [deck.id]: false },
         ...(icon ? { deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon } } : {}),
       });
+      scheduleAchievementCheck(); // decks_1 / decks_5
       onClose();
       nav(`/decks/${deck.id}`);
     } catch (err) {

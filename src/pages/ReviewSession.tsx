@@ -11,6 +11,7 @@ import { TypeInCard } from '../features/review/TypeInCard';
 import { Confetti } from '../features/review/Confetti';
 import { XP_REWARDS, levelForXp } from '../features/gamification/xp';
 import { celebrate } from '../features/gamification/celebration';
+import { scheduleAchievementCheck } from '../features/gamification/achievements';
 import { cardTypeOf } from '../lib/cardType';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { TutorButton } from '../features/ai/TutorButton';
@@ -256,6 +257,9 @@ export function ReviewSession() {
         message: `Você alcançou o nível ${newLevel}. Continue assim.`,
       });
     }
+    // Re-check achievements after the session (debounced so the last saveReview
+    // lands first). A level-up banner queues ahead of any new-achievement ones.
+    scheduleAchievementCheck();
   }, [session.done, counters.total, gamification]);
 
   if (session.loading) {

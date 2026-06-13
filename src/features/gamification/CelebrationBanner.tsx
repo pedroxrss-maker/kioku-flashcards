@@ -38,7 +38,9 @@ export function CelebrationBanner() {
 
   return (
     <>
-      <AnimatePresence>
+      {/* mode="wait": when the queue advances, the current banner slides out
+          fully before the next slides in (no overlapping banners). */}
+      <AnimatePresence mode="wait">
         {celebration && (
           <motion.div
             key={celebration.id}
