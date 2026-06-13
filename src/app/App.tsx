@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { seedForUserIfEmpty } from '../db';
 import { Toaster } from '../components/Toaster';
 import { CelebrationBanner } from '../features/gamification/CelebrationBanner';
+import { UpdateBanner } from '../features/pwa/UpdateBanner';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
 import { Decks } from '../pages/Decks';
@@ -27,6 +28,8 @@ export function App() {
       >
         <RootGate />
       </BrowserRouter>
+      {/* Shown on any screen (logged in or out) when a new deploy is ready. */}
+      <UpdateBanner />
     </AuthProvider>
   );
 }

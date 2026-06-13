@@ -15,7 +15,11 @@ export default defineConfig({
     // Supabase and studying still requires the network. Only the static app
     // shell (built JS/CSS/HTML + icons) is precached.
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new deploy does NOT auto-reload. We register + drive a small
+      // "nova versão disponível" prompt ourselves (src/features/pwa), so the
+      // plugin must not inject its own registration script.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: [
         'favicon-32.png',
         'apple-touch-icon.png',
@@ -40,13 +44,30 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // App shell only — keep the precache lean (exclude marketing images).
-        globPatterns: ['**/*.{js,css,html}'],
-        globIgnores: ['**/card*.png', '**/flashcard*.png', '**/mitochondria*.png'],
-        // Offline-capable shell: SPA navigations fall back to the cached
-        // index.html. Never let the SW intercept Supabase requests.
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /supabase/i],
+        // Precache ONLY the content-hashed JS/CSS (immutable → never stale) plus
+        // the icons/manifest (via includeAssets). index.html is deliberately NOT
+        // precached, so it is never served cache-first.
+        globPatterns: ['**/*.{js,css}'],
+        // Disable the default precache-bound navigation fallback (it would serve
+        // index.html cache-first and shadow the NetworkFirst rule below). Offline
+        // navigations fall back to the NetworkFirst cache instead.
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            // Page navigations (the HTML shell): NETWORK-FIRST. A returning user
+            // always gets the newest index.html — and therefore the newest
+            // hashed bundles — on a normal reload; the cached copy is used only
+            // as an offline fallback (after a 3s network timeout).
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'kioku-html',
+              networkTimeoutSeconds: 3,
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 16 },
+            },
+          },
+        ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
       },

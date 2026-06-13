@@ -128,9 +128,14 @@ export async function generateDeckAudio(
   }
 
   // Persiste o caminho gerado de cada card, no lado pedido, sem apagar o outro.
+  // Relê as configurações ATUAIS em vez do snapshot recebido: ao gerar "ambos"
+  // os lados em sequência, a 2ª chamada precisa enxergar o que a 1ª acabou de
+  // salvar, senão o merge partiria de um cardAudio defasado e apagaria o outro
+  // lado (o bug "só veio áudio no verso").
   const doneEntries = Object.entries(donePaths);
   if (doneEntries.length > 0) {
-    const map = { ...(settings.cardAudio ?? {}) };
+    const current = await repo.getSettings();
+    const map = { ...(current.cardAudio ?? {}) };
     for (const [id, path] of doneEntries) {
       map[id] = { ...(map[id] ?? {}), [side]: path };
     }

@@ -1,0 +1,17 @@
+# Cloudflare Workers Static Assets: response headers (copied to dist/ by Vite).
+#
+# Goal: new deploys reach users without a hard refresh.
+#  - The HTML shell (/, SPA routes, /index.html) and the service worker
+#    (/sw.js, /registerSW.js, /workbox-*.js) must be REVALIDATED on every load
+#    (no-cache), so the browser always sees the newest bundle references and
+#    detects a new service worker.
+#  - The content-hashed bundles under /assets/ never change for a given URL, so
+#    they're cached hard (immutable). A new deploy emits new hashed filenames.
+#
+# Later, more-specific rules win, so /assets/* overrides the /* no-cache below.
+
+/*
+  Cache-Control: no-cache
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
