@@ -44,9 +44,9 @@ const MODES: Array<{ id: Mode; label: string; icon: typeof Type }> = [
   { id: 'url', label: 'URL', icon: Globe },
 ];
 
-const CARD_TYPES: Array<{ id: CardType; label: string }> = [
-  { id: 'basic', label: 'Básico' },
-  { id: 'cloze', label: 'Cloze' },
+const CARD_TYPES: Array<{ id: CardType; label: string; hint?: string }> = [
+  { id: 'basic', label: 'Básico', hint: 'frente e verso' },
+  { id: 'cloze', label: 'Cloze', hint: 'ocultar palavra' },
   { id: 'typein', label: 'Escreva a resposta' },
 ];
 
@@ -541,7 +541,10 @@ export function GenerateDeck() {
                         >
                           {checked && <Check size={13} color="#fff" />}
                         </span>
-                        <span className="text-sm">{ct.label}</span>
+                        <span className="text-sm">
+                          {ct.label}
+                          {ct.hint && <span className="text-muted"> ({ct.hint})</span>}
+                        </span>
                       </button>
                     );
                   })}

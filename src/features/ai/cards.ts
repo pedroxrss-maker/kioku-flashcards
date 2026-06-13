@@ -54,22 +54,26 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
   const typeRules = types.map((t) => '- ' + RULES[t]).join('\n');
 
   const instrLine = req.instructions?.trim()
-    ? 'The user instructions below take PRIORITY for the topic/focus, the card count, and the mix ' +
-      'of types (follow any per-type distribution they give EXACTLY, still using only the allowed ' +
-      `types). They do NOT change the output language: write the cards in ${req.language} even if ` +
-      `the instructions themselves are written in another language. User instructions: ${req.instructions.trim()} `
+    ? 'The user instructions below take PRIORITY for the topic/focus and for any EXPLICIT number or ' +
+      'per-type distribution of cards (follow that exactly, using only the allowed types). If the ' +
+      'instructions do NOT state a number of cards, the requested count above is authoritative. The ' +
+      `instructions also do NOT change the output language: write the cards in ${req.language} even ` +
+      `if they are written in another language. User instructions: ${req.instructions.trim()} `
     : '';
 
+  const cardWord = req.count === 1 ? 'card' : 'cards';
   const system =
     'You generate study flashcards. ' +
-    `LANGUAGE (mandatory, overrides everything else): write EVERY card — both "front" and "back" — ` +
-    `in ${req.language}, regardless of the language of the source material or of the user ` +
+    'LANGUAGE (mandatory, overrides everything else): write EVERY card (both the "front" and the ' +
+    `"back") in ${req.language}, regardless of the language of the source material or of the user ` +
     `instructions. Translate the content into ${req.language} when the source is in another language. ` +
+    `COUNT (mandatory): output EXACTLY ${req.count} ${cardWord}, no more and no fewer, UNLESS the ` +
+    'user instructions explicitly request a different number or a per-type distribution. If the ' +
+    `instructions do not mention a number, output EXACTLY ${req.count} ${cardWord}. ` +
     `Use ONLY these card types: ${typesList}. ` +
     'Each card is a JSON object with string fields "type", "front" and "back", where "type" is ' +
     `one of: ${typesList}. Rules per type:\n${typeRules}\n` +
-    `By default, produce about ${req.count} high-quality, non-redundant cards in a balanced mix ` +
-    'of the allowed types. ' +
+    'Make the cards high-quality and non-redundant, in a balanced mix of the allowed types. ' +
     instrLine +
     `Keep each side concise and self-contained, written in ${req.language}. Use plain text only ` +
     '(no markdown, no HTML), except the {{c1::...}} cloze syntax when the type is cloze. ' +

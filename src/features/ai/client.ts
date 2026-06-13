@@ -154,7 +154,13 @@ export async function generateCards(req: GenerateRequest): Promise<GeneratedCard
     messages: [{ role: 'user', content }],
     maxTokens: 8000,
   });
-  return parseCardsJson(text);
+  const cards = parseCardsJson(text);
+  // The quantity selector is authoritative UNLESS the user typed a number in
+  // their instructions (then they may want a specific per-type distribution):
+  // never return more cards than requested if no number was given. The model can
+  // over-produce despite the prompt, so this is the hard guarantee.
+  const instructionsHaveNumber = /\d/.test(req.instructions ?? '');
+  return instructionsHaveNumber ? cards : cards.slice(0, req.count);
 }
 
 export interface BatchProgress {
