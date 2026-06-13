@@ -14,6 +14,7 @@
  * gating on a `settings.achievementsSeededAt` flag.
  */
 import { repo } from '../../db/repositories';
+import { getQueryData } from '../../db/store';
 import { celebrate } from './celebration';
 import {
   longestStreak,
@@ -32,7 +33,8 @@ export type AchievementCategory =
   | 'dedication'
   | 'mastery'
   | 'goals'
-  | 'features';
+  | 'features'
+  | 'exploration';
 
 /** Category headings (pt-BR), in the order the Awards page lists them. */
 export const CATEGORY_ORDER: AchievementCategory[] = [
@@ -43,6 +45,7 @@ export const CATEGORY_ORDER: AchievementCategory[] = [
   'mastery',
   'goals',
   'features',
+  'exploration',
 ];
 export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   milestones: 'Marcos',
@@ -52,6 +55,7 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   mastery: 'Maestria',
   goals: 'Meta diária',
   features: 'Recursos',
+  exploration: 'Exploração',
 };
 
 /** The metrics every achievement is checked against (computed once per run). */
@@ -67,6 +71,11 @@ export interface AchievementMetrics {
   daysGoalMet: number; // distinct days that met the (current) daily goal
   hasAudio: boolean;
   hasImage: boolean;
+  // Exploração: one-off feature uses, tracked from now on (settings.featureCounts).
+  tutorUsed: boolean;
+  aigenUsed: boolean;
+  importUsed: boolean;
+  exportUsed: boolean;
 }
 
 export interface AchievementDef {
@@ -111,6 +120,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   // Recursos
   { key: 'feat_audio', name: 'Audiófilo', description: 'Gere áudio (TTS) para um card.', category: 'features', check: (m) => m.hasAudio },
   { key: 'feat_image', name: 'Ilustrador', description: 'Adicione uma imagem a um card.', category: 'features', check: (m) => m.hasImage },
+
+  // Exploração — events tracked from now on (no retroactive unlock).
+  { key: 'feat_tutor', name: 'Mente Curiosa', description: 'Use o tutor de IA pela primeira vez.', category: 'exploration', check: (m) => m.tutorUsed },
+  { key: 'feat_aigen', name: 'Conjurador', description: 'Gere um deck com IA.', category: 'exploration', check: (m) => m.aigenUsed },
+  { key: 'feat_import', name: 'Importador', description: 'Importe um deck do Anki (.apkg).', category: 'exploration', check: (m) => m.importUsed },
+  { key: 'feat_export', name: 'Compartilhador', description: 'Exporte um deck.', category: 'exploration', check: (m) => m.exportUsed },
 ];
 
 interface AchievementContext {
@@ -136,6 +151,7 @@ export function computeMetrics(ctx: AchievementContext): AchievementMetrics {
     cards.some((c) => !!c.audioPath) ||
     Object.values(cardAudio).some((v) => !!v && (!!v.front || !!v.back));
   const hasImage = cards.some((c) => /<img/i.test(c.front) || /<img/i.test(c.back));
+  const fc = settings.featureCounts ?? {};
 
   return {
     totalReviews: statsSummary(logs).totalReviews,
@@ -149,6 +165,10 @@ export function computeMetrics(ctx: AchievementContext): AchievementMetrics {
     daysGoalMet,
     hasAudio,
     hasImage,
+    tutorUsed: (fc.tutor ?? 0) >= 1,
+    aigenUsed: (fc.aigen ?? 0) >= 1,
+    importUsed: (fc.import ?? 0) >= 1,
+    exportUsed: (fc.export ?? 0) >= 1,
   };
 }
 
@@ -174,6 +194,27 @@ export function scheduleAchievementCheck(delay = 800): void {
     debounceTimer = null;
     void evaluateAchievements();
   }, delay);
+}
+
+export type FeatureCountKey = 'tutor' | 'aigen' | 'import' | 'export';
+
+/**
+ * Record a one-off feature use (tutor / AI deck generation / import / export) by
+ * bumping a counter in profiles.settings jsonb, then re-evaluate so the matching
+ * "Exploração" badge unlocks and celebrates immediately. These events aren't
+ * logged historically, so they only ever unlock from the first use onward.
+ */
+export async function recordFeatureUse(key: FeatureCountKey): Promise<void> {
+  try {
+    const settings = getQueryData<AppSettings>('settings') ?? (await repo.getSettings());
+    const counts = { ...(settings.featureCounts ?? {}) };
+    counts[key] = (counts[key] ?? 0) + 1;
+    await repo.saveSettings({ featureCounts: counts });
+    scheduleAchievementCheck();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[achievements] recordFeatureUse failed', err);
+  }
 }
 
 /**

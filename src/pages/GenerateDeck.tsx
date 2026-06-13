@@ -14,6 +14,7 @@ import { createDeckFromGenerated } from '../features/ai/cards';
 import { fileToBase64 } from '../features/ai/readFile';
 import { extractFromUrl } from '../features/ai/url';
 import { generateDeckAudio } from '../features/tts/audioGen';
+import { recordFeatureUse } from '../features/gamification/achievements';
 import type { AudioSide } from '../features/tts/audioGen';
 import { GOOGLE_VOICES, groupGoogleVoices, isTtsConfigured } from '../features/tts/googleProvider';
 import { useSettings } from '../db/hooks';
@@ -77,11 +78,15 @@ export function GenerateDeck() {
   const [audioSide, setAudioSide] = useState<'front' | 'back' | 'both'>('front');
   const [audioVoice, setAudioVoice] = useState('');
   const [audioCross, setAudioCross] = useState(false);
-  const [audioProgress, setAudioProgress] = useState<string | null>(null);
+  const [audioProgress, setAudioProgress] = useState<{ label: string; done: number; total: number } | null>(null);
   const effVoice = audioVoice || settings?.tts.googleVoiceName || GOOGLE_VOICES[0]?.id || '';
 
   const [cards, setCards] = useState<GeneratedCard[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // Distinguishes the "creating the deck" phase (after the review) from the
+  // "generating cards" phase, since both set `busy` while `cards` is present
+  // (e.g. "Gerar novamente"). Drives the creation progress bar.
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdfDragOver, setPdfDragOver] = useState(false);
 
@@ -167,6 +172,7 @@ export function GenerateDeck() {
       const aiInstructions = instructions.trim() || undefined;
       const result = await generateCards({ types, count, language, source, instructions: aiInstructions });
       setCards(result);
+      void recordFeatureUse('aigen');
       if (!deckName.trim()) {
         const fallback =
           mode === 'pdf'
@@ -188,6 +194,7 @@ export function GenerateDeck() {
   async function confirm() {
     if (!cards) return;
     setBusy(true);
+    setCreating(true);
     setError(null);
     try {
       const deck = await createDeckFromGenerated(deckName, cards, { language });
@@ -203,7 +210,7 @@ export function GenerateDeck() {
           const r = await generateDeckAudio(
             deck.id,
             s,
-            (p) => setAudioProgress(`Gerando áudio (${label}) ${p.done}/${p.total}...`),
+            (p) => setAudioProgress({ label: `Gerando áudio (${label})`, done: p.done, total: p.total }),
             side,
             voice,
           );
@@ -232,6 +239,7 @@ export function GenerateDeck() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao criar o deck.');
       setBusy(false);
+      setCreating(false);
       setAudioProgress(null);
     }
   }
@@ -652,12 +660,6 @@ export function GenerateDeck() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-
-                  {audioProgress && (
-                    <p className="text-xs mt-3" style={{ color: 'var(--accent)' }}>
-                      {audioProgress}
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -668,6 +670,57 @@ export function GenerateDeck() {
                 busy={busy}
                 confirmLabel="Criar deck"
               />
+
+              {/* Creation progress: the same filling bar shown before the review.
+                  It tracks audio generation when that runs (done/total), else a
+                  steady fill while the deck + cards are saved. */}
+              <AnimatePresence initial={false}>
+                {creating && (
+                  <motion.div
+                    key="create-loading"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div
+                      className="mt-4 p-4 rounded-[var(--r-md)]"
+                      style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <Loader2 size={15} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                        <span className="text-sm font-semibold">
+                          {audioProgress
+                            ? `${audioProgress.label} ${audioProgress.done}/${audioProgress.total}...`
+                            : 'Criando seu deck...'}
+                        </span>
+                      </div>
+                      <div style={{ height: 8, borderRadius: 999, background: 'var(--surface)', overflow: 'hidden' }}>
+                        {audioProgress && audioProgress.total > 0 ? (
+                          <motion.div
+                            key={audioProgress.label}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.round((audioProgress.done / audioProgress.total) * 100)}%` }}
+                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                            style={{ height: '100%', borderRadius: 999, background: 'var(--accent)' }}
+                          />
+                        ) : (
+                          <motion.div
+                            initial={{ width: '8%' }}
+                            animate={{ width: '90%' }}
+                            transition={{ duration: 6, ease: 'easeOut' }}
+                            style={{ height: '100%', borderRadius: 999, background: 'var(--accent)' }}
+                          />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted mt-2.5" style={{ lineHeight: 1.5 }}>
+                        <b className="text-fg">Não saia desta tela</b> enquanto o deck é criado.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </Panel>
           )}
         </>

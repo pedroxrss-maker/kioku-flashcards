@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Sparkles } from 'lucide-react';
 import { cardAssist, isAiConfigured } from './client';
 import type { CardAssistAction } from './client';
+import { recordFeatureUse } from '../gamification/achievements';
 
 interface CardAssistBarProps {
   /** Plain-text (HTML stripped) front + back of the card under review. */
@@ -44,6 +45,7 @@ export function CardAssistBar({ front, back }: CardAssistBarProps) {
     try {
       const reply = await cardAssist(front, back, action);
       setCache((c) => ({ ...c, [action]: reply }));
+      void recordFeatureUse('tutor');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível falar com a IA.');
     }

@@ -21,14 +21,18 @@ const base: AchievementMetrics = {
   daysGoalMet: 0,
   hasAudio: false,
   hasImage: false,
+  tutorUsed: false,
+  aigenUsed: false,
+  importUsed: false,
+  exportUsed: false,
 };
 const find = (key: string) => ACHIEVEMENTS.find((a) => a.key === key)!;
 
 describe('achievement registry', () => {
-  it('is exactly the lean 19, with unique keys and known categories', () => {
-    expect(ACHIEVEMENTS).toHaveLength(19);
+  it('has 23 achievements with unique keys and known categories', () => {
+    expect(ACHIEVEMENTS).toHaveLength(23);
     const keys = ACHIEVEMENTS.map((a) => a.key);
-    expect(new Set(keys).size).toBe(19);
+    expect(new Set(keys).size).toBe(23);
     for (const a of ACHIEVEMENTS) {
       expect(CATEGORY_ORDER).toContain(a.category);
       expect(CATEGORY_LABELS[a.category]).toBeTruthy();
@@ -84,5 +88,18 @@ describe('computeMetrics', () => {
     expect(m.mastered).toBe(1); // only the review-state card with interval >= 21d
     expect(m.hasImage).toBe(true);
     expect(m.hasAudio).toBe(true);
+  });
+
+  it('reads featureCounts for the Exploração achievements', () => {
+    const deck = makeDeck({ name: 'D', color: '#fff', algorithm: 'sm2' });
+    const settings = { ...defaultSettings(), featureCounts: { tutor: 1, export: 2 } };
+    const m = computeMetrics({ logs: [], cards: [], decks: [deck], settings });
+    expect(m.tutorUsed).toBe(true);
+    expect(m.exportUsed).toBe(true);
+    expect(m.aigenUsed).toBe(false);
+    expect(m.importUsed).toBe(false);
+    // And the achievements read those metrics.
+    expect(find('feat_tutor').check(m)).toBe(true);
+    expect(find('feat_import').check(m)).toBe(false);
   });
 });

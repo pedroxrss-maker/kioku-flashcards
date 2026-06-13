@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { downloadBlob } from '../../lib/download';
+import { recordFeatureUse } from '../gamification/achievements';
 
 interface ExportButtonProps {
   deckId: string;
@@ -20,6 +21,7 @@ export function ExportButton({ deckId, size = 'sm', tile = false }: ExportButton
       const { exportApkg } = await import('./apkg-export');
       const { blob, name } = await exportApkg(deckId);
       downloadBlob(blob, name);
+      void recordFeatureUse('export');
     } catch (err) {
       // eslint-disable-next-line no-alert
       alert(err instanceof Error ? err.message : 'Falha ao exportar.');

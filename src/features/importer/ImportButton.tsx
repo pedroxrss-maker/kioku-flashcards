@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Upload } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
+import { recordFeatureUse } from '../gamification/achievements';
 import type { ImportProgress, ImportResult } from './apkg-import';
 
 interface ImportButtonProps {
@@ -111,6 +112,7 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
         controller.signal,
       );
       setResult(res);
+      void recordFeatureUse('import');
     } catch (err) {
       // A user cancel aborts the controller; the import rolls itself back, so we
       // just close the dialog silently instead of showing an error.

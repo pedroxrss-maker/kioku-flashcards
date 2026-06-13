@@ -120,6 +120,15 @@ export interface AppSettings {
    *  evaluation seeds already-earned achievements silently (one summary banner)
    *  instead of firing dozens; afterwards new unlocks celebrate individually. */
   achievementsSeededAt?: number;
+  /** One-off feature-use counters for the "Exploração" achievements. Stored here
+   *  (settings jsonb) so no event table is needed; these actions aren't logged
+   *  historically, so the badges only unlock from the first use onward. */
+  featureCounts?: {
+    tutor?: number;
+    aigen?: number;
+    import?: number;
+    export?: number;
+  };
   /** Card ids that should NOT be auto-pronounced (cardId -> true). Stored here
    *  (settings jsonb) so no card-table column / migration is needed. */
   mutedCards?: Record<string, boolean>;

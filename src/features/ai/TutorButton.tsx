@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { isAiConfigured, tutorTeach } from './client';
+import { recordFeatureUse } from '../gamification/achievements';
 
 interface TutorButtonProps {
   /** Plain-text (HTML stripped) front + back of the card under review. */
@@ -36,6 +37,7 @@ export function TutorButton({ front, back }: TutorButtonProps) {
     setError(null);
     try {
       setText(await tutorTeach(front, back));
+      void recordFeatureUse('tutor');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível falar com o tutor.');
     } finally {
