@@ -1,0 +1,16 @@
+{
+  // Isolado do app: o tsconfig do Kioku so inclui "src", entao este Worker nao
+  // entra no build do app. Use-o para checar o Worker dentro desta pasta.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": ["src"]
+}

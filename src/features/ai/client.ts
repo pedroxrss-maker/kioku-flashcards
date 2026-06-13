@@ -256,3 +256,24 @@ export async function cardAssist(
     'Plain text only: no markdown, no headings, no preamble.';
   return createMessage({ system, messages: [{ role: 'user', content: ASK[action] }], maxTokens: 400 });
 }
+
+/**
+ * Turn a card's content into ONE short, concrete visual description (English) to
+ * feed an image generator. Concrete imagery only (objects/scene/symbols), no
+ * style words (the caller appends a fixed style) and no text-in-image.
+ */
+export async function describeCardVisually(front: string, back: string): Promise<string> {
+  const system =
+    'You turn a flashcard into a single short prompt for an illustration. ' +
+    `Card front: ${front}. Card back: ${back}. ` +
+    'Reply with ONE short English sentence describing concrete imagery that illustrates the ' +
+    "card's core concept (objects, a scene, symbols). Do NOT include any words/letters to render " +
+    'in the image, no style adjectives, no preamble, no quotes. Just the sentence.';
+  const text = await createMessage({
+    system,
+    messages: [{ role: 'user', content: 'Describe the illustration.' }],
+    maxTokens: 120,
+  });
+  // One clean line, no surrounding quotes.
+  return text.split('\n')[0].trim().replace(/^["']|["']$/g, '');
+}

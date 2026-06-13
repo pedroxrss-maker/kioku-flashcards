@@ -129,6 +129,9 @@ export interface AppSettings {
     import?: number;
     export?: number;
   };
+  /** How many AI images this user has generated (provisional global test cap).
+   *  Incremented only on a successful generation; gates the generate controls. */
+  imageGenCount?: number;
   /** Card ids that should NOT be auto-pronounced (cardId -> true). Stored here
    *  (settings jsonb) so no card-table column / migration is needed. */
   mutedCards?: Record<string, boolean>;

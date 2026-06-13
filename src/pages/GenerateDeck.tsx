@@ -14,8 +14,20 @@ import { createDeckFromGenerated } from '../features/ai/cards';
 import { fileToBase64 } from '../features/ai/readFile';
 import { extractFromUrl } from '../features/ai/url';
 import { generateDeckAudio } from '../features/tts/audioGen';
-import { recordFeatureUse } from '../features/gamification/achievements';
+import { recordFeatureUse, scheduleAchievementCheck } from '../features/gamification/achievements';
+import {
+  IMAGE_GEN_CAP,
+  appendImageHtml,
+  atImageCap,
+  generateCardImage,
+  imageSideForType,
+  imagesRemaining,
+  imagesUsed,
+  isImageGenConfigured,
+  recordImageGeneration,
+} from '../features/ai/image';
 import type { AudioSide } from '../features/tts/audioGen';
+import type { Card } from '../db/types';
 import { GOOGLE_VOICES, groupGoogleVoices, isTtsConfigured } from '../features/tts/googleProvider';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
@@ -87,6 +99,9 @@ export function GenerateDeck() {
   // "generating cards" phase, since both set `busy` while `cards` is present
   // (e.g. "Gerar novamente"). Drives the creation progress bar.
   const [creating, setCreating] = useState(false);
+  const [imageProgress, setImageProgress] = useState<{ done: number; total: number } | null>(null);
+  // Bumped on each (re)generation so the cards editor clears its image selection.
+  const [genNonce, setGenNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pdfDragOver, setPdfDragOver] = useState(false);
 
@@ -172,6 +187,7 @@ export function GenerateDeck() {
       const aiInstructions = instructions.trim() || undefined;
       const result = await generateCards({ types, count, language, source, instructions: aiInstructions });
       setCards(result);
+      setGenNonce((n) => n + 1); // clears the editor's image selection
       void recordFeatureUse('aigen');
       if (!deckName.trim()) {
         const fallback =
@@ -191,13 +207,13 @@ export function GenerateDeck() {
     }
   }
 
-  async function confirm() {
+  async function confirm(imageIndices: number[]) {
     if (!cards) return;
     setBusy(true);
     setCreating(true);
     setError(null);
     try {
-      const deck = await createDeckFromGenerated(deckName, cards, { language });
+      const { deck, cards: createdCards } = await createDeckFromGenerated(deckName, cards, { language });
 
       if (genAudio && isTtsConfigured()) {
         const s = await repo.getSettings();
@@ -235,14 +251,76 @@ export function GenerateDeck() {
         );
       }
 
+      // AI images for the cards the user picked, respecting the provisional cap.
+      // Sequential (one at a time) to avoid hammering the API; failures are
+      // counted and skipped, never aborting the rest or crashing.
+      if (isImageGenConfigured() && imageIndices.length > 0) {
+        // Map an original card index to its created card (aligned to the
+        // non-empty input order createDeckFromGenerated used).
+        const indexToCard = new Map<number, Card>();
+        let j = 0;
+        cards.forEach((c, i) => {
+          if (c.front.trim() || c.back.trim()) {
+            indexToCard.set(i, createdCards[j]);
+            j += 1;
+          }
+        });
+        const s = await repo.getSettings();
+        const targets = imageIndices
+          .map((i) => ({ card: indexToCard.get(i), type: cards[i]?.type }))
+          .filter((t): t is { card: Card; type: GeneratedCard['type'] } => !!t.card && !!t.type);
+        const total = Math.min(targets.length, imagesRemaining(s));
+        let used = imagesUsed(s);
+        let made = 0;
+        let failed = 0;
+        setImageProgress({ done: 0, total });
+        for (const t of targets) {
+          if (used >= IMAGE_GEN_CAP) break;
+          try {
+            const img = await generateCardImage({ front: t.card.front, back: t.card.back, deckId: deck.id });
+            const side = imageSideForType(t.type);
+            const patch: Partial<Card> =
+              side === 'front'
+                ? { front: appendImageHtml(t.card.front, img.path) }
+                : { back: appendImageHtml(t.card.back, img.path) };
+            await repo.updateCard(t.card.id, patch);
+            await recordImageGeneration();
+            used += 1;
+            made += 1;
+          } catch {
+            failed += 1;
+          }
+          setImageProgress({ done: made, total });
+        }
+        setImageProgress(null);
+        if (made > 0) scheduleAchievementCheck(); // feat_image
+        if (made > 0 || failed > 0) {
+          pushToast(
+            failed > 0 ? 'error' : 'success',
+            failed > 0
+              ? `${made} ${made === 1 ? 'imagem gerada' : 'imagens geradas'}, ${failed} falharam.`
+              : `${made} ${made === 1 ? 'imagem gerada' : 'imagens geradas'} para os cards.`,
+          );
+        }
+      }
+
       nav(`/decks/${deck.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao criar o deck.');
       setBusy(false);
       setCreating(false);
       setAudioProgress(null);
+      setImageProgress(null);
     }
   }
+
+  // The creation progress bar shows image generation, else audio, else a steady
+  // "Criando seu deck..." fill.
+  const barProgress = imageProgress
+    ? { label: 'Gerando imagens', done: imageProgress.done, total: imageProgress.total }
+    : audioProgress
+      ? { label: audioProgress.label, done: audioProgress.done, total: audioProgress.total }
+      : null;
 
   return (
     <div className="rise flex flex-col gap-6 max-w-3xl mx-auto">
@@ -669,6 +747,10 @@ export function GenerateDeck() {
                 onConfirm={confirm}
                 busy={busy}
                 confirmLabel="Criar deck"
+                imagesEnabled={isImageGenConfigured()}
+                imagesRemaining={imagesRemaining(settings)}
+                atImageCap={atImageCap(settings)}
+                resetKey={genNonce}
               />
 
               {/* Creation progress: the same filling bar shown before the review.
@@ -691,17 +773,17 @@ export function GenerateDeck() {
                       <div className="flex items-center gap-2 mb-2.5">
                         <Loader2 size={15} className="animate-spin" style={{ color: 'var(--accent)' }} />
                         <span className="text-sm font-semibold">
-                          {audioProgress
-                            ? `${audioProgress.label} ${audioProgress.done}/${audioProgress.total}...`
+                          {barProgress
+                            ? `${barProgress.label} ${barProgress.done}/${barProgress.total}...`
                             : 'Criando seu deck...'}
                         </span>
                       </div>
                       <div style={{ height: 8, borderRadius: 999, background: 'var(--surface)', overflow: 'hidden' }}>
-                        {audioProgress && audioProgress.total > 0 ? (
+                        {barProgress && barProgress.total > 0 ? (
                           <motion.div
-                            key={audioProgress.label}
+                            key={barProgress.label}
                             initial={{ width: 0 }}
-                            animate={{ width: `${Math.round((audioProgress.done / audioProgress.total) * 100)}%` }}
+                            animate={{ width: `${Math.round((barProgress.done / barProgress.total) * 100)}%` }}
                             transition={{ duration: 0.3, ease: 'easeOut' }}
                             style={{ height: '100%', borderRadius: 999, background: 'var(--accent)' }}
                           />

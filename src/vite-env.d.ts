@@ -15,6 +15,10 @@ interface ImportMetaEnv {
    *  credential server-side). When unset, cloud audio generation is disabled and
    *  the app shows a clear pt-BR message instead. Baked in at build time. */
   readonly VITE_TTS_PROXY_URL?: string;
+  /** Base URL of the image proxy (a Cloudflare Worker holding the OpenAI key
+   *  server-side). When unset, AI image generation is disabled and the controls
+   *  are hidden. Baked in at build time. */
+  readonly VITE_IMAGE_PROXY_URL?: string;
 }
 
 interface ImportMeta {

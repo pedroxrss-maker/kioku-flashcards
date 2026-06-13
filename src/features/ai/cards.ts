@@ -8,7 +8,7 @@ import { repo } from '../../db/repositories';
 import { DECK_COLORS, makeCard } from '../../db/factories';
 import { markTypeIn } from '../../lib/cardType';
 import type { CardType } from '../../lib/cardType';
-import type { Deck } from '../../db/types';
+import type { Card, Deck } from '../../db/types';
 
 export interface GeneratedCard {
   /** Which Kioku card type this becomes: basic, cloze, or type-in. */
@@ -54,22 +54,25 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
   const typeRules = types.map((t) => '- ' + RULES[t]).join('\n');
 
   const instrLine = req.instructions?.trim()
-    ? 'The user instructions below take PRIORITY over the default count and balance above: if ' +
-      'they specify how many cards of each type (or any other distribution), follow that EXACTLY ' +
-      `(still using only the allowed types). User instructions: ${req.instructions.trim()} `
+    ? 'The user instructions below take PRIORITY for the topic/focus, the card count, and the mix ' +
+      'of types (follow any per-type distribution they give EXACTLY, still using only the allowed ' +
+      `types). They do NOT change the output language: write the cards in ${req.language} even if ` +
+      `the instructions themselves are written in another language. User instructions: ${req.instructions.trim()} `
     : '';
 
   const system =
     'You generate study flashcards. ' +
-    `Write every card in ${req.language}. ` +
+    `LANGUAGE (mandatory, overrides everything else): write EVERY card — both "front" and "back" — ` +
+    `in ${req.language}, regardless of the language of the source material or of the user ` +
+    `instructions. Translate the content into ${req.language} when the source is in another language. ` +
     `Use ONLY these card types: ${typesList}. ` +
     'Each card is a JSON object with string fields "type", "front" and "back", where "type" is ' +
     `one of: ${typesList}. Rules per type:\n${typeRules}\n` +
     `By default, produce about ${req.count} high-quality, non-redundant cards in a balanced mix ` +
     'of the allowed types. ' +
     instrLine +
-    'Keep each side concise and self-contained. Use plain text only (no markdown, no HTML), ' +
-    'except the {{c1::...}} cloze syntax when the type is cloze. ' +
+    `Keep each side concise and self-contained, written in ${req.language}. Use plain text only ` +
+    '(no markdown, no HTML), except the {{c1::...}} cloze syntax when the type is cloze. ' +
     'Output ONLY a JSON array of those objects. ' +
     'No prose, no explanations, no code fences, nothing before or after the array.';
 
@@ -146,12 +149,13 @@ const LANG_TO_TTS: Record<string, string> = {
 };
 
 /** Create a real deck from generated cards via the existing repo, using the
- *  user's default algorithm. Returns the new deck (caller navigates to it). */
+ *  user's default algorithm. Returns the new deck plus the created cards (in the
+ *  same order as the non-empty input cards), so the caller can attach images. */
 export async function createDeckFromGenerated(
   name: string,
   cards: GeneratedCard[],
   opts?: { category?: string; language?: string },
-): Promise<Deck> {
+): Promise<{ deck: Deck; cards: Card[] }> {
   const settings = await repo.getSettings();
   const color = DECK_COLORS[Math.floor(Math.random() * DECK_COLORS.length)];
   const deck = await repo.createDeck({
@@ -176,5 +180,5 @@ export async function createDeckFromGenerated(
       });
     });
   await repo.bulkInsertCards(made);
-  return deck;
+  return { deck, cards: made };
 }

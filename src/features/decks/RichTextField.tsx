@@ -55,6 +55,9 @@ interface RichTextFieldProps {
 
 export interface RichTextFieldHandle {
   focus: () => void;
+  /** Append an image to this field (editor form: preview URL + data-kioku-media,
+   *  serialized to kioku-media://<path> on save). Used by AI image generation. */
+  insertImage: (url: string, mediaPath: string) => void;
 }
 
 function ToolbarBtn({
@@ -139,7 +142,21 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
     fwdRef,
   ) {
   const ref = useRef<HTMLDivElement>(null);
-  useImperativeHandle(fwdRef, () => ({ focus: () => ref.current?.focus() }), []);
+  useImperativeHandle(
+    fwdRef,
+    () => ({
+      focus: () => ref.current?.focus(),
+      insertImage: (url: string, mediaPath: string) => {
+        if (!ref.current) return;
+        ref.current.insertAdjacentHTML(
+          'beforeend',
+          `<img src="${url}" data-kioku-media="${mediaPath}" alt="" />`,
+        );
+        emit();
+      },
+    }),
+    [],
+  );
   const imageRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const [canCloze, setCanCloze] = useState(false);

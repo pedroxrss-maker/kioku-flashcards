@@ -1,0 +1,14 @@
+{
+  "name": "kioku-image-proxy",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Cloudflare Worker que faz proxy da geração de imagens da OpenAI (gpt-image-1-mini) para o Kioku.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "wrangler": "^4.20.0"
+  }
+}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Cloud, Eye, LayoutGrid, Pencil, Trash2, Volume2 } from 'lucide-react';
+import { Cloud, Eye, Image as ImageIcon, LayoutGrid, Loader2, Pencil, Trash2, Volume2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
@@ -10,6 +10,16 @@ import type { RichTextFieldHandle } from './RichTextField';
 import { GenerateCardAudioButton } from '../tts/GenerateCardAudioButton';
 import type { AudioSide } from '../tts/audioGen';
 import { isTtsConfigured } from '../tts/googleProvider';
+import { isAiConfigured } from '../ai/client';
+import {
+  IMAGE_GEN_CAP,
+  atImageCap,
+  generateCardImage,
+  imageSideForType,
+  imagesRemaining,
+  isImageGenConfigured,
+  recordImageGeneration,
+} from '../ai/image';
 import { FlipCard } from '../review/FlipCard';
 import { ClozeCard } from '../review/ClozeCard';
 import { TypeInCard } from '../review/TypeInCard';
@@ -77,7 +87,9 @@ export function CardEditorModal({
   const [pendingBack, setPendingBack] = useState<string | null>(null);
   // Tab from the front jumps here; both also submit on Ctrl/Cmd+Enter.
   const backRef = useRef<RichTextFieldHandle>(null);
+  const frontRef = useRef<RichTextFieldHandle>(null);
   const answerRef = useRef<HTMLInputElement>(null);
+  const [imgBusy, setImgBusy] = useState(false);
   const focusNext = () => (type === 'typein' ? answerRef.current?.focus() : backRef.current?.focus());
 
   useEffect(() => {
@@ -298,6 +310,25 @@ export function CardEditorModal({
     }
   }
 
+  /** Generate an AI illustration for the CURRENT content and insert it into the
+   *  field (back for basic/cloze, front for type-in). Persisted when the card is
+   *  saved; the achievement fires from the existing save trigger. */
+  async function genImage() {
+    if (imgBusy || atImageCap(settings)) return;
+    setImgBusy(true);
+    try {
+      const img = await generateCardImage({ front, back, deckId });
+      const targetRef = imageSideForType(type) === 'front' ? frontRef : backRef;
+      targetRef.current?.insertImage(img.url, img.path);
+      await recordImageGeneration();
+      pushToast('success', 'Imagem gerada e anexada ao card.');
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar a imagem.');
+    } finally {
+      setImgBusy(false);
+    }
+  }
+
   return (
     <Modal
       open={open}
@@ -458,6 +489,7 @@ export function CardEditorModal({
             {type === 'cloze' ? (
               <>
                 <RichTextField
+                  ref={frontRef}
                   key={`cloze-${nonce}`}
                   label="Texto"
                   valueHtml={front}
@@ -485,6 +517,7 @@ export function CardEditorModal({
             ) : type === 'typein' ? (
               <>
                 <RichTextField
+                  ref={frontRef}
                   key={`tiprompt-${nonce}`}
                   label="Frente (pergunta)"
                   valueHtml={front}
@@ -525,6 +558,7 @@ export function CardEditorModal({
             ) : (
               <>
                 <RichTextField
+                  ref={frontRef}
                   key={`front-${nonce}`}
                   label="Frente"
                   valueHtml={front}
@@ -548,6 +582,41 @@ export function CardEditorModal({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* AI image generation (manual): illustrate the current content and attach
+          it to the card (back for basic/cloze, front for type-in). Hidden when the
+          image proxy isn't configured. */}
+      {isImageGenConfigured() && (
+        <div className="mt-3 pt-3 sm:mt-5 sm:pt-4 border-t" style={{ borderColor: 'var(--line)' }}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={genImage}
+              disabled={
+                imgBusy ||
+                atImageCap(settings) ||
+                !isAiConfigured() ||
+                (isEmptyHtml(front) && isEmptyHtml(back))
+              }
+              className="btn btn-ghost btn-sm disabled:opacity-50"
+            >
+              {imgBusy ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+              {imgBusy ? 'Gerando imagem...' : 'Gerar imagem com IA'}
+            </button>
+            <span
+              className="mono text-[11px]"
+              style={{ color: atImageCap(settings) ? 'var(--accent)' : 'var(--muted)' }}
+            >
+              {atImageCap(settings)
+                ? `Limite de imagens atingido (${IMAGE_GEN_CAP}).`
+                : `Restam ${imagesRemaining(settings)} imagens.`}
+            </span>
+          </div>
+          <p className="text-[11px] text-muted mt-1.5" style={{ lineHeight: 1.45 }}>
+            Cria uma ilustração do conteúdo e anexa ao card. Cada imagem usa 1 do seu limite.
+          </p>
+        </div>
+      )}
 
       <label
         className="flex items-center gap-2.5 mt-3 pt-3 sm:mt-5 sm:pt-4 border-t cursor-pointer select-none"
