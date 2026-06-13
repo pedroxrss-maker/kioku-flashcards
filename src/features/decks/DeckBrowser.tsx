@@ -9,6 +9,7 @@ import { groupCardsByDeck } from '../../lib/deckStats';
 import { Panel } from '../../components/Panel';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DeckTree, DECK_TABLE } from './DeckTree';
+import { DeckGridCard } from './DeckGridCard';
 import { CreateDeckModal } from './CreateDeckModal';
 import { DeckSettingsModal } from './DeckSettingsModal';
 import { cn } from '../../lib/cn';
@@ -147,8 +148,28 @@ export function DeckBrowser() {
         />
       </div>
 
-      {/* Deck table */}
-      <Panel className="p-1.5 sm:p-2">
+      {/* Mobile: a 2-column grid of color deck cards. Tapping a card opens the
+          deck overview — no "Estudar" button on mobile. */}
+      <div className="sm:hidden">
+        {decks.length === 0 ? (
+          <p className="text-muted text-sm text-center py-10">
+            Você ainda não tem decks. Crie o primeiro acima.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-muted text-sm text-center py-8">
+            Nenhum deck encontrado para “{query}”.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {filtered.map((d) => (
+              <DeckGridCard key={d.id} deck={d} cards={byDeck.get(d.id) ?? []} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Deck table (desktop) */}
+      <Panel className="hidden sm:block p-1.5 sm:p-2">
         {decks.length === 0 ? (
           <p className="text-muted text-sm text-center py-10">
             Você ainda não tem decks. Crie o primeiro acima.

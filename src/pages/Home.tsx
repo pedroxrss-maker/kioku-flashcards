@@ -35,6 +35,7 @@ import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
+import { DeckGridCard } from '../features/decks/DeckGridCard';
 import { computeStreak, greeting } from '../lib/greeting';
 import { dayKey, startOfLocalDay } from '../lib/date';
 import {
@@ -450,33 +451,47 @@ export function Home() {
                 <Plus size={16} /> Criar deck
               </button>
             </div>
-          ) : hierarchical ? (
-            /* Nested, collapsible tree when subdecks exist. */
-            <DeckTree
-              decks={decks}
-              cardsByDeck={byDeck}
-              query={query}
-              maxRows={8}
-              onConfig={(d) => setSettingsDeck(d)}
-              onDelete={(d) => setDeckToDelete(d)}
-            />
           ) : (
-            <div className="flex flex-col gap-1">
-              {filteredRows.slice(0, 5).map((r) => (
-                <DeckStudyRow
-                  key={r.deck.id}
-                  deck={r.deck}
-                  newCount={r.newCount}
-                  learning={r.learning}
-                  reviewDue={r.reviewDue}
-                  menuOpen={menuDeckId === r.deck.id}
-                  onMenu={() => setMenuDeckId((id) => (id === r.deck.id ? null : r.deck.id))}
-                  onCloseMenu={() => setMenuDeckId(null)}
-                  onConfig={() => setSettingsDeck(r.deck)}
-                  onDelete={() => setDeckToDelete(r.deck)}
-                />
-              ))}
-            </div>
+            <>
+              {/* Mobile: 2-column grid of color deck cards. Tapping opens the
+                  deck overview — no "Estudar" button on mobile. */}
+              <div className="grid grid-cols-2 gap-3 sm:hidden">
+                {filteredRows.slice(0, 6).map((r) => (
+                  <DeckGridCard key={r.deck.id} deck={r.deck} cards={byDeck.get(r.deck.id) ?? []} />
+                ))}
+              </div>
+
+              {/* Desktop: the existing rows / nested collapsible tree. */}
+              <div className="hidden sm:block">
+                {hierarchical ? (
+                  <DeckTree
+                    decks={decks}
+                    cardsByDeck={byDeck}
+                    query={query}
+                    maxRows={8}
+                    onConfig={(d) => setSettingsDeck(d)}
+                    onDelete={(d) => setDeckToDelete(d)}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {filteredRows.slice(0, 5).map((r) => (
+                      <DeckStudyRow
+                        key={r.deck.id}
+                        deck={r.deck}
+                        newCount={r.newCount}
+                        learning={r.learning}
+                        reviewDue={r.reviewDue}
+                        menuOpen={menuDeckId === r.deck.id}
+                        onMenu={() => setMenuDeckId((id) => (id === r.deck.id ? null : r.deck.id))}
+                        onCloseMenu={() => setMenuDeckId(null)}
+                        onConfig={() => setSettingsDeck(r.deck)}
+                        onDelete={() => setDeckToDelete(r.deck)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
       </Panel>
 
