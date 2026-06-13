@@ -8,7 +8,7 @@ export function Decks() {
   return (
     <div className="rise">
       <PageHeader
-        title="Meus decks"
+        title="Biblioteca"
         subtitle={`${decks.length} ${decks.length === 1 ? 'deck' : 'decks'}`}
         action={
           <div className="flex items-center gap-2 flex-wrap justify-end">

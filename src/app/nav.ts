@@ -10,7 +10,7 @@ export interface NavItemDef {
 
 export const NAV_ITEMS: NavItemDef[] = [
   { to: '/', label: 'Início', icon: House, end: true },
-  { to: '/decks', label: 'Meus decks', icon: Layers },
+  { to: '/decks', label: 'Biblioteca', icon: Layers },
   { to: '/stats', label: 'Estatísticas', icon: BarChart3 },
   { to: '/conquistas', label: 'Conquistas', icon: Trophy },
   { to: '/settings', label: 'Configurações', icon: Settings },

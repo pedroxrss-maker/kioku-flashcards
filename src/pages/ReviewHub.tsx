@@ -32,7 +32,7 @@ export function ReviewHub() {
       />
 
       {decks.length === 0 ? (
-        <p className="text-muted">Crie um deck primeiro em “Meus Decks”.</p>
+        <p className="text-muted">Crie um deck primeiro na “Biblioteca”.</p>
       ) : tree ? (
         /* Nested deck tree (subdecks) — studying a parent reviews all descendants. */
         <Panel className="p-2 sm:p-3">

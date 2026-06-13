@@ -361,7 +361,7 @@ button.pill.pill-active:hover {
   }
 }
 
-/* Sidebar nav items ("Início", "Meus decks", ...): the same hover "jump"
+/* Sidebar nav items ("Início", "Biblioteca", ...): the same hover "jump"
    (slide right + slight scale) as .recent-deck, plus a background transition
    since the nav pills also fill on hover. */
 .nav-jump {
@@ -371,6 +371,25 @@ button.pill.pill-active:hover {
 }
 .nav-jump:hover {
   transform: translateX(6px) scale(1.03);
+}
+
+/* Deck list rows (Início + Biblioteca): the same hover "jump" as the sidebar,
+   adapted for full-width rows — a rightward nudge (the scale is dropped so a
+   row's right-edge actions are never clipped by the list's overflow-x clip).
+   transform-origin keeps the slide anchored on the left, like the sidebar. */
+.deck-jump {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.16s ease,
+    color 0.16s ease;
+  transform-origin: left center;
+}
+.deck-jump:hover {
+  transform: translateX(6px);
+}
+/* While a row's "⋮" menu is open, hold still: a transform would move the
+   dropdown target AND become the containing block for the menu's fixed-position
+   click-away overlay. Defined after .deck-jump:hover so it wins. */
+.deck-jump-locked:hover {
+  transform: none;
 }
 
 /* Attention "jump" for a card located via "Ver no painel": a few decaying hops
@@ -410,6 +429,9 @@ button.pill.pill-active:hover {
     transition: color 0.16s ease, background-color 0.16s ease;
   }
   .nav-jump:hover {
+    transform: none;
+  }
+  .deck-jump:hover {
     transform: none;
   }
   .card-jump {

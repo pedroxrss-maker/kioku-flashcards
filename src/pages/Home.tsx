@@ -120,7 +120,7 @@ function DeckStudyRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter') nav(`/decks/${deck.id}`);
       }}
-      className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)] min-w-0 cursor-pointer"
+      className={`deck-jump${menuOpen ? ' deck-jump-locked' : ''} flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-[var(--r-sm)] hover:bg-[color:var(--surface-2)] min-w-0 cursor-pointer`}
       title={`Abrir ${deck.name}`}
     >
       <DeckAvatar deck={deck} size={40} />

@@ -92,7 +92,7 @@ export function DeckDetail() {
     return (
       <div className="rise">
         <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
-          ← Meus Decks
+          ← Biblioteca
         </Link>
         <p className="mono text-muted text-sm mt-6">Carregando…</p>
       </div>
@@ -103,7 +103,7 @@ export function DeckDetail() {
     return (
       <div className="rise">
         <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
-          ← Meus Decks
+          ← Biblioteca
         </Link>
         <div className="mt-6 flex flex-col items-start gap-3">
           <p className="text-muted">Não foi possível carregar. Tente novamente.</p>
@@ -119,7 +119,7 @@ export function DeckDetail() {
     return (
       <div className="rise">
         <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
-          ← Meus Decks
+          ← Biblioteca
         </Link>
         <p className="text-muted mt-6">Deck não encontrado.</p>
       </div>
@@ -162,7 +162,7 @@ export function DeckDetail() {
                 to="/decks"
                 className="mono text-[11px] text-muted hover:text-fg inline-flex items-center gap-1 mb-3"
               >
-                <ArrowLeft size={13} /> Meus Decks
+                <ArrowLeft size={13} /> Biblioteca
               </Link>
               <div className="flex items-center gap-3">
                 <DeckAvatar deck={deck} size={52} />
