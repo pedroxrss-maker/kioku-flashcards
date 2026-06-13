@@ -28,18 +28,18 @@ export function UpdateBanner() {
           aria-live="polite"
         >
           <div
-            className="flex items-center gap-2.5 pl-4 pr-2 py-2"
+            className="flex items-center gap-2.5 pl-4 pr-2 py-2 w-full sm:w-auto"
             style={{
-              maxWidth: 'calc(100vw - 24px)',
+              maxWidth: 460,
               background: 'var(--surface)',
               border: '1px solid var(--line-strong)',
-              borderRadius: 'var(--r-full)',
+              borderRadius: 'var(--r-md)',
               boxShadow: 'var(--shadow-pop)',
               pointerEvents: 'auto',
             }}
           >
             <RefreshCw size={16} style={{ color: 'var(--accent)' }} className="shrink-0" />
-            <span className="text-sm whitespace-nowrap">Nova versão disponível</span>
+            <span className="text-sm flex-1 min-w-0 truncate">Nova versão disponível</span>
             <button type="button" onClick={() => apply?.()} className="btn btn-accent btn-sm shrink-0">
               Atualizar
             </button>

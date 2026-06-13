@@ -328,10 +328,11 @@ function DeckTreeRow({
     <div
       className={cn(
         // Sidebar-style hover "jump" (rightward nudge). Locked while this row's
-        // menu is open so the dropdown stays put.
-        'deck-jump flex items-center gap-2 sm:gap-3 hover:bg-[color:var(--surface-2)] min-w-0',
+        // menu is open so the dropdown stays put. Tight left spacing on mobile so
+        // the deck name gets the room (icons sit further left).
+        'deck-jump flex items-center gap-1.5 sm:gap-3 hover:bg-[color:var(--surface-2)] min-w-0',
         menuOpen && 'deck-jump-locked',
-        table ? 'px-2 sm:px-3 py-2.5' : 'p-2.5 sm:p-3 rounded-[var(--r-sm)]',
+        table ? 'px-2 sm:px-3 py-2.5' : 'py-2.5 pl-1.5 pr-2 sm:p-3 rounded-[var(--r-sm)]',
       )}
       style={{
         marginLeft: node.depth * (table ? 16 : 18),
@@ -356,7 +357,7 @@ function DeckTreeRow({
           />
         </button>
       ) : (
-        <span className="w-[18px] shrink-0" aria-hidden />
+        <span className="w-1.5 sm:w-[18px] shrink-0" aria-hidden />
       )}
 
       {/* Avatar: deck logo, or a folder for a pure grouping node */}
