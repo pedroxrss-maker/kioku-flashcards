@@ -84,7 +84,7 @@ export function Heatmap({ logs, fill = false }: HeatmapProps) {
   }
 
   return (
-    <div ref={wrapRef}>
+    <div ref={wrapRef} className="min-w-0">
       <div className="min-w-0">
         <div className="mb-3">
           <span className="mono text-sm font-semibold">{year}</span>

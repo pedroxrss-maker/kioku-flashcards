@@ -1,7 +1,7 @@
 import { useQuery } from './store';
 import type { QueryResult } from './store';
 import { repo } from './repositories';
-import type { AppSettings, Card, Deck, ReviewLog } from './types';
+import type { AppSettings, Card, Deck, GamificationState, ReviewLog } from './types';
 
 /**
  * Reactive read hooks backed by Supabase (via the keyed query store). The public
@@ -48,6 +48,13 @@ export function useAllLogs(): ReviewLog[] {
 
 export function useSettings(): AppSettings | undefined {
   return useQuery<AppSettings | undefined>('settings', () => repo.getSettings(), undefined).data;
+}
+
+/** The user's XP/level (undefined until first load). Shares the 'gamification'
+ *  cache key with repo.addXp, so awarding XP updates this reactively. */
+export function useGamification(): GamificationState | undefined {
+  return useQuery<GamificationState | undefined>('gamification', () => repo.getGamification(), undefined)
+    .data;
 }
 
 /**

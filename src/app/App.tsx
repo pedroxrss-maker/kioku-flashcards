@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { seedForUserIfEmpty } from '../db';
 import { Toaster } from '../components/Toaster';
+import { CelebrationBanner } from '../features/gamification/CelebrationBanner';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
 import { Decks } from '../pages/Decks';
@@ -79,6 +80,7 @@ function AuthedApp() {
         </Route>
       </Routes>
       <Toaster />
+      <CelebrationBanner />
     </>
   );
 }

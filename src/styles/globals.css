@@ -361,6 +361,62 @@ button.pill.pill-active:hover {
   }
 }
 
+/* Sidebar nav items ("Início", "Meus decks", ...): the same hover "jump"
+   (slide right + slight scale) as .recent-deck, plus a background transition
+   since the nav pills also fill on hover. */
+.nav-jump {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), color 0.16s ease,
+    background-color 0.16s ease;
+  transform-origin: left center;
+}
+.nav-jump:hover {
+  transform: translateX(6px) scale(1.03);
+}
+
+/* Attention "jump" for a card located via "Ver no painel": a few decaying hops
+   with an accent glow under the card, then it settles. */
+.card-jump {
+  animation: card-jump 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes card-jump {
+  0% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  18% {
+    transform: translateY(-16px);
+    filter: drop-shadow(0 10px 18px color-mix(in srgb, var(--accent) 55%, transparent));
+  }
+  36% {
+    transform: translateY(0);
+  }
+  54% {
+    transform: translateY(-9px);
+    filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--accent) 38%, transparent));
+  }
+  72% {
+    transform: translateY(0);
+  }
+  86% {
+    transform: translateY(-3px);
+  }
+  100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-jump {
+    transition: color 0.16s ease, background-color 0.16s ease;
+  }
+  .nav-jump:hover {
+    transform: none;
+  }
+  .card-jump {
+    animation: none;
+  }
+}
+
 /* Review card "balloon" minimum height — smaller on phones so the rating
    buttons (the priority) stay in view with less scrolling. */
 :root {
@@ -384,6 +440,63 @@ button.pill.pill-active:hover {
   .rte-area {
     min-height: 72px;
   }
+}
+
+/* Deck overview action tiles (mobile 2x2 grid): icon on top, label below. */
+.deck-action-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 12px;
+  min-height: 92px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  transition: background 0.16s ease, transform 0.12s ease, filter 0.16s ease;
+}
+.deck-action-tile:hover {
+  background: #2a2a31;
+}
+.deck-action-tile:active {
+  transform: scale(0.98);
+}
+.deck-action-tile:disabled {
+  opacity: 0.5;
+}
+.deck-action-tile-accent {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+.deck-action-tile-accent:hover {
+  background: var(--accent);
+  filter: brightness(1.06);
+}
+
+/* AI assist/tutor buttons: a soft, clean violet outline grows in on hover
+   (matches the "Me ensine isso" tutor text color). */
+.ai-hover-outline {
+  transition: box-shadow 0.22s ease, border-color 0.18s ease, background-color 0.16s ease,
+    color 0.16s ease;
+}
+.ai-hover-outline:hover {
+  box-shadow: 0 0 0 1.5px #a78bfa, 0 0 10px color-mix(in srgb, #a78bfa 28%, transparent);
+}
+
+/* Hide the scrollbar (horizontal carousels like the category pills). */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Rounded-square icon tile (accent by default; color override via --tile). */

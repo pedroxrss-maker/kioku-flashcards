@@ -513,6 +513,44 @@ export function GenerateDeck() {
                 </span>
               )}
             </div>
+
+            {/* Generation progress: a filling bar + "don't leave" warning. */}
+            <AnimatePresence initial={false}>
+              {busy && !cards && (
+                <motion.div
+                  key="gen-loading"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div
+                    className="mt-4 p-4 rounded-[var(--r-md)]"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+                  >
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <Loader2 size={15} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                      <span className="text-sm font-semibold">Gerando seus cards com IA...</span>
+                    </div>
+                    <div
+                      style={{ height: 8, borderRadius: 999, background: 'var(--surface)', overflow: 'hidden' }}
+                    >
+                      <motion.div
+                        initial={{ width: '6%' }}
+                        animate={{ width: '92%' }}
+                        transition={{ duration: 20, ease: 'easeOut' }}
+                        style={{ height: '100%', borderRadius: 999, background: 'var(--accent)' }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted mt-2.5" style={{ lineHeight: 1.5 }}>
+                      Isso pode levar alguns segundos.{' '}
+                      <b className="text-fg">Não saia desta tela</b> enquanto o deck é gerado.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </Panel>
 
           {cards && (

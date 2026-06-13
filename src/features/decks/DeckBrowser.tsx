@@ -60,7 +60,8 @@ export function DeckBrowser() {
     <div>
       {/* Category filters + search */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
-        <div className="flex flex-wrap gap-2 flex-1">
+        {/* Category filters: a horizontal scrollable carousel (no wrap). */}
+        <div className="flex flex-nowrap gap-2 flex-1 overflow-x-auto hide-scrollbar">
           {[null, ...categories].map((c) => {
             const active = category === c;
             return (
@@ -68,7 +69,7 @@ export function DeckBrowser() {
                 key={c ?? '__all'}
                 type="button"
                 onClick={() => selectCategory(c)}
-                className="pill"
+                className="pill shrink-0"
                 style={{
                   position: 'relative',
                   overflow: 'hidden',
@@ -316,7 +317,7 @@ function HeroCard({
   };
   // Half-height on mobile (compact padding, no min-height); full card on sm+.
   const className =
-    'hero-card hover-lift flex items-center justify-center px-5 py-3 sm:px-6 sm:py-7 sm:min-h-[150px]';
+    'hero-card hover-lift flex items-center justify-start sm:justify-center px-5 py-3 sm:px-6 sm:py-7 sm:min-h-[150px]';
 
   return to ? (
     <Link to={to} className={className} style={style}>

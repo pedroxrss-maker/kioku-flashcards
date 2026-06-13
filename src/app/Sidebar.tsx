@@ -25,7 +25,9 @@ function Wordmark() {
 
 function navItemClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-[var(--r-sm)] transition-colors',
+    // `nav-jump` adds the same hover "jump" the Recentes items have (and carries
+    // its own color/background transitions, so transition-colors is dropped).
+    'nav-jump flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-[var(--r-sm)]',
     isActive
       ? 'text-fg bg-[color:var(--accent-soft)]'
       : 'text-muted hover:text-fg hover:bg-[color:var(--surface-2)]',

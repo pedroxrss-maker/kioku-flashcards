@@ -21,9 +21,10 @@ const LIGHT = '#ffffff';
 export function buttonsFor(count: ButtonCount): ButtonDef[] {
   const errei: ButtonDef = { rating: 'again', label: 'Errei', color: 'var(--accent)', text: LIGHT };
   const dificil: ButtonDef = { rating: 'hard', label: 'Difícil', color: 'var(--accent-amber)', text: DARK };
-  const bom: ButtonDef = { rating: 'good', label: 'Bom', color: 'var(--fg)', text: DARK };
-  // #00b569: black has ~7.9:1 contrast vs white ~2.7:1 -> dark text.
-  const facil: ButtonDef = { rating: 'easy', label: 'Fácil', color: 'var(--accent-green)', text: DARK };
+  // #00b569 green: black has ~7.9:1 contrast vs white ~2.7:1 -> dark text.
+  const bom: ButtonDef = { rating: 'good', label: 'Bom', color: 'var(--accent-green)', text: DARK };
+  // #1f6dff blue: white text for contrast.
+  const facil: ButtonDef = { rating: 'easy', label: 'Fácil', color: 'var(--accent-blue)', text: LIGHT };
   const acertei: ButtonDef = { rating: 'good', label: 'Acertei', color: 'var(--accent-green)', text: DARK };
 
   if (count === 2) return [errei, acertei];

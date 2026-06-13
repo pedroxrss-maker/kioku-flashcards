@@ -184,6 +184,52 @@ grant all on table public.review_logs to anon, authenticated, service_role;
 
 
 -- ----------------------------------------------------------------------------
+-- 7b) Gamificação: XP/nivel por usuario (uma linha) + historico de conquistas
+--     desbloqueadas (uma linha por conquista). RLS isolada por usuario, igual
+--     ao restante. (Mesmo conteudo do arquivo db/gamification.sql.)
+-- ----------------------------------------------------------------------------
+create table if not exists public.gamification (
+    user_id    uuid not null,
+    total_xp   integer default 0 not null,
+    level      integer default 1 not null,
+    updated_at timestamp with time zone default now() not null,
+    constraint gamification_pkey primary key (user_id),
+    constraint gamification_user_id_fkey foreign key (user_id) references auth.users(id) on delete cascade,
+    constraint gamification_total_xp_check check ((total_xp >= 0)),
+    constraint gamification_level_check check ((level >= 1))
+);
+
+create table if not exists public.achievement_unlocks (
+    id              uuid default gen_random_uuid() not null,
+    user_id         uuid not null,
+    achievement_key text not null,
+    unlocked_at     timestamp with time zone default now() not null,
+    constraint achievement_unlocks_pkey primary key (id),
+    constraint achievement_unlocks_user_key_unique unique (user_id, achievement_key),
+    constraint achievement_unlocks_user_id_fkey foreign key (user_id) references auth.users(id) on delete cascade
+);
+
+create index if not exists idx_achievement_unlocks_user
+    on public.achievement_unlocks using btree (user_id, unlocked_at);
+
+alter table public.gamification        enable row level security;
+alter table public.achievement_unlocks enable row level security;
+
+drop policy if exists "gamificação própria" on public.gamification;
+create policy "gamificação própria" on public.gamification
+  using ((auth.uid() = user_id))
+  with check ((auth.uid() = user_id));
+
+drop policy if exists "conquistas próprias" on public.achievement_unlocks;
+create policy "conquistas próprias" on public.achievement_unlocks
+  using ((auth.uid() = user_id))
+  with check ((auth.uid() = user_id));
+
+grant all on table public.gamification        to anon, authenticated, service_role;
+grant all on table public.achievement_unlocks to anon, authenticated, service_role;
+
+
+-- ----------------------------------------------------------------------------
 -- 8) Storage: bucket privado "media" (id = name = "media", public = false).
 --    Objetos (arquivos) sao dados e nao fazem parte deste schema.
 -- ----------------------------------------------------------------------------

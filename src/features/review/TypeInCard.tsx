@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, X } from 'lucide-react';
+import { Check, Send, X } from 'lucide-react';
 import { CardHtml } from '../media/CardHtml';
 import { PlayAudioButton } from './PlayAudioButton';
 import { stripTypeInMark, normalizeAnswer } from '../../lib/cardType';
@@ -84,7 +84,18 @@ export function TypeInCard({
 
   return (
     <div className="flip-scene w-full max-w-2xl">
-      <div className="cloze-card" style={{ minHeight: height }}>
+      <div
+        className="cloze-card"
+        style={{ minHeight: height, cursor: revealed ? 'default' : 'pointer' }}
+        onClick={(e) => {
+          if (revealed) return;
+          // Tapping anywhere on the card reveals the answer — but not when the tap
+          // is on the answer input (the user is typing) or a button (e.g. audio).
+          const t = e.target as HTMLElement;
+          if (t.closest('input') || t.closest('button')) return;
+          onReveal();
+        }}
+      >
         {/* Corner: plays the prompt (front) audio when it has a track. */}
         {hasFrontAudio && (
           <div className="absolute top-3 right-3">
@@ -104,6 +115,33 @@ export function TypeInCard({
             className="typein-input"
             aria-label="Resposta"
           />
+
+          {/* Minimalist send button (some mobile keyboards have no Enter icon). */}
+          {!revealed && (
+            <div className="flex justify-center mt-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onReveal();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                title="Enviar resposta"
+                aria-label="Enviar resposta"
+                className="inline-flex items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent)',
+                }}
+              >
+                <Send size={17} />
+              </button>
+            </div>
+          )}
 
           <AnimatePresence initial={false}>
             {revealed && (

@@ -19,8 +19,10 @@ import { defaultSettings, makeCard, makeDeck, newFsrsFields, newSm2Fields } from
 import { getQueryData, invalidate, setQueryData } from './store';
 import { pushToast } from '../lib/toast';
 import { startOfLocalDay } from '../lib/date';
+import { levelForXp } from '../features/gamification/xp';
 import type { KiokuRepository } from './repositories';
 import type {
+  AchievementUnlock,
   Algorithm,
   AppSettings,
   ButtonCount,
@@ -31,10 +33,12 @@ import type {
   Deck,
   DeckInput,
   FsrsFields,
+  GamificationState,
   MediaBlob,
   Rating,
   ReviewLog,
   Sm2Fields,
+  XpResult,
 } from './types';
 
 const DEFAULT_TTS_LANG = 'en-US';
@@ -460,6 +464,86 @@ export class SupabaseRepository implements KiokuRepository {
   }
 
   // ------------------------------------------------------------- settings --
+  // ----------------------------------------------------------- gamification --
+  /** Read the user's XP/level. A missing row (new user) reads as {0, level 1}. */
+  async getGamification(): Promise<GamificationState> {
+    const userId = await currentUserId();
+    const { data, error } = await supabase
+      .from('gamification')
+      .select('total_xp, level')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) readFail(error);
+    return {
+      totalXp: typeof data?.total_xp === 'number' ? data.total_xp : 0,
+      level: typeof data?.level === 'number' ? data.level : 1,
+    };
+  }
+
+  /**
+   * Add XP and upsert the new total + level (read-modify-write off the warm
+   * cache — single-device safe, see the schema note). Optimistically updates the
+   * cache so the UI reflects it instantly; reverts on a failed write. Returns the
+   * new state plus whether a level boundary was crossed.
+   */
+  async addXp(amount: number): Promise<XpResult> {
+    const userId = await currentUserId();
+    const current = getQueryData<GamificationState>('gamification') ?? (await this.getGamification());
+    const totalXp = current.totalXp + Math.max(0, Math.round(amount));
+    const level = levelForXp(totalXp);
+    const result: XpResult = { totalXp, level, fromLevel: current.level, leveledUp: level > current.level };
+
+    setQueryData<GamificationState>('gamification', { totalXp, level });
+    try {
+      await withRetry(async () => {
+        const { error } = await supabase
+          .from('gamification')
+          .upsert(
+            { user_id: userId, total_xp: totalXp, level, updated_at: toIso(Date.now()) },
+            { onConflict: 'user_id' },
+          );
+        if (error) throw error;
+      }, 3);
+    } catch (err) {
+      // XP is non-critical — don't nag with a toast; just revert the optimistic
+      // cache to the pre-write value so the UI stays truthful.
+      // eslint-disable-next-line no-console
+      console.error('[supabase addXp]', err);
+      setQueryData<GamificationState>('gamification', current);
+    }
+    return result;
+  }
+
+  /** Record an achievement unlock; the unique(user_id, key) makes a repeat a
+   *  no-op. Returns true only when it was newly unlocked. (Phase 2 scaffold.) */
+  async unlockAchievement(key: string): Promise<boolean> {
+    const userId = await currentUserId();
+    const { data, error } = await supabase
+      .from('achievement_unlocks')
+      .upsert(
+        { user_id: userId, achievement_key: key },
+        { onConflict: 'user_id,achievement_key', ignoreDuplicates: true },
+      )
+      .select('id');
+    if (error) {
+      writeFail(error, 'Não foi possível registrar a conquista.');
+    }
+    const isNew = (data?.length ?? 0) > 0;
+    if (isNew) invalidate();
+    return isNew;
+  }
+
+  /** All of the user's unlocked achievements, oldest first. (Phase 2 scaffold.) */
+  async listAchievements(): Promise<AchievementUnlock[]> {
+    const { data, error } = await supabase
+      .from('achievement_unlocks')
+      .select('achievement_key, unlocked_at')
+      .order('unlocked_at', { ascending: true });
+    if (error) readFail(error);
+    const rows = (data ?? []) as Array<{ achievement_key: string; unlocked_at: string }>;
+    return rows.map((r) => ({ key: r.achievement_key, unlockedAt: toEpoch(r.unlocked_at) }));
+  }
+
   async getSettings(): Promise<AppSettings> {
     const userId = await currentUserId();
     const { data, error } = await supabase

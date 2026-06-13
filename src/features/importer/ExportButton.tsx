@@ -6,10 +6,12 @@ import { downloadBlob } from '../../lib/download';
 interface ExportButtonProps {
   deckId: string;
   size?: 'sm' | 'md';
+  /** Render as an icon-top action tile (deck overview on mobile). */
+  tile?: boolean;
 }
 
 /** Exports the deck as a best-effort Anki .apkg (code-split). */
-export function ExportButton({ deckId, size = 'sm' }: ExportButtonProps) {
+export function ExportButton({ deckId, size = 'sm', tile = false }: ExportButtonProps) {
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -24,6 +26,15 @@ export function ExportButton({ deckId, size = 'sm' }: ExportButtonProps) {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (tile) {
+    return (
+      <button type="button" onClick={run} disabled={busy} className="deck-action-tile">
+        <Download size={22} />
+        <span>{busy ? 'Exportando…' : 'Exportar .apkg'}</span>
+      </button>
+    );
   }
 
   return (

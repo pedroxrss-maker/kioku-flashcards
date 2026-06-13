@@ -1,13 +1,16 @@
 import { SupabaseRepository } from './supabaseRepo';
 import type {
+  AchievementUnlock,
   AppSettings,
   Card,
   CardInput,
   DailyProgress,
   Deck,
   DeckInput,
+  GamificationState,
   MediaBlob,
   ReviewLog,
+  XpResult,
 } from './types';
 
 /**
@@ -52,6 +55,14 @@ export interface KiokuRepository {
   // settings
   getSettings(): Promise<AppSettings>;
   saveSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
+
+  // gamification (XP / level + achievement-unlock history)
+  getGamification(): Promise<GamificationState>;
+  /** Add XP (upsert); returns the new state + whether a level was crossed. */
+  addXp(amount: number): Promise<XpResult>;
+  /** Record an achievement unlock; returns true if it was newly unlocked. */
+  unlockAchievement(key: string): Promise<boolean>;
+  listAchievements(): Promise<AchievementUnlock[]>;
 
   // maintenance
   resetAll(): Promise<void>;

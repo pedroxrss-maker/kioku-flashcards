@@ -9,11 +9,13 @@ import { FlipCard } from '../features/review/FlipCard';
 import { ClozeCard } from '../features/review/ClozeCard';
 import { TypeInCard } from '../features/review/TypeInCard';
 import { Confetti } from '../features/review/Confetti';
+import { XP_REWARDS, levelForXp } from '../features/gamification/xp';
+import { celebrate } from '../features/gamification/celebration';
 import { cardTypeOf } from '../lib/cardType';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { TutorButton } from '../features/ai/TutorButton';
 import { CardAssistBar } from '../features/ai/CardAssistBar';
-import { useSettings } from '../db/hooks';
+import { useGamification, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { stripHtml } from '../lib/text';
 import { deckAudioEnabled } from '../lib/deckAudio';
@@ -33,9 +35,14 @@ export function ReviewSession() {
   const { deckId } = useParams();
   const nav = useNavigate();
   const settings = useSettings();
+  const gamification = useGamification();
   const session = useReviewSession(deckId);
   const { deck, currentDeck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
   const [editOpen, setEditOpen] = useState(false);
+  // XP is awarded once when a session completes; `award.leveledUp` lets the
+  // completion screen mute the confetti pop on a level-up (the banner chimes).
+  const awardedRef = useRef(false);
+  const [award, setAward] = useState<{ leveledUp: boolean } | null>(null);
   const cardWrapRef = useRef<HTMLDivElement>(null);
   const storedAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAutoPlayedId = useRef<string | null>(null);
@@ -216,6 +223,41 @@ export function ReviewSession() {
   const hasFrontAudio = !!settings?.tts.enabled && !!current && faceHasAudio(current, 'front', settings);
   const hasBackAudio = !!settings?.tts.enabled && !!current && faceHasAudio(current, 'back', settings);
 
+  // Type-in cards: auto-play the answer (back) audio once it is revealed.
+  const autoPlayedBackId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!current || !flipped || !backAudioUrl) return;
+    if (cardTypeOf(current.front) !== 'typein') return;
+    if (!settings?.tts.enabled || settings.mutedCards?.[current.id] === true) return;
+    if (autoPlayedBackId.current === current.id) return;
+    autoPlayedBackId.current = current.id;
+    replayBackAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flipped, current?.id, backAudioUrl]);
+
+  // Award XP once the session finishes (XP_REWARDS.reviewCard per card rated),
+  // then celebrate a level-up. Level-up is decided from the warm cached XP/level
+  // so the choice is instant; the persist is fire-and-forget (repo.addXp also
+  // updates the cache). Runs once (awardedRef); waits for the cached state.
+  useEffect(() => {
+    if (!session.done || counters.total <= 0 || awardedRef.current) return;
+    if (!gamification) return;
+    awardedRef.current = true;
+    const gained = counters.total * XP_REWARDS.reviewCard;
+    const newXp = gamification.totalXp + gained;
+    const newLevel = levelForXp(newXp);
+    const leveledUp = newLevel > gamification.level;
+    setAward({ leveledUp });
+    void repo.addXp(gained);
+    if (leveledUp) {
+      celebrate({
+        kind: 'levelup',
+        title: `Nível ${newLevel}!`,
+        message: `Você alcançou o nível ${newLevel}. Continue assim.`,
+      });
+    }
+  }, [session.done, counters.total, gamification]);
+
   if (session.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -243,7 +285,11 @@ export function ReviewSession() {
       : 0;
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-5 rise">
-        {reviewed > 0 && <Confetti />}
+        {/* Confetti waits until XP is tallied (`award`) so a level-up can mute the
+            pop — on a level-up the banner owns the chime instead. */}
+        {award && reviewed > 0 && (
+          <Confetti sound={!award.leveledUp && settings?.celebrationSound !== false} />
+        )}
         <div className="text-center">
           <Check size={40} className="mx-auto text-accent-green mb-3" style={{ color: 'var(--accent-green)' }} />
           <h1 className="display text-3xl">

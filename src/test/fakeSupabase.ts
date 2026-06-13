@@ -9,6 +9,8 @@ export interface FakeTables {
   cards: Record<string, unknown>[];
   review_logs: Record<string, unknown>[];
   profiles: Record<string, unknown>[];
+  gamification: Record<string, unknown>[];
+  achievement_unlocks: Record<string, unknown>[];
 }
 
 type Op = 'select' | 'insert' | 'update' | 'delete' | 'upsert';
@@ -26,6 +28,8 @@ class Query {
   private single = false;
   private count = false;
   private rangeSpec: { from: number; to: number } | null = null;
+  private conflictCols: string[] = ['id'];
+  private ignoreDup = false;
 
   constructor(
     private readonly rows: Record<string, unknown>[],
@@ -45,9 +49,11 @@ class Query {
     this.payload = payload;
     return this;
   }
-  upsert(payload: unknown) {
+  upsert(payload: unknown, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.op = 'upsert';
     this.payload = payload;
+    if (opts?.onConflict) this.conflictCols = opts.onConflict.split(',').map((s) => s.trim());
+    this.ignoreDup = opts?.ignoreDuplicates ?? false;
     return this;
   }
   delete() {
@@ -88,17 +94,23 @@ class Query {
   private exec() {
     if (this.op === 'insert' || this.op === 'upsert') {
       const items = Array.isArray(this.payload) ? this.payload : [this.payload];
+      const inserted: Record<string, unknown>[] = [];
       for (const it of items as Record<string, unknown>[]) {
         if (this.op === 'upsert') {
-          const idx = this.rows.findIndex((r) => r.id === it.id);
+          // Dedupe on the conflict columns (default 'id'); ON CONFLICT either
+          // updates the row or, with ignoreDuplicates, leaves it untouched.
+          const idx = this.rows.findIndex((r) => this.conflictCols.every((c) => r[c] === it[c]));
           if (idx >= 0) {
-            this.rows[idx] = { ...this.rows[idx], ...it };
+            if (!this.ignoreDup) this.rows[idx] = { ...this.rows[idx], ...it };
             continue;
           }
         }
         this.rows.push({ ...it });
+        inserted.push(it);
       }
-      return { data: items, error: null };
+      // ignoreDuplicates upsert returns only the rows actually inserted (so a
+      // caller can tell a fresh insert from a no-op), matching PostgREST.
+      return { data: this.ignoreDup ? inserted : items, error: null };
     }
     if (this.op === 'update') {
       for (const r of this.rows) {
@@ -161,6 +173,8 @@ export function createFakeSupabase(opts?: {
     cards: [],
     review_logs: [],
     profiles: [{ id: userId, display_name: displayName, daily_goal: 40, settings: {} }],
+    gamification: [],
+    achievement_unlocks: [],
   };
 
   const user = { id: userId, email, user_metadata: { display_name: displayName } };

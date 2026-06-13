@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from 'framer-motion';
+import { playConfetti } from '../gamification/sound';
 
 /** Brand-palette confetti. */
 const COLORS = ['#ff3b1f', '#1f6dff', '#00b569', '#ff9d00', '#b14cff', '#ff4d9d', '#00c2c7', '#ffd000'];
@@ -10,10 +11,20 @@ const COLORS = ['#ff3b1f', '#1f6dff', '#00b569', '#ff9d00', '#b14cff', '#ff4d9d'
  * volleys launch up and inward from the bottom-left and bottom-right corners
  * and arc back down. Portaled to <body> so ancestor transforms/clipping can't
  * hide or misplace it. Respects reduced motion.
+ *
+ * `sound` plays the synthesized confetti "pop" once on mount — callers pass it
+ * only when it should be heard (e.g. a normal session completion, but NOT when a
+ * level-up banner fires, since that owns the celebration chime).
  */
-export function Confetti() {
+export function Confetti({ sound = false }: { sound?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
+
+  // Confetti pop, once when this burst appears (independent of reduced motion).
+  useEffect(() => {
+    if (sound) playConfetti();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (reduce) return;
@@ -37,8 +48,10 @@ export function Confetti() {
         root.appendChild(el);
         pieces.push(el);
 
-        // Arc: up + inward to a peak, then fall past the bottom while fading.
-        const dx = side * (W * 0.12 + Math.random() * W * 0.42);
+        // Arc: up + INWARD to a peak, then fall past the bottom while fading.
+        // `-side` aims into the screen (left corner -> right, right corner -> left);
+        // `side` would fling every piece off the nearest edge (invisible).
+        const dx = -side * (W * 0.12 + Math.random() * W * 0.42);
         const peakY = -(H * 0.35 + Math.random() * H * 0.5);
         const rot = Math.random() * 900 - 450;
         const duration = 1700 + Math.random() * 1500;

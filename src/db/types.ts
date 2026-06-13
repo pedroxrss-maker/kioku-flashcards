@@ -113,6 +113,9 @@ export interface AppSettings {
   showAnswerIntervals?: boolean;
   /** Show how many reviews remain ("Card X de Y") during a study session. */
   showRemainingCount?: boolean;
+  /** Play a sound + confetti when leveling up and finishing a session. Unset =
+   *  enabled (default-on); set false to mute the celebration sound/confetti. */
+  celebrationSound?: boolean;
   /** Card ids that should NOT be auto-pronounced (cardId -> true). Stored here
    *  (settings jsonb) so no card-table column / migration is needed. */
   mutedCards?: Record<string, boolean>;
@@ -165,4 +168,27 @@ export interface CardInput {
 export interface DailyProgress {
   newDone: number;
   reviewsDone: number;
+}
+
+/* ----------------------------------------------------------- gamification */
+
+/** A user's gamification state: total XP earned and current level. Backed by the
+ *  dedicated `gamification` table (one row per user), not the settings jsonb. */
+export interface GamificationState {
+  totalXp: number;
+  level: number;
+}
+
+/** Outcome of awarding XP — the new state plus whether a level boundary was
+ *  crossed (so the caller can fire the level-up celebration). */
+export interface XpResult extends GamificationState {
+  fromLevel: number;
+  leveledUp: boolean;
+}
+
+/** One unlocked achievement (history row), epoch ms. Scaffold for Phase 2 —
+ *  no achievements are defined/awarded yet. */
+export interface AchievementUnlock {
+  key: string;
+  unlockedAt: number;
 }

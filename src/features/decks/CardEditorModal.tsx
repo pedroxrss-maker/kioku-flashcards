@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Cloud, Eye, Pencil, Volume2 } from 'lucide-react';
+import { Cloud, Eye, LayoutGrid, Pencil, Trash2, Volume2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
@@ -53,6 +54,8 @@ export function CardEditorModal({
   const editing = !!card;
   const reduce = useReducedMotion();
   const settings = useSettings();
+  const nav = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [type, setType] = useState<CardType>('basic');
   const [front, setFront] = useState(''); // basic/cloze front, or type-in prompt (no marker)
   const [back, setBack] = useState(''); // basic/cloze extra, or type-in answer
@@ -84,6 +87,7 @@ export function CardEditorModal({
       setBack(card?.back ?? '');
       setNonce((n) => n + 1);
       setPreviewing(false);
+      setConfirmDelete(false);
       setPronounce(card ? settings?.mutedCards?.[card.id] !== true : true);
       setDraftId(uuid());
       setPendingFront(null);
@@ -270,6 +274,27 @@ export function CardEditorModal({
     }
   }
 
+  /** Close the editor and jump to this card in its deck's overview (the panel),
+   *  passing the id so the deck page scrolls to it and plays the jump bounce. */
+  function viewInPanel() {
+    if (!card) return;
+    onClose();
+    nav(`/decks/${card.deckId}`, { state: { focusCardId: card.id } });
+  }
+
+  async function handleDelete() {
+    if (!card) return;
+    setSaving(true);
+    try {
+      await repo.deleteCard(card.id);
+      pushToast('success', 'Card excluído.');
+      onClose();
+    } finally {
+      setSaving(false);
+      setConfirmDelete(false);
+    }
+  }
+
   return (
     <Modal
       open={open}
@@ -278,14 +303,41 @@ export function CardEditorModal({
       width={640}
       footer={
         <>
-          <Button
-            variant="default"
-            className="mr-auto"
-            icon={previewing ? <Pencil size={15} /> : <Eye size={15} />}
-            onClick={() => setPreviewing((p) => !p)}
-          >
-            {previewing ? 'Voltar a editar' : 'Pré-visualizar'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 mr-auto">
+            <Button
+              variant="default"
+              icon={previewing ? <Pencil size={15} /> : <Eye size={15} />}
+              onClick={() => setPreviewing((p) => !p)}
+            >
+              {previewing ? 'Voltar a editar' : 'Pré-visualizar'}
+            </Button>
+            {editing && (
+              <>
+                <Button variant="default" icon={<LayoutGrid size={15} />} onClick={viewInPanel}>
+                  Ver no painel
+                </Button>
+                {confirmDelete ? (
+                  <Button
+                    variant="ghost"
+                    icon={<Trash2 size={15} />}
+                    onClick={handleDelete}
+                    disabled={saving}
+                    style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+                  >
+                    Confirmar exclusão
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    icon={<Trash2 size={15} />}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    Excluir
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
           <Button variant="ghost" onClick={onClose}>
             {editing ? 'Cancelar' : 'Fechar'}
           </Button>

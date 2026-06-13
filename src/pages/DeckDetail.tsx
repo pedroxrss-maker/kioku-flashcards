@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Folder, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
 import { useAllCards, useAllLogs, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
@@ -43,6 +43,14 @@ export function DeckDetail() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [audioDialogOpen, setAudioDialogOpen] = useState(false);
 
+  // "Ver no painel": the card editor navigates here with a focusCardId in the
+  // route state. Once that card's row is on screen, scroll to it and play the
+  // jump bounce so the user sees where it sits among the others.
+  const location = useLocation();
+  const focusCardId = (location.state as { focusCardId?: string } | null)?.focusCardId ?? null;
+  const [jumpId, setJumpId] = useState<string | null>(null);
+  const handledFocusKey = useRef<string | null>(null);
+
   const counts = useMemo(
     () => countCards(cards, Date.now(), deck),
     [cards, deck],
@@ -63,6 +71,22 @@ export function DeckDetail() {
     };
     return find(tree)?.children ?? [];
   }, [deck, decks, allCards, settings?.deckPaths]);
+
+  useEffect(() => {
+    if (!focusCardId) return;
+    if (handledFocusKey.current === location.key) return; // handled this navigation
+    if (!cards.some((c) => c.id === focusCardId)) return; // wait for the deck's cards to load
+    handledFocusKey.current = location.key;
+    // Next frame: the row is in the DOM; scroll to it and arm the jump (cleared
+    // by the wrapper's onAnimationEnd, so no timer fights effect re-runs).
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`card-${focusCardId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setJumpId(focusCardId);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCardId, location.key, cards.length]);
 
   if (loading) {
     return (
@@ -183,7 +207,34 @@ export function DeckDetail() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3 mt-6">
+          {/* Mobile: 2x2 grid of icon-top action tiles. */}
+          <div className="grid grid-cols-2 gap-3 mt-6 sm:hidden">
+            <Link
+              to={`/review/${deck.id}`}
+              className="deck-action-tile deck-action-tile-accent"
+            >
+              <Zap size={22} />
+              <span>Revisar agora</span>
+            </Link>
+            <button type="button" onClick={addCard} className="deck-action-tile">
+              <Plus size={22} />
+              <span>Adicionar card</span>
+            </button>
+            <ExportButton deckId={deck.id} tile />
+            {isTtsConfigured() && (
+              <button
+                type="button"
+                onClick={() => setAudioDialogOpen(true)}
+                className="deck-action-tile"
+              >
+                <Volume2 size={22} />
+                <span>Gerar áudio</span>
+              </button>
+            )}
+          </div>
+
+          {/* Desktop: the original button row. */}
+          <div className="hidden sm:flex flex-wrap gap-3 mt-6">
             <Link to={`/review/${deck.id}`} className="btn-mega">
               <Zap size={20} /> Revisar agora
             </Link>
@@ -285,12 +336,21 @@ export function DeckDetail() {
         ) : (
           <div className="flex flex-col gap-3">
             {cards.map((card) => (
-              <CardRow
+              <div
                 key={card.id}
-                card={card}
-                deck={deck}
-                onEdit={() => editCard(card)}
-              />
+                id={`card-${card.id}`}
+                className={jumpId === card.id ? 'card-jump' : undefined}
+                onAnimationEnd={
+                  jumpId === card.id
+                    ? (e) => {
+                        if (e.currentTarget === e.target) setJumpId(null);
+                      }
+                    : undefined
+                }
+                style={{ scrollMarginBlock: 24 }}
+              >
+                <CardRow card={card} deck={deck} onEdit={() => editCard(card)} />
+              </div>
             ))}
           </div>
         )}

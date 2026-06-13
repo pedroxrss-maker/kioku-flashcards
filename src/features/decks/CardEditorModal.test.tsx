@@ -2,6 +2,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { CardEditorModal } from './CardEditorModal';
 import { makeCard } from '../../db/factories';
 
@@ -9,7 +10,12 @@ describe('CardEditorModal preview', () => {
   it('toggles between the edit fields and a rendered preview', async () => {
     const card = makeCard({ deckId: 'd1', front: '<b>FrontText</b>', back: 'BackText' });
 
-    render(<CardEditorModal open onClose={() => {}} deckId="d1" card={card} />);
+    // The editor uses useNavigate ("Ver no painel"), so it needs Router context.
+    render(
+      <MemoryRouter>
+        <CardEditorModal open onClose={() => {}} deckId="d1" card={card} />
+      </MemoryRouter>,
+    );
 
     // Editing: the Frente/Verso fields are shown.
     expect(screen.getByText('Frente')).toBeTruthy();

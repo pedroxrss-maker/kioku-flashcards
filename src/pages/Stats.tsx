@@ -68,7 +68,7 @@ export function Stats() {
     .sort((a, b) => b.total - a.total);
 
   return (
-    <div className="rise flex flex-col gap-7">
+    <div className="rise flex flex-col gap-7 [&>*]:min-w-0">
       <PageHeader title="Estatísticas" subtitle="Seu progresso ao longo do tempo." />
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -116,7 +116,7 @@ export function Stats() {
         <DailyBars logs={logs} />
       </Panel>
 
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 [&>*]:min-w-0">
         {/* Per-deck progress */}
         <Panel className="p-5 md:p-6">
           <h2 className="mono text-sm text-muted mb-4">Progresso por deck</h2>

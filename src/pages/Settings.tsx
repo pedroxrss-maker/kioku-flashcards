@@ -395,6 +395,21 @@ export function Settings() {
             onChange={(v) => repo.saveSettings({ showRemainingCount: v })}
           />
         </div>
+        <div
+          className="flex items-center justify-between gap-4 mt-4 pt-4 border-t"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Sons de comemoração</p>
+            <p className="text-xs text-muted mt-0.5" style={{ lineHeight: 1.5 }}>
+              Toca um som ao subir de nível e ao concluir uma sessão de estudos.
+            </p>
+          </div>
+          <Toggle
+            checked={settings.celebrationSound !== false}
+            onChange={(v) => repo.saveSettings({ celebrationSound: v })}
+          />
+        </div>
       </Section>
 
       {/* Appearance */}
