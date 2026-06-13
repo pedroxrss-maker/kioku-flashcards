@@ -380,7 +380,12 @@ function DeckTreeRow({
         <div className="flex items-center gap-2 min-w-0">
           <p className="font-semibold truncate leading-tight">{node.name}</p>
           {node.deck && (
-            <AlgoBadge algorithm={node.deck.algorithm} className="shrink-0 hidden sm:inline-flex" />
+            // Wrapper carries `hidden` so it actually hides on mobile (.pill-algo
+            // sets display:inline-flex, which would override `hidden` directly on
+            // the badge). The deck name takes the freed space.
+            <span className="shrink-0 hidden sm:inline-flex">
+              <AlgoBadge algorithm={node.deck.algorithm} />
+            </span>
           )}
         </div>
       </button>

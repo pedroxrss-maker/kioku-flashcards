@@ -128,7 +128,11 @@ function DeckStudyRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
           <p className="font-semibold truncate leading-tight">{deck.name}</p>
-          <AlgoBadge algorithm={deck.algorithm} className="shrink-0 hidden sm:inline-flex" />
+          {/* Wrapper carries `hidden` so it actually hides on mobile (.pill-algo's
+              display:inline-flex would override `hidden` directly on the badge). */}
+          <span className="shrink-0 hidden sm:inline-flex">
+            <AlgoBadge algorithm={deck.algorithm} />
+          </span>
         </div>
       </div>
 
