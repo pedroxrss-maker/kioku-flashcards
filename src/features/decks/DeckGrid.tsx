@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Folder } from 'lucide-react';
 import { aggregateCounts, buildDeckTree, deckPathOf } from '../../lib/deckTree';
 import type { DeckTreeNode } from '../../lib/deckTree';
@@ -8,11 +10,10 @@ import { DeckGridCard, GridCounts, SubdeckToggle } from './DeckGridCard';
 import type { Card, Deck } from '../../db/types';
 
 /**
- * Mobile-only 2-column grid of deck tiles, hierarchy-aware: a deck (or pure
- * grouping folder) with subdecks shows a chevron that expands a nested sub-grid
- * below it (the parent goes full-width while open). Tapping a deck card opens its
- * overview. While searching, it flattens to matching decks (no hierarchy), like
- * the desktop tree.
+ * Mobile-only deck grid, hierarchy-aware. Two INDEPENDENT columns (masonry): a
+ * deck (or folder) with subdecks expands a nested list directly below it, IN ITS
+ * OWN COLUMN, so the sibling in the other column stays put on the same line. The
+ * reveal/hide slides smoothly. While searching it flattens to matching decks.
  */
 export function DeckGrid({
   decks,
@@ -58,20 +59,37 @@ export function DeckGrid({
       );
     }
     return (
-      <div className="grid grid-cols-2 gap-3">
-        {matches.map((d) => (
+      <TwoColumns
+        items={matches}
+        render={(d) => (
           <DeckGridCard key={d.id} deck={d} counts={countCards(cardsByDeck.get(d.id) ?? [], now, d)} />
-        ))}
-      </div>
+        )}
+      />
     );
   }
 
   const top = maxRows ? roots.slice(0, maxRows) : roots;
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {top.map((node) => (
+    <TwoColumns
+      items={top}
+      render={(node) => (
         <GridNode key={node.path} node={node} now={now} expandedSet={expanded} toggle={toggle} />
-      ))}
+      )}
+    />
+  );
+}
+
+/** Two equal, independent columns (masonry): each grows on its own, so an
+ *  expanded card never pushes the other column. Items alternate left/right to
+ *  keep a natural top-to-bottom reading order. */
+function TwoColumns<T>({ items, render }: { items: T[]; render: (item: T) => ReactNode }) {
+  const left: T[] = [];
+  const right: T[] = [];
+  items.forEach((it, i) => (i % 2 === 0 ? left : right).push(it));
+  return (
+    <div className="flex gap-3 items-start">
+      <div className="flex-1 min-w-0 flex flex-col gap-3">{left.map(render)}</div>
+      <div className="flex-1 min-w-0 flex flex-col gap-3">{right.map(render)}</div>
     </div>
   );
 }
@@ -87,6 +105,7 @@ function GridNode({
   expandedSet: Set<string>;
   toggle: (path: string) => void;
 }) {
+  const reduce = useReducedMotion();
   const counts = aggregateCounts(node, now);
   const hasKids = node.children.length > 0;
   const open = expandedSet.has(node.path);
@@ -95,10 +114,10 @@ function GridNode({
     return node.deck ? <DeckGridCard deck={node.deck} counts={counts} /> : null;
   }
 
-  // Parent (deck or pure folder): the tile, plus a nested sub-grid when expanded.
-  // While open it spans the full width so the subdecks read as a group below it.
+  // Parent (deck or pure folder): the tile, with its subdecks revealed below it
+  // within this column (smooth height slide). The tile keeps its normal width.
   return (
-    <div className={open ? 'col-span-2 flex flex-col gap-3' : ''}>
+    <div className="flex flex-col">
       {node.deck ? (
         <DeckGridCard
           deck={node.deck}
@@ -110,13 +129,27 @@ function GridNode({
       ) : (
         <FolderCard node={node} counts={counts} expanded={open} onToggle={() => toggle(node.path)} />
       )}
-      {open && (
-        <div className="grid grid-cols-2 gap-3 pl-2" style={{ borderLeft: '2px solid var(--line)' }}>
-          {node.children.map((child) => (
-            <GridNode key={child.path} node={child} now={now} expandedSet={expandedSet} toggle={toggle} />
-          ))}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="sub"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduce ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div
+              className="flex flex-col gap-3 pt-3 pl-2"
+              style={{ borderLeft: '2px solid var(--line)' }}
+            >
+              {node.children.map((child) => (
+                <GridNode key={child.path} node={child} now={now} expandedSet={expandedSet} toggle={toggle} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -142,7 +175,7 @@ function FolderCard({
         if (e.key === 'Enter') onToggle();
       }}
       className="relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden min-w-0 cursor-pointer"
-      style={{ minHeight: 116, background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+      style={{ minHeight: 104, background: 'var(--surface-2)', border: '1px solid var(--line)' }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 15 }}>
