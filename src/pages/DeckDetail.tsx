@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Folder, Play, Plus, Settings2, Volume2, Zap } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Folder, Play, Plus, Search, Settings2, Volume2, Zap } from 'lucide-react';
 import { useAllCards, useAllLogs, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
@@ -12,6 +12,7 @@ import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { DeckAvatar } from '../features/decks/deckIcons';
 import { ExportButton } from '../features/importer/ExportButton';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
+import { stripHtml } from '../lib/text';
 import {
   aggregateCounts,
   buildDeckTree,
@@ -42,6 +43,7 @@ export function DeckDetail() {
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [audioDialogOpen, setAudioDialogOpen] = useState(false);
+  const [cardQuery, setCardQuery] = useState('');
 
   // "Ver no painel": the card editor navigates here with a focusCardId in the
   // route state. Once that card's row is on screen, scroll to it and play the
@@ -127,6 +129,10 @@ export function DeckDetail() {
   }
 
   const pct = counts.total ? Math.round((counts.mastered / counts.total) * 100) : 0;
+  const cardQ = cardQuery.trim().toLowerCase();
+  const visibleCards = cardQ
+    ? cards.filter((c) => `${stripHtml(c.front)} ${stripHtml(c.back)}`.toLowerCase().includes(cardQ))
+    : cards;
 
   function addCard() {
     setEditingCard(null);
@@ -320,10 +326,25 @@ export function DeckDetail() {
 
       {/* Card list */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
           <h2 className="mono text-sm text-muted">
             Cards · {counts.total}
           </h2>
+          {cards.length > 0 && (
+            <div className="relative w-full sm:w-auto sm:min-w-[240px]">
+              <Search
+                size={15}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+              />
+              <input
+                className="field w-full"
+                style={{ paddingLeft: '2.25rem' }}
+                placeholder="Buscar card..."
+                value={cardQuery}
+                onChange={(e) => setCardQuery(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
         {cards.length === 0 ? (
@@ -333,9 +354,13 @@ export function DeckDetail() {
               Adicionar o primeiro card
             </Button>
           </Panel>
+        ) : visibleCards.length === 0 ? (
+          <Panel className="p-8 text-center">
+            <p className="text-muted">Nenhum card encontrado para “{cardQuery}”.</p>
+          </Panel>
         ) : (
           <div className="flex flex-col gap-3">
-            {cards.map((card) => (
+            {visibleCards.map((card) => (
               <div
                 key={card.id}
                 id={`card-${card.id}`}

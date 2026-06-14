@@ -9,7 +9,7 @@ import { groupCardsByDeck } from '../../lib/deckStats';
 import { Panel } from '../../components/Panel';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DeckTree, DECK_TABLE } from './DeckTree';
-import { DeckGridCard } from './DeckGridCard';
+import { DeckGrid } from './DeckGrid';
 import { CreateDeckModal } from './CreateDeckModal';
 import { DeckSettingsModal } from './DeckSettingsModal';
 import { cn } from '../../lib/cn';
@@ -59,10 +59,8 @@ export function DeckBrowser() {
 
   return (
     <div>
-      {/* Category filters + search */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
-        {/* Category filters: a horizontal scrollable carousel (no wrap). */}
-        <div className="flex flex-nowrap gap-2 flex-1 overflow-x-auto hide-scrollbar">
+      {/* Category filters: a horizontal scrollable carousel (no wrap). */}
+      <div className="flex flex-nowrap gap-2 overflow-x-auto hide-scrollbar mb-5">
           {[null, ...categories].map((c) => {
             const active = category === c;
             return (
@@ -101,31 +99,6 @@ export function DeckBrowser() {
               </button>
             );
           })}
-        </div>
-        <div className="relative">
-          <Search
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
-          />
-          <input
-            className="field"
-            style={{ minWidth: 220, paddingLeft: '2.25rem', paddingRight: '3rem' }}
-            placeholder="Buscar deck..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <kbd
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] mono pointer-events-none"
-            style={{
-              color: 'var(--muted)',
-              border: '1px solid var(--line-strong)',
-              borderRadius: 6,
-              padding: '1px 6px',
-            }}
-          >
-            ⌘K
-          </kbd>
-        </div>
       </div>
 
       {/* Create / generate — two prominent cards */}
@@ -148,23 +121,41 @@ export function DeckBrowser() {
         />
       </div>
 
+      {/* Search (below the create / generate cards). */}
+      <div className="relative mb-5">
+        <Search
+          size={15}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+        />
+        <input
+          className="field w-full"
+          style={{ paddingLeft: '2.25rem', paddingRight: '3rem' }}
+          placeholder="Buscar deck..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <kbd
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] mono pointer-events-none"
+          style={{
+            color: 'var(--muted)',
+            border: '1px solid var(--line-strong)',
+            borderRadius: 6,
+            padding: '1px 6px',
+          }}
+        >
+          ⌘K
+        </kbd>
+      </div>
+
       {/* Mobile: a 2-column grid of color deck cards. Tapping a card opens the
-          deck overview — no "Estudar" button on mobile. */}
+          deck overview (no "Estudar" button); decks with subdecks expand. */}
       <div className="sm:hidden">
         {decks.length === 0 ? (
           <p className="text-muted text-sm text-center py-10">
             Você ainda não tem decks. Crie o primeiro acima.
           </p>
-        ) : filtered.length === 0 ? (
-          <p className="text-muted text-sm text-center py-8">
-            Nenhum deck encontrado para “{query}”.
-          </p>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {filtered.map((d) => (
-              <DeckGridCard key={d.id} deck={d} cards={byDeck.get(d.id) ?? []} />
-            ))}
-          </div>
+          <DeckGrid decks={byCategory} cardsByDeck={byDeck} query={query} />
         )}
       </div>
 

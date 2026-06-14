@@ -35,7 +35,7 @@ import { useAuth } from '../features/auth/AuthContext';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
-import { DeckGridCard } from '../features/decks/DeckGridCard';
+import { DeckGrid } from '../features/decks/DeckGrid';
 import { computeStreak, greeting } from '../lib/greeting';
 import { dayKey, startOfLocalDay } from '../lib/date';
 import {
@@ -453,12 +453,10 @@ export function Home() {
             </div>
           ) : (
             <>
-              {/* Mobile: 2-column grid of color deck cards. Tapping opens the
-                  deck overview — no "Estudar" button on mobile. */}
-              <div className="grid grid-cols-2 gap-3 sm:hidden">
-                {filteredRows.slice(0, 6).map((r) => (
-                  <DeckGridCard key={r.deck.id} deck={r.deck} cards={byDeck.get(r.deck.id) ?? []} />
-                ))}
+              {/* Mobile: 2-column grid of color deck cards (tap opens the deck
+                  overview, no "Estudar" button; decks with subdecks expand). */}
+              <div className="sm:hidden">
+                <DeckGrid decks={decks} cardsByDeck={byDeck} query={query} maxRows={6} />
               </div>
 
               {/* Desktop: the existing rows / nested collapsible tree. */}
