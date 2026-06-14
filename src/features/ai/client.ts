@@ -16,6 +16,7 @@
  */
 import { buildGeneratePrompt, parseCardsJson } from './cards';
 import type { GeneratedCard, GenerateRequest } from './cards';
+import { supabase } from '../../lib/supabase';
 
 /** The model used for all generation and tutoring. Single source of truth; a
  *  single call can override it via createMessage's `model` option if needed. */
@@ -27,6 +28,55 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 /** Carries a user-facing (pt-BR) message; safe to show in dialogs/toasts. */
 export class AiError extends Error {}
+
+/** Which metered action an AI call counts as. The server enforces the limit
+ *  (consume_quota) and the period; the client only declares the metric. */
+export type AiMetric = 'deckGen' | 'tutor' | 'image';
+
+export interface QuotaInfo {
+  metric: AiMetric | string;
+  used: number;
+  /** The plan's cap for the period (0 = blocked on this plan, e.g. free images). */
+  limit: number;
+  period: 'day' | 'month' | string;
+}
+
+/** A specific AiError thrown when the proxy (429) refuses an AI call because a
+ *  plan usage limit was reached. Carries the limit details for the UI. */
+export class QuotaError extends AiError {
+  info: QuotaInfo;
+  constructor(message: string, info: QuotaInfo) {
+    super(message);
+    this.info = info;
+  }
+}
+
+function quotaMessage(p: { metric?: string; period?: string; max_count?: number }): string {
+  const periodWord = p.period === 'month' ? 'mensal' : 'diário';
+  const cap = typeof p.max_count === 'number' && p.max_count > 0 ? ` (${p.max_count})` : '';
+  switch (p.metric) {
+    case 'deckGen':
+      return `Limite ${periodWord} de gerações de deck atingido${cap}. Tente mais tarde ou faça upgrade do plano.`;
+    case 'tutor':
+      return `Limite ${periodWord} de usos do tutor IA atingido${cap}. Tente mais tarde ou faça upgrade do plano.`;
+    case 'image':
+      return p.max_count === 0
+        ? 'Geração de imagens não está disponível no seu plano. Faça upgrade para gerar imagens.'
+        : `Limite ${periodWord} de imagens atingido${cap}. Faça upgrade do plano.`;
+    default:
+      return 'Limite de uso atingido. Tente novamente mais tarde.';
+  }
+}
+
+/** Current Supabase access token (JWT) for the proxy's auth, or null. */
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** True when either a proxy URL or a direct key is configured. */
 export function isAiConfigured(): boolean {
@@ -52,6 +102,8 @@ interface CreateOptions {
   maxTokens?: number;
   /** Override the model for a single call (defaults to AI_MODEL). */
   model?: string;
+  /** Which usage metric this call counts as (sent to the proxy for the limit). */
+  metric: AiMetric;
 }
 
 /** One Gemini content part: plain text, or inline base64 data (PDF / image). */
@@ -79,7 +131,7 @@ function toGeminiContent(m: AiMessage): { role: 'user' | 'model'; parts: GeminiP
 /** Low-level Gemini generateContent call. Returns the concatenated model text.
  *  Keeps the same options shape callers used before; the translation to and from
  *  Gemini's request/response format lives entirely here. */
-async function createMessage({ system, messages, maxTokens = 4096, model = AI_MODEL }: CreateOptions): Promise<string> {
+async function createMessage({ system, messages, maxTokens = 4096, model = AI_MODEL, metric }: CreateOptions): Promise<string> {
   if (!isAiConfigured()) throw new AiError(NOT_CONFIGURED);
 
   const geminiBody = {
@@ -95,8 +147,13 @@ async function createMessage({ system, messages, maxTokens = 4096, model = AI_MO
   let url: string;
   let body: unknown;
   if (PROXY_URL) {
+    // Proxy mode: the user must be signed in — attach the Supabase JWT so the
+    // Worker can verify them and meter the usage. The metric goes in the body.
+    const token = await getAccessToken();
+    if (!token) throw new AiError('Faça login para usar a IA.');
+    headers['authorization'] = `Bearer ${token}`;
     url = PROXY_URL;
-    body = { model, ...geminiBody };
+    body = { model, metric, ...geminiBody };
   } else {
     url = `${GEMINI_BASE}/${model}:generateContent`;
     headers['x-goog-api-key'] = DIRECT_KEY as string;
@@ -111,20 +168,41 @@ async function createMessage({ system, messages, maxTokens = 4096, model = AI_MO
   }
 
   if (!res.ok) {
-    let detail = '';
+    let payload:
+      | { error?: unknown; code?: string; metric?: string; period?: string; used?: number; max_count?: number }
+      | null = null;
     try {
-      const j = (await res.json()) as { error?: { message?: string } };
-      if (j?.error?.message) detail = `: ${j.error.message}`;
+      payload = await res.json();
     } catch {
-      /* ignore body parse errors */
+      /* non-JSON error body */
     }
-    if (res.status === 401 || res.status === 403) {
-      throw new AiError(`Chave de IA inválida ou não autorizada${detail}.`);
+    const detail =
+      typeof payload?.error === 'string'
+        ? payload.error
+        : (payload?.error as { message?: string } | undefined)?.message ?? '';
+
+    // Plan usage limit hit (the proxy enforces it server-side).
+    if (res.status === 429 && payload?.code === 'quota_exceeded') {
+      throw new QuotaError(quotaMessage(payload), {
+        metric: payload.metric ?? metric,
+        used: payload.used ?? 0,
+        limit: payload.max_count ?? 0,
+        period: payload.period ?? 'day',
+      });
+    }
+    if (res.status === 401) {
+      throw new AiError('Sua sessão expirou. Entre novamente para usar a IA.');
+    }
+    if (res.status === 403) {
+      throw new AiError(`Acesso à IA não autorizado${detail ? `: ${detail}` : ''}.`);
+    }
+    if (res.status === 503 && payload?.code === 'quota_unavailable') {
+      throw new AiError('Não foi possível verificar seu limite agora. Tente novamente em instantes.');
     }
     if (res.status === 429) {
       throw new AiError('Limite de uso da IA atingido. Tente novamente em instantes.');
     }
-    throw new AiError(`Erro da IA (HTTP ${res.status})${detail}.`);
+    throw new AiError(`Erro da IA (HTTP ${res.status})${detail ? `: ${detail}` : ''}.`);
   }
 
   const data = (await res.json()) as {
@@ -153,6 +231,7 @@ export async function generateCards(req: GenerateRequest): Promise<GeneratedCard
     system,
     messages: [{ role: 'user', content }],
     maxTokens: 8000,
+    metric: 'deckGen',
   });
   const cards = parseCardsJson(text);
   // The quantity selector is authoritative UNLESS the user typed a number in
@@ -220,7 +299,7 @@ export async function tutorReply(req: TutorRequest): Promise<string> {
     `Front: ${req.front}. Back: ${req.back}. ` +
     'Help them understand it: give a real-world example, a simpler breakdown, an analogy, or a ' +
     'memory hook. Do not just repeat the answer. Be concise. Always reply in Brazilian Portuguese.';
-  return createMessage({ system, messages: req.history, maxTokens: 1024 });
+  return createMessage({ system, messages: req.history, maxTokens: 1024, metric: 'tutor' });
 }
 
 /** One-shot "teach me this" for a card the student did not understand. pt-BR. */
@@ -235,6 +314,7 @@ export async function tutorTeach(front: string, back: string): Promise<string> {
     system,
     messages: [{ role: 'user', content: 'Não entendi este card. Me ensine isso.' }],
     maxTokens: 700,
+    metric: 'tutor',
   });
 }
 
@@ -260,7 +340,7 @@ export async function cardAssist(
     `Front: ${front}. Back: ${back}. ` +
     'Answer in Brazilian Portuguese, in at most 3 short sentences. Be concrete and concise. ' +
     'Plain text only: no markdown, no headings, no preamble.';
-  return createMessage({ system, messages: [{ role: 'user', content: ASK[action] }], maxTokens: 400 });
+  return createMessage({ system, messages: [{ role: 'user', content: ASK[action] }], maxTokens: 400, metric: 'tutor' });
 }
 
 /**
@@ -279,6 +359,7 @@ export async function describeCardVisually(front: string, back: string): Promise
     system,
     messages: [{ role: 'user', content: 'Describe the illustration.' }],
     maxTokens: 120,
+    metric: 'image',
   });
   // One clean line, no surrounding quotes.
   return text.split('\n')[0].trim().replace(/^["']|["']$/g, '');

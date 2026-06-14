@@ -42,9 +42,11 @@ create table if not exists public.profiles (
     id uuid not null,
     display_name text default 'Estudante'::text not null,
     daily_goal integer default 40 not null,
+    plan text default 'free'::text not null,
     settings jsonb default '{}'::jsonb not null,
     created_at timestamp with time zone default now() not null,
     constraint profiles_pkey primary key (id),
+    constraint profiles_plan_check check ((plan = any (array['free'::text, 'basic'::text, 'advanced'::text]))),
     constraint profiles_id_fkey foreign key (id) references auth.users(id) on delete cascade
 );
 
@@ -227,6 +229,191 @@ create policy "conquistas próprias" on public.achievement_unlocks
 
 grant all on table public.gamification        to anon, authenticated, service_role;
 grant all on table public.achievement_unlocks to anon, authenticated, service_role;
+
+
+-- ----------------------------------------------------------------------------
+-- 7c) Limites de uso (freemium). A coluna profiles.plan ja esta embutida no
+--     create table de profiles acima. Aqui: contadores por usuario/metrica/
+--     periodo (RLS, escrita so via funcoes), os limites por plano (FONTE UNICA
+--     em quota_rules, espelhada em src/features/usage/limits.ts) e as funcoes
+--     atomicas consume_quota / get_usage. (Mesmo conteudo de db/usage-limits.sql.)
+-- ----------------------------------------------------------------------------
+create table if not exists public.usage_counters (
+    user_id    uuid    not null,
+    metric     text    not null,
+    period     text    not null,
+    bucket     text    not null,
+    count      integer default 0 not null,
+    updated_at timestamp with time zone default now() not null,
+    constraint usage_counters_pkey primary key (user_id, metric, period),
+    constraint usage_counters_user_id_fkey foreign key (user_id)
+        references auth.users(id) on delete cascade,
+    constraint usage_counters_metric_check
+        check (metric = any (array['deckGen'::text, 'tutor'::text, 'image'::text, 'audio'::text])),
+    constraint usage_counters_period_check
+        check (period = any (array['day'::text, 'month'::text])),
+    constraint usage_counters_count_check check (count >= 0)
+);
+
+alter table public.usage_counters enable row level security;
+
+-- Leitura so do dono; escrita apenas pelas funcoes SECURITY DEFINER (sem policy
+-- de insert/update/delete -> cliente nao adultera o proprio contador).
+drop policy if exists "uso próprio (leitura)" on public.usage_counters;
+create policy "uso próprio (leitura)" on public.usage_counters
+  for select using (auth.uid() = user_id);
+
+grant select on table public.usage_counters to authenticated;
+grant all    on table public.usage_counters to service_role;
+
+-- Limites por plano: FONTE UNICA. max_count: -1 = ilimitado, 0 = sempre nega.
+create or replace function public.quota_rules(p_plan text)
+returns table(metric text, period text, max_count integer)
+language sql
+immutable
+as $$
+  select r.metric, r.period, r.max_count
+  from (values
+    ('free',     'deckGen',  'day',       6),
+    ('free',     'tutor',    'day',      20),
+    ('free',     'image',    'month',     0),
+    ('free',     'audio',    'month',    -1),
+    ('basic',    'deckGen',  'month',   300),
+    ('basic',    'tutor',    'month',  1000),
+    ('basic',    'image',    'month',   100),
+    ('basic',    'audio',    'month',    -1),
+    ('advanced', 'deckGen',  'month',  1000),
+    ('advanced', 'tutor',    'month',  5000),
+    ('advanced', 'image',    'month',   300),
+    ('advanced', 'audio',    'month',    -1)
+  ) as r(plan, metric, period, max_count)
+  where r.plan = p_plan;
+$$;
+
+grant execute on function public.quota_rules(text) to anon, authenticated, service_role;
+
+-- Chave do periodo atual (UTC). Troque 'utc' por 'America/Sao_Paulo' se quiser.
+create or replace function public.current_bucket(p_period text)
+returns text
+language sql
+stable
+as $$
+  select case p_period
+    when 'month' then to_char((now() at time zone 'utc'), 'YYYY-MM')
+    else              to_char((now() at time zone 'utc'), 'YYYY-MM-DD')
+  end;
+$$;
+
+grant execute on function public.current_bucket(text) to anon, authenticated, service_role;
+
+-- consume_quota: registra 1 uso, atomico (trava a linha ate o commit) e diz se
+-- pode. Periodo/teto vem sempre do plano, nao do p_period (sem burla).
+create or replace function public.consume_quota(p_metric text, p_period text)
+returns table(allowed boolean, used integer, max_count integer, period text)
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_plan   text;
+  v_period text;
+  v_limit  integer;
+  v_bucket text;
+  v_count  integer;
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select coalesce(p.plan, 'free') into v_plan
+  from public.profiles p where p.id = v_uid;
+  v_plan := coalesce(v_plan, 'free');
+
+  select qr.period, qr.max_count into v_period, v_limit
+  from public.quota_rules(v_plan) qr where qr.metric = p_metric;
+
+  if v_period is null then
+    return query select true, 0, -1, coalesce(p_period, 'day');
+    return;
+  end if;
+
+  if v_limit < 0 then
+    return query select true, 0, -1, v_period;
+    return;
+  end if;
+
+  if v_limit = 0 then
+    return query select false, 0, 0, v_period;
+    return;
+  end if;
+
+  v_bucket := public.current_bucket(v_period);
+
+  -- Alias `uc` + colunas qualificadas: "period" colidiria com a coluna de saida
+  -- "period" do RETURNS TABLE (variavel implicita do PL/pgSQL).
+  insert into public.usage_counters as uc (user_id, metric, period, bucket, count)
+  values (v_uid, p_metric, v_period, v_bucket, 0)
+  on conflict (user_id, metric, period) do update
+    set bucket     = v_bucket,
+        count      = case when uc.bucket = v_bucket
+                          then uc.count else 0 end,
+        updated_at = now()
+  returning uc.count into v_count;
+
+  if v_count >= v_limit then
+    return query select false, v_count, v_limit, v_period;
+    return;
+  end if;
+
+  update public.usage_counters as uc
+    set count = uc.count + 1, updated_at = now()
+    where uc.user_id = v_uid and uc.metric = p_metric and uc.period = v_period
+    returning uc.count into v_count;
+
+  return query select true, v_count, v_limit, v_period;
+end;
+$$;
+
+grant execute on function public.consume_quota(text, text) to authenticated, service_role;
+
+-- get_usage: uso atual de todas as metricas do plano, sem incrementar.
+create or replace function public.get_usage()
+returns table(metric text, period text, used integer, max_count integer, remaining integer)
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_plan text;
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select coalesce(p.plan, 'free') into v_plan
+  from public.profiles p where p.id = v_uid;
+  v_plan := coalesce(v_plan, 'free');
+
+  return query
+  select qr.metric,
+         qr.period,
+         coalesce(u.cnt, 0) as used,
+         qr.max_count,
+         case when qr.max_count < 0 then -1
+              else greatest(qr.max_count - coalesce(u.cnt, 0), 0) end as remaining
+  from public.quota_rules(v_plan) qr
+  left join lateral (
+    select case when uc.bucket = public.current_bucket(qr.period)
+                then uc.count else 0 end as cnt
+    from public.usage_counters uc
+    where uc.user_id = v_uid and uc.metric = qr.metric and uc.period = qr.period
+  ) u on true;
+end;
+$$;
+
+grant execute on function public.get_usage() to authenticated, service_role;
 
 
 -- ----------------------------------------------------------------------------

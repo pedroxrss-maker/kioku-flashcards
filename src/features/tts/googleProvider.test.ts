@@ -2,6 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isTtsConfigured, listGoogleVoices, synthesizeGoogle } from './googleProvider';
 import { TtsProviderError } from './providers';
 
+// O Worker exige login: synthesizeGoogle anexa o JWT da sessao Supabase.
+vi.mock('../../lib/supabase', () => ({
+  supabase: {
+    auth: { getSession: async () => ({ data: { session: { access_token: 'test-jwt' } } }) },
+  },
+}));
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -43,6 +50,7 @@ describe('googleProvider', () => {
     const [url, init] = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock
       .calls[0] as [string, RequestInit];
     expect(url).toBe('https://tts.example.dev/synthesize');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-jwt');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toMatchObject({
       text: 'hello',

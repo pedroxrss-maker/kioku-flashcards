@@ -9,6 +9,7 @@
  * clara em pt-BR, sem quebrar o app.
  */
 import { TtsProviderError, type TtsVoice } from './providers';
+import { supabase } from '../../lib/supabase';
 
 export type GoogleAudioEncoding = 'MP3' | 'OGG_OPUS' | 'LINEAR16';
 
@@ -29,6 +30,16 @@ function proxyBase(): string {
 /** true quando VITE_TTS_PROXY_URL está definida (Worker disponível). */
 export function isTtsConfigured(): boolean {
   return proxyBase().length > 0;
+}
+
+/** Token de acesso (JWT) da sessão Supabase, para autenticar no Worker. */
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function mimeFor(encoding: GoogleAudioEncoding): string {
@@ -62,11 +73,18 @@ export async function synthesizeGoogle(text: string, opts: GoogleSynthOptions): 
   if (!base) throw new TtsProviderError(NOT_CONFIGURED);
 
   const audioEncoding = opts.audioEncoding ?? 'MP3';
+  // O Worker exige login: anexa o JWT do Supabase (Authorization: Bearer).
+  const token = await getAccessToken();
+  if (!token) throw new TtsProviderError('Faça login para gerar áudio.');
+
   let res: Response;
   try {
     res = await fetch(`${base}/synthesize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         text,
         voiceName: opts.voiceName,

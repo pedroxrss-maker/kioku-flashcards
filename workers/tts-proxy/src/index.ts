@@ -10,6 +10,11 @@
  * O navegador NUNCA recebe a credencial. NUNCA cometa segredos: a chave vem de
  * env.GOOGLE_TTS_API_KEY (Wrangler secret; localmente via .dev.vars, ignorado
  * pelo git). Veja o README para a opcao com service account + OAuth.
+ *
+ * AUTENTICACAO (mesma abordagem do ai-proxy): /synthesize exige o JWT do
+ * Supabase do usuario (Authorization: Bearer <token>), validado por assinatura
+ * contra o JWKS publico (ES256/ECC). NAO ha cota: audio e livre em todos os
+ * planos, entao o Worker so autentica e nunca chama consume_quota.
  */
 
 export interface Env {
@@ -17,6 +22,11 @@ export interface Env {
   GOOGLE_TTS_API_KEY: string;
   /** Origens permitidas, separadas por virgula (dominio de producao + dev). */
   ALLOWED_ORIGINS: string;
+  /** Supabase: URL do projeto, ex. https://xxxx.supabase.co (secret ou var).
+   *  O endpoint JWKS e derivado dela: {URL}/auth/v1/.well-known/jwks.json */
+  SUPABASE_URL: string;
+  /** Supabase: publishable key (sb_publishable_...), usada como apikey no JWKS. */
+  SUPABASE_ANON_KEY: string;
 }
 
 const GOOGLE_TTS = 'https://texttospeech.googleapis.com/v1';
@@ -53,7 +63,7 @@ function parseOrigins(env: Env): string[] {
 function corsHeaders(origin: string | null, env: Env): Record<string, string> {
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -68,6 +78,149 @@ function json(data: unknown, status: number, cors: Record<string, string>): Resp
     status,
     headers: { 'Content-Type': 'application/json', ...cors },
   });
+}
+
+// ── JWT (ES256 / JWKS) verification ──────────────────────────────────────────
+// Mesma abordagem do ai-proxy: o projeto usa chaves ASSIMETRICAS (ECC P-256 ->
+// ES256). Buscamos as chaves PUBLICAS no JWKS do Supabase e validamos a
+// assinatura localmente, escolhendo a chave pelo `kid`. O JWKS fica em cache na
+// memoria do Worker (TTL curto) e e refeito quando o `kid` nao e encontrado
+// (rotacao). Nenhum segredo de assinatura e necessario - so a URL do projeto e
+// a publishable key (apikey). SEM cota: este Worker apenas autentica.
+
+function base64UrlToBytes(input: string): Uint8Array {
+  const s = input.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4 ? 4 - (s.length % 4) : 0;
+  const bin = atob(s + '='.repeat(pad));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function decodeJsonSegment(seg: string): Record<string, unknown> {
+  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(seg)));
+}
+
+/** A standalone ArrayBuffer view of bytes (a BufferSource Web Crypto accepts). */
+function buf(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function utf8(s: string): ArrayBuffer {
+  return buf(new TextEncoder().encode(s));
+}
+
+interface JwtClaims {
+  sub: string;
+}
+
+interface Jwk {
+  kid?: string;
+  kty?: string;
+  crv?: string;
+  x?: string;
+  y?: string;
+}
+
+/** Resultado: ok | invalido (-> 401) | indisponivel/JWKS fora do ar (-> 503). */
+type VerifyOutcome = { ok: true; claims: JwtClaims } | { ok: false; unavailable: boolean };
+
+// Cache do JWKS em memoria do isolate (compartilhado entre requisicoes).
+let jwksCache: { keys: Jwk[]; fetchedAt: number } | null = null;
+const JWKS_TTL_MS = 10 * 60 * 1000; // 10 min
+
+function jwksUrl(env: Env): string {
+  return `${env.SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/.well-known/jwks.json`;
+}
+
+async function fetchJwks(env: Env): Promise<Jwk[] | null> {
+  try {
+    const res = await fetch(jwksUrl(env), { headers: { apikey: env.SUPABASE_ANON_KEY } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { keys?: Jwk[] };
+    if (!Array.isArray(data.keys)) return null;
+    jwksCache = { keys: data.keys, fetchedAt: Date.now() };
+    return data.keys;
+  } catch {
+    return null;
+  }
+}
+
+/** Chaves do JWKS: usa o cache se fresco; senao busca. Em falha de rede, cai no
+ *  cache antigo se existir. forceRefresh ignora o cache (usado na rotacao). */
+async function getJwks(env: Env, forceRefresh: boolean): Promise<Jwk[] | null> {
+  const fresh = jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL_MS;
+  if (jwksCache && fresh && !forceRefresh) return jwksCache.keys;
+  const keys = await fetchJwks(env);
+  if (keys) return keys;
+  return jwksCache ? jwksCache.keys : null; // fallback ao cache antigo
+}
+
+/** Acha a chave EC pelo kid. `unavailable` = nao deu para obter o JWKS (rede);
+ *  key=null com unavailable=false = JWKS ok, mas sem chave para esse kid. */
+async function findVerifyKey(
+  env: Env,
+  kid: string | undefined,
+): Promise<{ key: Jwk | null; unavailable: boolean }> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const keys = await getJwks(env, attempt === 1);
+    if (!keys) return { key: null, unavailable: true };
+    const key = keys.find((k) => k.kty === 'EC' && (!kid || k.kid === kid));
+    if (key) return { key, unavailable: false };
+  }
+  return { key: null, unavailable: false };
+}
+
+/** Verifica assinatura ES256 (via JWKS) + exp/nbf/aud/sub. */
+async function verifySupabaseJwt(token: string, env: Env): Promise<VerifyOutcome> {
+  const parts = token.split('.');
+  if (parts.length !== 3) return { ok: false, unavailable: false };
+  const [headerB64, payloadB64, sigB64] = parts;
+
+  let header: Record<string, unknown>;
+  let payload: Record<string, unknown>;
+  try {
+    header = decodeJsonSegment(headerB64);
+    payload = decodeJsonSegment(payloadB64);
+  } catch {
+    return { ok: false, unavailable: false };
+  }
+  if (header.alg !== 'ES256') return { ok: false, unavailable: false };
+
+  const found = await findVerifyKey(env, typeof header.kid === 'string' ? header.kid : undefined);
+  if (found.unavailable) return { ok: false, unavailable: true };
+  const jwk = found.key;
+  if (!jwk || !jwk.x || !jwk.y) return { ok: false, unavailable: false };
+
+  let ok = false;
+  try {
+    // Importa so os campos da chave publica EC (evita conflito com use/key_ops/alg).
+    const key = await crypto.subtle.importKey(
+      'jwk',
+      { kty: 'EC', crv: jwk.crv ?? 'P-256', x: jwk.x, y: jwk.y },
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify'],
+    );
+    // A assinatura JWS ES256 ja vem como r||s cru (P1363), que e o que o
+    // WebCrypto ECDSA verify espera.
+    ok = await crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      key,
+      buf(base64UrlToBytes(sigB64)),
+      utf8(`${headerB64}.${payloadB64}`),
+    );
+  } catch {
+    return { ok: false, unavailable: false };
+  }
+  if (!ok) return { ok: false, unavailable: false };
+
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp === 'number' && payload.exp < now) return { ok: false, unavailable: false };
+  if (typeof payload.nbf === 'number' && payload.nbf > now) return { ok: false, unavailable: false };
+  if (payload.aud && payload.aud !== 'authenticated') return { ok: false, unavailable: false };
+  if (typeof payload.sub !== 'string' || !payload.sub) return { ok: false, unavailable: false };
+  return { ok: true, claims: { sub: payload.sub } };
 }
 
 export default {
@@ -95,6 +248,33 @@ export default {
     if (request.method === 'POST' && url.pathname === '/synthesize') {
       if (!env.GOOGLE_TTS_API_KEY) {
         return json({ error: 'Credencial do Google não configurada no servidor.' }, 500, cors);
+      }
+      if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+        return json({ error: 'Autenticação não configurada no servidor.' }, 500, cors);
+      }
+
+      // Autenticacao do usuario (sem cota: audio e livre). JWT do Supabase
+      // validado por assinatura (ES256/JWKS). 401 se faltar/for invalido; 503
+      // fail-closed se nao deu para validar (JWKS fora do ar).
+      const authHeader = request.headers.get('Authorization') ?? '';
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (!token) {
+        return json({ error: 'Não autenticado.', code: 'unauthenticated' }, 401, cors);
+      }
+      const verified = await verifySupabaseJwt(token, env);
+      if (!verified.ok) {
+        if (verified.unavailable) {
+          return json(
+            { error: 'Não foi possível validar sua sessão agora. Tente novamente.', code: 'auth_unavailable' },
+            503,
+            cors,
+          );
+        }
+        return json(
+          { error: 'Sessão inválida ou expirada. Entre novamente.', code: 'unauthenticated' },
+          401,
+          cors,
+        );
       }
 
       let body: SynthesizeBody;
