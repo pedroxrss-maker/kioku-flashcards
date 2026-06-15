@@ -586,25 +586,29 @@ export function HeroMockup() {
   );
 }
 
-/** Solid white pointing-hand cursor. Built from overlapping white fills (no
- *  internal strokes), so the inside is fully white with no dark seam — unlike
- *  the lucide Pointer outline, whose open subpaths left a gap when filled. */
+/** Cursor de mao "apontando" (estilo do icone anexo): indice estendido, mais
+ *  tres dedos dobrados, polegar a esquerda e o punho. Preenchimento branco
+ *  solido com pequenas folgas entre os dedos (os vaos = a separacao dos dedos),
+ *  para aparecer sobre o mockup escuro. */
 function ClickHand({ size = 30 }: { size?: number }) {
   return (
     <svg
       width={size}
-      height={(size * 36) / 30}
-      viewBox="0 0 30 36"
+      height={(size * 34) / 30}
+      viewBox="0 0 30 34"
       fill="#fff"
       aria-hidden="true"
       focusable="false"
     >
-      {/* fist / folded fingers */}
-      <rect x="10" y="14" width="15" height="18" rx="6" />
-      {/* thumb */}
-      <rect x="5" y="15" width="8" height="6.5" rx="3.25" />
-      {/* index finger pointing up */}
-      <rect x="10" y="2" width="6" height="17" rx="3" />
+      {/* punho / palma */}
+      <rect x="7.4" y="12.5" width="18.6" height="18.5" rx="5.5" />
+      {/* polegar (inclinado, a esquerda) */}
+      <rect x="3.4" y="13" width="5" height="10.5" rx="2.5" transform="rotate(-32 5.9 18.25)" />
+      {/* quatro dedos: indice (mais alto) + medio + anelar + mindinho */}
+      <rect x="8" y="2" width="4.3" height="16.5" rx="2.15" />
+      <rect x="12.6" y="5.8" width="4.3" height="12.7" rx="2.15" />
+      <rect x="17.2" y="6.3" width="4.3" height="12.2" rx="2.15" />
+      <rect x="21.8" y="8.5" width="4" height="10" rx="2" />
     </svg>
   );
 }
