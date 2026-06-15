@@ -102,7 +102,7 @@ export function Pricing() {
   // os tres aparecerem juntos com o carrossel funcional. No desktop ficam
   // maiores e mais espacados (sem um cobrir o preco do outro).
   const compact = stageW > 0 && stageW < 768;
-  const cardW = stageW ? Math.min(360, stageW * (compact ? 0.6 : 0.86)) : 340;
+  const cardW = stageW ? Math.min(compact ? 296 : 360, stageW * (compact ? 0.62 : 0.86)) : 340;
   const spread = cardW * (compact ? 0.56 : 0.95);
   const n = PLANS_DATA.length;
 
@@ -147,7 +147,7 @@ export function Pricing() {
       <Reveal>
         <div ref={stageRef} className="relative mt-8">
           <div aria-hidden className="mx-auto" style={{ width: cardW, visibility: 'hidden' }}>
-            <PlanCardView plan={PLANS_DATA[1]} billing={billing} active />
+            <PlanCardView plan={PLANS_DATA[1]} billing={billing} active compact={compact} />
           </div>
 
           {PLANS_DATA.map((plan, i) => {
@@ -177,7 +177,7 @@ export function Pricing() {
                 transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 210, damping: 26 }}
                 onClick={() => !center && setActive(i)}
               >
-                <PlanCardView plan={plan} billing={billing} active={center} />
+                <PlanCardView plan={plan} billing={billing} active={center} compact={compact} />
               </motion.div>
             );
           })}
@@ -252,10 +252,13 @@ function PlanCardView({
   plan,
   billing,
   active,
+  compact,
 }: {
   plan: PlanCard;
   billing: Billing;
   active: boolean;
+  /** No mobile o conteudo encolhe (padding/preco/textos) para caber sem quebrar. */
+  compact: boolean;
 }) {
   const hi = !!plan.highlighted;
   const isAnnual = billing === 'anual';
@@ -280,34 +283,38 @@ function PlanCardView({
 
   const price = plan.free ? 'R$ 0' : isAnnual ? plan.annual! : plan.monthly!;
   const sub = plan.free ? 'Grátis para sempre' : '';
+  const featText = compact ? 'text-[12.5px]' : 'text-sm';
 
   return (
-    <div className="p-6 md:p-7 h-full flex flex-col" style={cardStyle}>
+    <div className={`${compact ? 'p-4' : 'p-6 md:p-7'} h-full flex flex-col`} style={cardStyle}>
       <div className="flex items-center gap-2">
-        <h3 className="display" style={{ fontSize: 20, fontWeight: 600, color: c.title }}>
+        <h3 className="display" style={{ fontSize: compact ? 17 : 20, fontWeight: 600, color: c.title }}>
           {PLAN_LABELS[plan.key]}
         </h3>
         {plan.badge && (
           <span
-            className="mono text-[11px] px-2 py-0.5"
-            style={{ background: 'var(--accent)', color: '#fff', borderRadius: 'var(--r-full)' }}
+            className={`mono px-2 py-0.5 ${compact ? 'text-[9px]' : 'text-[11px]'}`}
+            style={{ background: 'var(--accent)', color: '#fff', borderRadius: 'var(--r-full)', whiteSpace: 'nowrap' }}
           >
             {plan.badge}
           </span>
         )}
       </div>
-      <p className="text-sm mt-1.5" style={{ color: c.muted, lineHeight: 1.5 }}>
+      <p className={`mt-1.5 ${compact ? 'text-[12px]' : 'text-sm'}`} style={{ color: c.muted, lineHeight: 1.45 }}>
         {plan.tagline}
       </p>
 
       {/* Preco */}
-      <div className="mt-5">
+      <div className={compact ? 'mt-4' : 'mt-5'}>
         <div className="flex items-baseline gap-1.5">
-          <span className="display" style={{ fontSize: 40, fontWeight: 600, lineHeight: 1, color: c.title }}>
+          <span
+            className="display"
+            style={{ fontSize: compact ? 28 : 40, fontWeight: 600, lineHeight: 1, color: c.title, whiteSpace: 'nowrap' }}
+          >
             {price}
           </span>
           {!plan.free && (
-            <span className="text-sm" style={{ color: c.muted }}>
+            <span className={compact ? 'text-[12px]' : 'text-sm'} style={{ color: c.muted }}>
               /mês
             </span>
           )}
@@ -319,17 +326,17 @@ function PlanCardView({
 
       {/* Comparativo de recursos: tudo aparece, com check (incluso) ou X (ausente). */}
       <ul
-        className="mt-5 flex flex-col gap-2.5 flex-1"
-        style={{ borderTop: `1px solid ${hi ? 'var(--line)' : '#e6e5e0'}`, paddingTop: 18 }}
+        className={`flex flex-col flex-1 ${compact ? 'mt-4 gap-2' : 'mt-5 gap-2.5'}`}
+        style={{ borderTop: `1px solid ${hi ? 'var(--line)' : '#e6e5e0'}`, paddingTop: compact ? 14 : 18 }}
       >
         {plan.features.map((cell) => (
-          <li key={cell.label} className="flex items-center gap-2.5">
+          <li key={cell.label} className="flex items-center gap-2">
             {cell.ok ? (
-              <Check size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <Check size={compact ? 15 : 16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             ) : (
-              <X size={16} style={{ color: c.faded, flexShrink: 0 }} />
+              <X size={compact ? 15 : 16} style={{ color: c.faded, flexShrink: 0 }} />
             )}
-            <span className="text-sm" style={{ color: cell.ok ? c.body : c.faded, lineHeight: 1.4 }}>
+            <span className={featText} style={{ color: cell.ok ? c.body : c.faded, lineHeight: 1.35 }}>
               {cell.label}
             </span>
             {cell.badge && (
@@ -355,7 +362,7 @@ function PlanCardView({
         onClick={() => {
           /* TODO: ligar ao checkout/assinatura. Sem acao no passo visual. */
         }}
-        className={hi ? 'btn btn-accent w-full mt-6' : 'btn w-full mt-6'}
+        className={`${hi ? 'btn btn-accent' : 'btn'} w-full ${compact ? 'mt-4' : 'mt-6'}`}
         style={hi ? undefined : { background: '#17171b', color: '#fff', borderColor: 'transparent' }}
       >
         {plan.cta}
