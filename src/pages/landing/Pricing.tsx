@@ -146,8 +146,15 @@ export function Pricing() {
           absolutos e animados em torno do centro. */}
       <Reveal>
         <div ref={stageRef} className="relative mt-8">
-          <div aria-hidden className="mx-auto" style={{ width: cardW, visibility: 'hidden' }}>
-            <PlanCardView plan={PLANS_DATA[1]} billing={billing} active compact={compact} />
+          {/* Espacador invisivel: as 3 cartas empilhadas na MESMA celula do grid,
+              entao a altura do palco = a da carta mais alta. As cartas reais
+              preenchem essa altura (inset-y-0 + h-full), ficando todas iguais. */}
+          <div aria-hidden className="mx-auto grid" style={{ width: cardW, visibility: 'hidden' }}>
+            {PLANS_DATA.map((p) => (
+              <div key={p.key} style={{ gridArea: '1 / 1' }}>
+                <PlanCardView plan={p} billing={billing} active compact={compact} />
+              </div>
+            ))}
           </div>
 
           {PLANS_DATA.map((plan, i) => {
@@ -166,7 +173,7 @@ export function Pricing() {
             return (
               <motion.div
                 key={plan.key}
-                className="absolute top-0"
+                className="absolute inset-y-0"
                 style={style}
                 initial={false}
                 animate={{
