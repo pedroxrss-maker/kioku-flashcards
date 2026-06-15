@@ -98,9 +98,12 @@ export function Pricing() {
     return () => ro.disconnect();
   }, []);
 
-  const cardW = stageW ? Math.min(360, stageW * 0.86) : 340;
-  // Espacamento largo o bastante para os blocos nao cobrirem o preco um do outro.
-  const spread = cardW * 0.95;
+  // No mobile (tela estreita) os cartoes ficam menores e mais sobrepostos, para
+  // os tres aparecerem juntos com o carrossel funcional. No desktop ficam
+  // maiores e mais espacados (sem um cobrir o preco do outro).
+  const compact = stageW > 0 && stageW < 768;
+  const cardW = stageW ? Math.min(360, stageW * (compact ? 0.6 : 0.86)) : 340;
+  const spread = cardW * (compact ? 0.56 : 0.95);
   const n = PLANS_DATA.length;
 
   // Slot circular de cada cartao: -1 (esquerda), 0 (centro), 1 (direita). Em loop,
