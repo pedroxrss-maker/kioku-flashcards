@@ -6,7 +6,8 @@
   //   npx wrangler secret put GOOGLE_TTS_API_KEY
   //   npx wrangler secret put SUPABASE_URL          # ex.: https://xxxx.supabase.co
   //   npx wrangler secret put SUPABASE_ANON_KEY     # publishable key (sb_publishable_...)
-  // O JWT e validado via JWKS (ES256), derivado de SUPABASE_URL. Audio nao tem cota.
+  // O JWT e validado via JWKS (ES256), derivado de SUPABASE_URL. Cota: metrica
+  // "audio" (gratuito tem teto mensal; planos pagos sao ilimitados).
   // Ajuste ALLOWED_ORIGINS abaixo para o seu dominio de producao do Kioku
   // (mantendo http://localhost:5173 para desenvolvimento).
   "name": "kioku-tts-proxy",

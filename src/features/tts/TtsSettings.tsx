@@ -46,6 +46,7 @@ export function TtsSettings() {
       const blob = await synthesizeGoogle(sample, {
         voiceName: tt.googleVoiceName,
         languageCode: tt.googleLanguageCode,
+        preview: true, // prévia: não consome a cota de áudio do usuário
       });
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = URL.createObjectURL(blob);

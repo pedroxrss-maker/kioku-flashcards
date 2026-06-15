@@ -11,10 +11,12 @@
  * env.GOOGLE_TTS_API_KEY (Wrangler secret; localmente via .dev.vars, ignorado
  * pelo git). Veja o README para a opcao com service account + OAuth.
  *
- * AUTENTICACAO (mesma abordagem do ai-proxy): /synthesize exige o JWT do
- * Supabase do usuario (Authorization: Bearer <token>), validado por assinatura
- * contra o JWKS publico (ES256/ECC). NAO ha cota: audio e livre em todos os
- * planos, entao o Worker so autentica e nunca chama consume_quota.
+ * AUTENTICACAO + COTA (mesma abordagem do ai-proxy/image-proxy): /synthesize
+ * exige o JWT do Supabase do usuario (Authorization: Bearer <token>), validado
+ * por assinatura contra o JWKS publico (ES256/ECC), e chama consume_quota com a
+ * metrica "audio". O plano gratuito tem teto mensal de audios; os planos pagos
+ * sao ilimitados (a funcao decide pelo plano, entao para os pagos ela libera sem
+ * medir). 429 quando o limite estoura, 503 fail-closed quando nao da para checar.
  */
 
 export interface Env {
@@ -25,17 +27,22 @@ export interface Env {
   /** Supabase: URL do projeto, ex. https://xxxx.supabase.co (secret ou var).
    *  O endpoint JWKS e derivado dela: {URL}/auth/v1/.well-known/jwks.json */
   SUPABASE_URL: string;
-  /** Supabase: publishable key (sb_publishable_...), usada como apikey no JWKS. */
+  /** Supabase: publishable key (sb_publishable_...), usada como apikey no JWKS/RPC. */
   SUPABASE_ANON_KEY: string;
 }
 
 const GOOGLE_TTS = 'https://texttospeech.googleapis.com/v1';
+
+/** Metrica de cota da geracao de audio (igual a quota_rules no banco). */
+const AUDIO_METRIC = 'audio';
 
 interface SynthesizeBody {
   text?: string;
   voiceName?: string;
   languageCode?: string;
   audioEncoding?: 'MP3' | 'OGG_OPUS' | 'LINEAR16';
+  /** "Testar voz": gera a previa SEM consumir cota (mas ainda exige JWT). */
+  preview?: boolean;
 }
 
 /**
@@ -223,6 +230,48 @@ async function verifySupabaseJwt(token: string, env: Env): Promise<VerifyOutcome
   return { ok: true, claims: { sub: payload.sub } };
 }
 
+// ── Quota ────────────────────────────────────────────────────────────────────
+interface QuotaRow {
+  allowed: boolean;
+  used: number;
+  max_count: number;
+  /** A funcao consume_quota expoe a coluna de saida como "period_out". */
+  period_out: string;
+}
+
+/**
+ * Chama consume_quota como o proprio usuario, encaminhando o JWT ao endpoint RPC
+ * do Supabase (apikey = anon). auth.uid() dentro da funcao = o usuario, e a
+ * funcao decide o periodo/teto pelo plano. Retorna a linha ou null se nao deu
+ * para checar (o handler trata null como 503 fail-closed).
+ */
+async function consumeQuota(env: Env, userJwt: string, metric: string): Promise<QuotaRow | null> {
+  const url = `${env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/consume_quota`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${userJwt}`,
+      },
+      body: JSON.stringify({ p_metric: metric, p_period: 'day' }),
+    });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  let rows: QuotaRow[];
+  try {
+    rows = (await res.json()) as QuotaRow[];
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return rows[0];
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -253,9 +302,9 @@ export default {
         return json({ error: 'Autenticação não configurada no servidor.' }, 500, cors);
       }
 
-      // Autenticacao do usuario (sem cota: audio e livre). JWT do Supabase
-      // validado por assinatura (ES256/JWKS). 401 se faltar/for invalido; 503
-      // fail-closed se nao deu para validar (JWKS fora do ar).
+      // Autenticacao do usuario. JWT do Supabase validado por assinatura
+      // (ES256/JWKS). 401 se faltar/for invalido; 503 fail-closed se nao deu
+      // para validar (JWKS fora do ar). A cota de audio e aplicada mais abaixo.
       const authHeader = request.headers.get('Authorization') ?? '';
       const token = authHeader.replace(/^Bearer\s+/i, '').trim();
       if (!token) {
@@ -294,6 +343,35 @@ export default {
           400,
           cors,
         );
+      }
+
+      // Cota de audio: gratuito tem teto mensal; pagos sao ilimitados (a funcao
+      // consume_quota decide pelo plano). 429 se estourou, 503 se nao deu p/ checar.
+      // Previa ("Testar voz") NAO consome cota — mas o JWT ja foi exigido acima,
+      // entao isso so pula a medicao, nunca a autenticacao.
+      if (body.preview !== true) {
+        const quota = await consumeQuota(env, token, AUDIO_METRIC);
+        if (!quota) {
+          return json(
+            { error: 'Não foi possível verificar seu limite de uso. Tente novamente.', code: 'quota_unavailable' },
+            503,
+            cors,
+          );
+        }
+        if (!quota.allowed) {
+          return json(
+            {
+              error: 'Limite de uso atingido.',
+              code: 'quota_exceeded',
+              metric: AUDIO_METRIC,
+              period: quota.period_out,
+              used: quota.used,
+              max_count: quota.max_count,
+            },
+            429,
+            cors,
+          );
+        }
       }
 
       // Opcao (a), implementada aqui: API key por query string (mais simples).

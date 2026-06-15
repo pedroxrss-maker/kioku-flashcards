@@ -15,6 +15,7 @@ import { ForgettingCurve } from './ForgettingCurve';
 import { Features } from './Features';
 import { HowItWorks } from './HowItWorks';
 import { Science } from './Science';
+import { Pricing } from './Pricing';
 import { ComingSoon } from './ComingSoon';
 import { LandingFooter } from './LandingFooter';
 
@@ -91,6 +92,7 @@ export function Landing() {
         <HowItWorks />
         <Features />
         <Science />
+        <Pricing />
         <ComingSoon />
         <FinalCta />
       </main>

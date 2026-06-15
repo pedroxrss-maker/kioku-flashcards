@@ -9,6 +9,7 @@ const ANCHORS: Array<[string, string]> = [
   ['Recursos', 'recursos'],
   ['Como funciona', 'como-funciona'],
   ['Ciência', 'ciencia'],
+  ['Planos', 'precos'],
   ['Em breve', 'em-breve'],
 ];
 

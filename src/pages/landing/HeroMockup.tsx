@@ -12,7 +12,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { CSSProperties, ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import type { MotionValue } from 'framer-motion';
-import { ArrowRight, Flame, MoreVertical, Pointer, Star } from 'lucide-react';
+import { ArrowRight, Flame, MoreVertical, Star } from 'lucide-react';
 import { makeSm2Scheduler } from '../../features/scheduling/sm2-adapter';
 import type { Card, Rating } from '../../db/types';
 import { useCountUp } from './anim';
@@ -578,10 +578,33 @@ export function HeroMockup() {
             ease: 'easeInOut',
           }}
         >
-          <Pointer size={30} strokeWidth={1.6} fill="#fff" color="#fff" />
+          <ClickHand size={30} />
         </motion.div>
       )}
     </Scaler>
     </DemoCtx.Provider>
+  );
+}
+
+/** Solid white pointing-hand cursor. Built from overlapping white fills (no
+ *  internal strokes), so the inside is fully white with no dark seam — unlike
+ *  the lucide Pointer outline, whose open subpaths left a gap when filled. */
+function ClickHand({ size = 30 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={(size * 36) / 30}
+      viewBox="0 0 30 36"
+      fill="#fff"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {/* fist / folded fingers */}
+      <rect x="10" y="14" width="15" height="18" rx="6" />
+      {/* thumb */}
+      <rect x="5" y="15" width="8" height="6.5" rx="3.25" />
+      {/* index finger pointing up */}
+      <rect x="10" y="2" width="6" height="17" rx="3" />
+    </svg>
   );
 }

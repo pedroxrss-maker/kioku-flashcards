@@ -96,7 +96,7 @@ as $$
     ('free',     'deckGen',  'day',       6),
     ('free',     'tutor',    'day',      20),
     ('free',     'image',    'month',     0),
-    ('free',     'audio',    'month',    -1),
+    ('free',     'audio',    'month',   500),
     ('basic',    'deckGen',  'month',   300),
     ('basic',    'tutor',    'month',  1000),
     ('basic',    'image',    'month',   100),
@@ -142,7 +142,7 @@ grant execute on function public.current_bucket(text) to anon, authenticated, se
 --    uma checagem 'month'. p_period e aceito so para manter a assinatura pedida.
 -- ----------------------------------------------------------------------------
 create or replace function public.consume_quota(p_metric text, p_period text)
-returns table(allowed boolean, used integer, max_count integer, period text)
+returns table(allowed boolean, used integer, max_count integer, period_out text)
 language plpgsql
 security definer
 set search_path to 'public'

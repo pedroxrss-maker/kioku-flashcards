@@ -35,7 +35,7 @@ export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
     deckGen: { period: 'day', limit: 6 },
     tutor: { period: 'day', limit: 20 },
     image: { period: 'month', limit: 0 }, // free: no AI images
-    audio: { period: 'month', limit: -1 }, // audio allowed for everyone
+    audio: { period: 'month', limit: 500 }, // free: 500 audios/month (paid = unlimited)
   },
   basic: {
     deckGen: { period: 'month', limit: 300 }, // soft-high

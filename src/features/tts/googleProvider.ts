@@ -17,6 +17,8 @@ export interface GoogleSynthOptions {
   voiceName: string;
   languageCode: string;
   audioEncoding?: GoogleAudioEncoding;
+  /** "Testar voz": gera a prévia sem consumir a cota de áudio (ainda exige login). */
+  preview?: boolean;
 }
 
 const NOT_CONFIGURED =
@@ -90,6 +92,7 @@ export async function synthesizeGoogle(text: string, opts: GoogleSynthOptions): 
         voiceName: opts.voiceName,
         languageCode: opts.languageCode,
         audioEncoding,
+        preview: opts.preview === true,
       }),
     });
   } catch {
@@ -97,12 +100,25 @@ export async function synthesizeGoogle(text: string, opts: GoogleSynthOptions): 
   }
 
   if (!res.ok) {
-    let detail = '';
+    let payload: { error?: unknown; code?: string; max_count?: number } | null = null;
     try {
-      const j = (await res.json()) as { error?: unknown };
-      if (typeof j.error === 'string') detail = j.error;
+      payload = await res.json();
     } catch {
       /* corpo não-JSON: usa o status abaixo */
+    }
+    const detail = typeof payload?.error === 'string' ? payload.error : '';
+    // Limite de áudios do plano (hoje: 500/mês no gratuito; pagos ilimitados).
+    if (res.status === 429 && payload?.code === 'quota_exceeded') {
+      const cap = typeof payload.max_count === 'number' && payload.max_count > 0 ? ` (${payload.max_count})` : '';
+      throw new TtsProviderError(
+        `Você atingiu o limite mensal de áudios do seu plano${cap}. Faça upgrade para gerar mais.`,
+      );
+    }
+    if (res.status === 401) {
+      throw new TtsProviderError('Sua sessão expirou. Entre novamente para gerar áudio.');
+    }
+    if (res.status === 503 && payload?.code === 'quota_unavailable') {
+      throw new TtsProviderError('Não foi possível verificar seu limite agora. Tente novamente em instantes.');
     }
     throw new TtsProviderError(detail || `Erro ao gerar áudio (HTTP ${res.status}).`);
   }
