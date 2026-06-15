@@ -36,9 +36,13 @@ export interface Env {
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-/** Metricas que o ai-proxy serve. deckGen = geracao de decks; tutor = ajuda de
- *  IA durante a revisao; image = prompt visual do gerador de imagens. */
-const GATED_METRICS = ['deckGen', 'tutor', 'image'];
+/** Metricas aceitas no corpo. deckGen = geracao de decks; tutor = ajuda de IA na
+ *  revisao; image = prompt visual (describeCardVisually) do gerador de imagens. */
+const ACCEPTED_METRICS = ['deckGen', 'tutor', 'image'];
+/** Dessas, as que CONSOMEM cota aqui. "image" NAO conta no ai-proxy: a imagem e
+ *  contada uma unica vez no image-proxy, no momento da geracao real (describe e
+ *  gerar sempre acontecem juntos, entao contar nos dois seria contagem dupla). */
+const METERED_METRICS = ['deckGen', 'tutor'];
 
 interface GenerateBody {
   model?: string;
@@ -306,32 +310,36 @@ export default {
 
       // 2) Metrica obrigatoria e conhecida.
       const metric = typeof body.metric === 'string' ? body.metric : '';
-      if (!GATED_METRICS.includes(metric)) {
+      if (!ACCEPTED_METRICS.includes(metric)) {
         return json({ error: 'Métrica inválida.' }, 400, cors);
       }
 
       // 3) Limite de uso (atomico, no Postgres). O periodo vem do plano.
-      const quota = await consumeQuota(env, token, metric);
-      if (!quota) {
-        return json(
-          { error: 'Não foi possível verificar seu limite de uso. Tente novamente.', code: 'quota_unavailable' },
-          503,
-          cors,
-        );
-      }
-      if (!quota.allowed) {
-        return json(
-          {
-            error: 'Limite de uso atingido.',
-            code: 'quota_exceeded',
-            metric,
-            period: quota.period_out,
-            used: quota.used,
-            max_count: quota.max_count,
-          },
-          429,
-          cors,
-        );
+      //    "image" (describeCardVisually) NAO consome cota aqui: a imagem e
+      //    contada so no image-proxy, na geracao real. Esse passo so autentica.
+      if (METERED_METRICS.includes(metric)) {
+        const quota = await consumeQuota(env, token, metric);
+        if (!quota) {
+          return json(
+            { error: 'Não foi possível verificar seu limite de uso. Tente novamente.', code: 'quota_unavailable' },
+            503,
+            cors,
+          );
+        }
+        if (!quota.allowed) {
+          return json(
+            {
+              error: 'Limite de uso atingido.',
+              code: 'quota_exceeded',
+              metric,
+              period: quota.period_out,
+              used: quota.used,
+              max_count: quota.max_count,
+            },
+            429,
+            cors,
+          );
+        }
       }
 
       // A chave vai no cabecalho x-goog-api-key (fora da URL e dos logs). O `model`

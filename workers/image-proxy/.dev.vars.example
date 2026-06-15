@@ -1,3 +1,6 @@
 # Exemplo. Copie para `.dev.vars` (ignorado pelo git) e preencha para rodar
 # `wrangler dev` localmente. NUNCA cometa o arquivo .dev.vars real.
 OPENAI_API_KEY=coloque-sua-chave-aqui
+# Autenticacao + cota (mesma do ai-proxy). Use a publishable key (NAO a secret).
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_xxx

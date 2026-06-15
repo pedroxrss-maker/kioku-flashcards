@@ -2,8 +2,11 @@
   // Worker proxy de geracao de imagens (OpenAI) para o Kioku.
   //
   // Deploy (rode DENTRO de workers/image-proxy): `npx wrangler deploy`.
-  // A chave NUNCA fica neste arquivo. Defina-a como secret:
+  // Segredos NUNCA ficam neste arquivo. Defina-os com `wrangler secret put`:
   //   npx wrangler secret put OPENAI_API_KEY
+  //   npx wrangler secret put SUPABASE_URL          # ex.: https://xxxx.supabase.co
+  //   npx wrangler secret put SUPABASE_ANON_KEY     # publishable key (sb_publishable_...)
+  // O JWT e validado via JWKS (ES256), derivado de SUPABASE_URL. Cota: metrica "image".
   // Ajuste ALLOWED_ORIGINS abaixo para o seu dominio de producao do Kioku
   // (mantendo http://localhost:5173 para desenvolvimento).
   "name": "kioku-image-proxy",

@@ -18,6 +18,7 @@
 import { describeCardVisually } from './client';
 import { uploadImageToStorage } from '../media/media';
 import { recordStorageUpload } from '../media/usage';
+import { supabase } from '../../lib/supabase';
 import { repo } from '../../db/repositories';
 import { getQueryData } from '../../db/store';
 import { stripHtml } from '../../lib/text';
@@ -42,6 +43,16 @@ export class ImageGenError extends Error {}
 /** True when the image proxy Worker URL is configured. */
 export function isImageGenConfigured(): boolean {
   return Boolean(PROXY_URL);
+}
+
+/** Current Supabase access token (JWT) for the proxy's auth, or null. */
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /* ----------------------------------------------------------------- cap ----- */
@@ -93,11 +104,18 @@ async function generateImageBase64(prompt: string, size = DEFAULT_SIZE): Promise
       'Geração de imagens não configurada. Defina VITE_IMAGE_PROXY_URL e refaça o build.',
     );
   }
+  // O Worker exige login e aplica a cota: anexa o JWT do Supabase.
+  const accessToken = await getAccessToken();
+  if (!accessToken) throw new ImageGenError('Faça login para gerar imagens.');
+
   let res: Response;
   try {
     res = await fetch(PROXY_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({ prompt, size }),
     });
   } catch {
