@@ -275,7 +275,7 @@ as $$
   select r.metric, r.period, r.max_count
   from (values
     ('free',     'deckGen',  'day',       2),
-    ('free',     'tutor',    'day',      10),
+    ('free',     'tutor',    'day',      50),
     ('free',     'image',    'month',     0),
     ('free',     'audio',    'month',   200),
     ('basic',    'deckGen',  'month',   300),

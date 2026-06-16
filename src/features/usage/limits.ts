@@ -33,7 +33,7 @@ export const DEFAULT_PLAN: Plan = 'free';
 export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
   free: {
     deckGen: { period: 'day', limit: 2 }, // free: 2 decks com IA por dia
-    tutor: { period: 'day', limit: 10 }, // free: 10 explicações do tutor por dia
+    tutor: { period: 'day', limit: 50 }, // free: 50 usos/dia, pool unico das 5 ferramentas de IA da revisao
     image: { period: 'month', limit: 0 }, // free: no AI images
     audio: { period: 'month', limit: 200 }, // free: 200 audios/month (paid = unlimited)
   },
