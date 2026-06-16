@@ -15,8 +15,7 @@ import { celebrate } from '../features/gamification/celebration';
 import { scheduleAchievementCheck } from '../features/gamification/achievements';
 import { cardTypeOf } from '../lib/cardType';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
-import { TutorButton } from '../features/ai/TutorButton';
-import { CardAssistBar } from '../features/ai/CardAssistBar';
+import { CardAiHelp } from '../features/ai/CardAiHelp';
 import { useGamification, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { stripHtml } from '../lib/text';
@@ -405,10 +404,11 @@ export function ReviewSession() {
 
       {/* Card */}
       <div ref={cardWrapRef} className="flex-1 flex flex-col items-center justify-center px-4 py-6">
-        {/* O card fica ancorado pelo próprio centro: a dica (acima) e os botões
-            de IA (abaixo) são posicionados de forma absoluta, então nunca
-            deslocam o card da sua linha horizontal original. */}
-        <div className="relative w-full flex justify-center">
+        {/* O card fica ancorado pelo próprio centro: a dica (acima), os botões de
+            IA (abaixo) e o balão de resposta (à direita, no xl) são absolutos,
+            então nunca deslocam o card nem cobrem as notas. O wrapper tem a
+            largura do card (max-w-2xl) para o balão ancorar na borda direita. */}
+        <div className="relative w-full max-w-2xl">
           {!flipped && current && cardTypeOf(current.front) !== 'typein' && (
             <p
               className="absolute left-0 right-0 text-center mono text-[11px] text-muted animate-pulse"
@@ -490,32 +490,19 @@ export function ReviewSession() {
           )}
         </AnimatePresence>
 
-          {/* IA no verso: surge A PARTIR do card (desliza de trás dele para
-              baixo). É absoluta, então não levanta o card da sua linha. */}
-          <AnimatePresence>
-            {current && flipped && (
-              <motion.div
-                key={`ai-${current.id}`}
-                className="absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
-                style={{ top: '100%', zIndex: 0 }}
-                initial={reduce ? { opacity: 0 } : { opacity: 0, y: -24 }}
-                animate={{ opacity: 1, y: 12 }}
-                exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16 }}
-                transition={{ duration: reduce ? 0 : 0.34, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.1 }}
-              >
-                <CardAssistBar
-                  key={current.id}
-                  front={stripHtml(current.front)}
-                  back={stripHtml(current.back)}
-                />
-                <TutorButton
-                  key={`tutor-${current.id}`}
-                  front={stripHtml(current.front)}
-                  back={stripHtml(current.back)}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* IA no verso: botões surgem a partir do card e a resposta abre num
+              balão à direita (xl) ou folha inferior. O componente fica MONTADO
+              durante todo o card (key = id:total), então o cache das respostas
+              persiste ao olhar a frente, os elementos saem com fade, e só um card
+              novo (nova key) zera tudo. Ele decide o que mostrar via `flipped`. */}
+          {current && (
+            <CardAiHelp
+              key={`${current.id}:${counters.total}`}
+              flipped={flipped}
+              front={stripHtml(current.front)}
+              back={stripHtml(current.back)}
+            />
+          )}
         </div>
       </div>
 

@@ -113,10 +113,22 @@ export function DeckTree({
 }: DeckTreeProps) {
   const settings = useSettings();
   const deckPaths = settings?.deckPaths;
-  const collapsed = useMemo(
+  // Collapse/expand is owned LOCALLY once the user interacts. The state used to be
+  // derived straight from the global `settings` query, so a background refetch of
+  // getSettings (e.g. the slow initial load still in flight, or the failure-path
+  // invalidate) could return the pre-toggle value and clobber the optimistic
+  // open — the tree "abria e fechava sozinho" ~1s after a click. Owning it here
+  // makes the UI immune to that race; we still seed from and persist to settings.
+  const [collapsed, setCollapsed] = useState<Set<string>>(
     () => new Set(settings?.deckTreeCollapsed ?? []),
-    [settings?.deckTreeCollapsed],
   );
+  const ownedRef = useRef(false);
+  useEffect(() => {
+    // Until the first local toggle, mirror the persisted value (covers the async
+    // settings load and changes from elsewhere); after that, local state wins.
+    if (ownedRef.current) return;
+    setCollapsed(new Set(settings?.deckTreeCollapsed ?? []));
+  }, [settings?.deckTreeCollapsed]);
   const [menuPath, setMenuPath] = useState<string | null>(null);
   const table = variant === 'table';
   // Table rows are flush (separated by hairlines); the plain list keeps a gap.
@@ -128,10 +140,12 @@ export function DeckTree({
   );
 
   function toggle(path: string) {
+    ownedRef.current = true;
     const next = new Set(collapsed);
     if (next.has(path)) next.delete(path);
     else next.add(path);
-    void repo.saveSettings({ deckTreeCollapsed: [...next] });
+    setCollapsed(next); // instant + stable: a settings refetch can't revert it
+    void repo.saveSettings({ deckTreeCollapsed: [...next] }); // persist in the background
   }
 
   // Search flattens the tree to matching decks (name or full path), no nesting.

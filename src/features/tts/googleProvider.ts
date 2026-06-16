@@ -179,6 +179,8 @@ export const GOOGLE_VOICES: TtsVoice[] = [
   { id: 'ko-KR-Neural2-C', name: 'Coreano, masculina (C)', lang: 'ko-KR' },
   { id: 'ko-KR-Neural2-A', name: 'Coreano, feminina (A)', lang: 'ko-KR' },
   { id: 'ko-KR-Neural2-B', name: 'Coreano, feminina (B)', lang: 'ko-KR' },
+  // Grego (Grécia) — única voz disponível (WaveNet; sem Neural2, sem masculina)
+  { id: 'el-GR-Wavenet-A', name: 'Grego, feminina (WaveNet)', lang: 'el-GR' },
 ];
 
 /** Frase curta de teste por idioma (prefixo de 2 letras). Cai para inglês. */
@@ -191,6 +193,7 @@ const SAMPLES: Record<string, string> = {
   it: 'Ciao! Questa è una voce di prova di Kioku.',
   ja: 'こんにちは。これは Kioku のテスト音声です。',
   ko: '안녕하세요. 이것은 Kioku 테스트 음성입니다.',
+  el: 'Γεια σας! Αυτή είναι μια δοκιμαστική φωνή του Kioku.',
 };
 
 /** Texto de teste no idioma da voz (para o botão "Testar voz"). */
@@ -217,6 +220,7 @@ export function groupGoogleVoices(): Array<{ lang: string; label: string; items:
     { lang: 'it-IT', label: 'Italiano' },
     { lang: 'ja-JP', label: 'Japonês' },
     { lang: 'ko-KR', label: 'Coreano' },
+    { lang: 'el-GR', label: 'Grego' },
   ];
   return order
     .map((g) => ({ ...g, items: GOOGLE_VOICES.filter((v) => v.lang === g.lang) }))

@@ -1,19 +1,22 @@
-import { setUpdateAvailable } from './updateStore';
+import { setPendingUpdate } from './updateStore';
 
 /**
- * Service-worker registration + manual update prompt.
+ * Service-worker registration + SOFT auto-update (no user prompt).
  *
  * The SW (vite-plugin-pwa, 'prompt' mode) serves page navigations NETWORK-FIRST,
  * so a normal reload already fetches the newest index.html → newest hashed
  * bundles, with no hard refresh. This module additionally:
  *  - registers with updateViaCache:'none' so /sw.js is never served stale,
  *  - polls for a new deploy hourly (covers long-open standalone PWA sessions),
- *  - when a new SW is installed and waiting, surfaces a non-intrusive prompt
- *    (it never forces a reload); the user taps "Atualizar" → we post SKIP_WAITING
- *    → the new SW activates → controllerchange reloads into the new version.
+ *  - when a new SW is installed and waiting, records a PENDING update (the
+ *    skip-waiting trigger) in updateStore instead of showing a banner. The new
+ *    version is then applied SILENTLY by <PwaAutoUpdate> at the next safe moment
+ *    (a route change or app refocus, never mid-review): it posts SKIP_WAITING →
+ *    the new SW activates → controllerchange reloads into the new version.
  *
  * We register ourselves (vite-plugin-pwa injectRegister is off) to control all of
- * the above precisely.
+ * the above precisely. 'prompt' mode is kept (NOT 'autoUpdate') so the SW never
+ * reloads on its own; we decide exactly when it is safe to apply.
  */
 const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
 
@@ -46,7 +49,8 @@ async function register(): Promise<void> {
 
   const offerUpdate = (worker: ServiceWorker | null) => {
     if (!worker) return;
-    setUpdateAvailable(() => worker.postMessage({ type: 'SKIP_WAITING' }));
+    // Record the pending update; <PwaAutoUpdate> applies it at a safe moment.
+    setPendingUpdate(() => worker.postMessage({ type: 'SKIP_WAITING' }));
   };
 
   // A new SW may already be waiting (installed on a previous visit).

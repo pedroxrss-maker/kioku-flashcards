@@ -308,8 +308,10 @@ export async function tutorTeach(front: string, back: string): Promise<string> {
     'You are a patient, encouraging tutor. The student did NOT understand this flashcard. ' +
     `Front: ${front}. Back: ${back}. ` +
     'Teach it: state the key idea, then explain simply with a concrete example or analogy that ' +
-    'makes it stick. Answer in Brazilian Portuguese, plain text only (no markdown, no headings), ' +
-    'in a short, warm paragraph.';
+    'makes it stick. Answer in Brazilian Portuguese in a short, warm explanation. Keep it easy to ' +
+    'read: break it into 1 to 3 short paragraphs separated by a BLANK LINE when it helps, and wrap ' +
+    'a FEW key words or short phrases in **double asterisks** to highlight them (use sparingly — ' +
+    'do not highlight whole sentences). No headings, no preamble, no other markdown.';
   return createMessage({
     system,
     messages: [{ role: 'user', content: 'Não entendi este card. Me ensine isso.' }],
@@ -339,7 +341,8 @@ export async function cardAssist(
     'You help a student reviewing a flashcard. ' +
     `Front: ${front}. Back: ${back}. ` +
     'Answer in Brazilian Portuguese, in at most 3 short sentences. Be concrete and concise. ' +
-    'Plain text only: no markdown, no headings, no preamble.';
+    'No headings and no preamble. You MAY wrap one or two KEY words or short phrases in ' +
+    '**double asterisks** to highlight them — use sparingly, never a whole sentence.';
   return createMessage({ system, messages: [{ role: 'user', content: ASK[action] }], maxTokens: 400, metric: 'tutor' });
 }
 

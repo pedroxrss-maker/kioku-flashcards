@@ -15,9 +15,11 @@ export default defineConfig({
     // Supabase and studying still requires the network. Only the static app
     // shell (built JS/CSS/HTML + icons) is precached.
     VitePWA({
-      // 'prompt': a new deploy does NOT auto-reload. We register + drive a small
-      // "nova versão disponível" prompt ourselves (src/features/pwa), so the
-      // plugin must not inject its own registration script.
+      // 'prompt': a new deploy does NOT auto-reload. We register the SW ourselves
+      // (src/features/pwa) and apply the update SILENTLY at a safe moment (route
+      // change / refocus, never mid-review) via <PwaAutoUpdate> — no banner. We
+      // keep 'prompt' (NOT 'autoUpdate') precisely so the SW never reloads on its
+      // own; injectRegister is off so the plugin doesn't add its own script.
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: [

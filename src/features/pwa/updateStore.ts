@@ -1,29 +1,22 @@
 /**
- * Tiny external store (same shape as toast.ts) bridging the service-worker
- * update flow to React. registerPwa.ts calls setUpdateAvailable(apply) when a
- * new version is installed and waiting; <UpdateBanner> subscribes and shows the
- * "nova versão disponível" prompt. `apply` performs skip-waiting + reload.
+ * Tiny bridge between the service-worker update flow (registerPwa.ts, which runs
+ * OUTSIDE React) and the in-app soft auto-updater (<PwaAutoUpdate>, a React
+ * component). When a new SW is installed and waiting, registerPwa stores the
+ * "apply" callback here (it posts SKIP_WAITING); PwaAutoUpdate reads it and fires
+ * it at the next SAFE moment (route change / refocus, never mid-review).
+ *
+ * There is intentionally NO subscription/notify here and NO UI: the user is never
+ * prompted. The value is read on demand, only when a safe moment occurs.
  */
-let applyFn: (() => void) | null = null;
-const listeners = new Set<() => void>();
+let pendingApply: (() => void) | null = null;
 
-function emit(): void {
-  for (const l of listeners) l();
+/** Record that a new version is installed and waiting. `apply` triggers
+ *  skip-waiting on the waiting worker (which leads to controllerchange + reload). */
+export function setPendingUpdate(apply: () => void): void {
+  pendingApply = apply;
 }
 
-export function subscribeUpdate(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-/** The apply callback (skip-waiting + reload), or null when no update is ready. */
-export function getUpdateApply(): (() => void) | null {
-  return applyFn;
-}
-
-export function setUpdateAvailable(apply: () => void): void {
-  applyFn = apply;
-  emit();
+/** The pending apply callback, or null when no update is waiting. */
+export function getPendingUpdate(): (() => void) | null {
+  return pendingApply;
 }

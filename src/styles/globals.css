@@ -828,6 +828,32 @@ button.pill.pill-active:hover {
     transition: none;
   }
 }
+
+/* ------------------------------------------- balão de resposta da IA (revisão) */
+/* Todo o texto do balão (cabeçalho, resposta, estados) em negrito. */
+.kioku-ai-balloon {
+  font-weight: 700;
+}
+/* Em telas largas (xl+) o balão fica à direita do card; usa o espaço vazio
+   disponível (sem cobrir o card), mais largo e confortável de ler. */
+@media (min-width: 1280px) {
+  /* Largura = espaço livre à direita do card (~50vw - meia-largura do card -
+     gaps), deixando ~36px de margem até a borda direita. Cresce até 480px em
+     telas largas; nunca passa do espaço disponível (não cobre o card nem a borda). */
+  .kioku-ai-balloon {
+    width: clamp(260px, calc(50vw - 388px), 480px);
+  }
+}
+/* Highlight discreto para palavras/frases-chave marcadas pela IA (**termo**).
+   O balão é branco, então o texto do realce é escuro (como no card). */
+.ai-hl {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: #17171b;
+  border-radius: 4px;
+  padding: 0 0.25em;
+  font-weight: 700;
+}
+
 .kioku-audio-lbl {
   font-family: var(--body);
   font-size: 12px;
