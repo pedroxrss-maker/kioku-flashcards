@@ -44,6 +44,16 @@ const ACCEPTED_METRICS = ['deckGen', 'tutor', 'image'];
  *  gerar sempre acontecem juntos, entao contar nos dois seria contagem dupla). */
 const METERED_METRICS = ['deckGen', 'tutor'];
 
+/**
+ * Teto de cartas por deck gerado por IA, por plano. ESPELHA `AI_DECK_MAX_CARDS`
+ * em src/features/usage/limits.ts - mantenha os dois em sincronia. free = 20;
+ * pagos (basic/advanced) = 100. Este e o teto REAL, aplicado no servidor (corta
+ * a resposta do Gemini); o cliente so limita o seletor visualmente.
+ */
+const AI_DECK_MAX_CARDS: Record<string, number> = { free: 20, basic: 100, advanced: 100 };
+const maxCardsForPlan = (plan: string): number =>
+  AI_DECK_MAX_CARDS[plan] ?? AI_DECK_MAX_CARDS.free;
+
 interface GenerateBody {
   model?: string;
   metric?: string;
@@ -256,6 +266,82 @@ async function consumeQuota(env: Env, userJwt: string, metric: string): Promise<
   return rows[0];
 }
 
+// ── Teto de cartas por deck (deckGen) ────────────────────────────────────────
+
+/**
+ * Le o plano do usuario (free | basic | advanced) da tabela profiles via REST,
+ * autenticando com o PROPRIO JWT do usuario (a RLS de profiles limita a leitura
+ * ao dono, auth.uid() = id). Em QUALQUER falha cai em 'free' (o teto mais
+ * restrito), entao nunca libera mais que o permitido. Usado so no deckGen.
+ */
+async function fetchUserPlan(env: Env, userJwt: string, uid: string): Promise<string> {
+  const base = env.SUPABASE_URL.replace(/\/+$/, '');
+  const url = `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(uid)}&select=plan&limit=1`;
+  try {
+    const res = await fetch(url, {
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${userJwt}` },
+    });
+    if (!res.ok) return 'free';
+    const rows = (await res.json()) as Array<{ plan?: string }>;
+    const plan = Array.isArray(rows) && typeof rows[0]?.plan === 'string' ? rows[0].plan : 'free';
+    return plan === 'basic' || plan === 'advanced' ? plan : 'free';
+  } catch {
+    return 'free';
+  }
+}
+
+/**
+ * Anexa ao systemInstruction um limite DURO de cartas (lado do pedido): instrui o
+ * Gemini a nunca produzir mais que `maxCards`, mesmo que a instrucao do usuario
+ * peca mais. E so um "steer" (reduz desperdicio de tokens); a garantia real e o
+ * corte da resposta em capDeckCardsResponse.
+ */
+function withCardCapInstruction(systemInstruction: unknown, maxCards: number): unknown {
+  const note =
+    `HARD SERVER LIMIT: output AT MOST ${maxCards} flashcards in the JSON array, regardless of any ` +
+    `other instruction or requested count. If more are requested, include only the first ${maxCards}.`;
+  if (systemInstruction && typeof systemInstruction === 'object') {
+    const si = systemInstruction as { parts?: Array<{ text?: string }> };
+    const parts = Array.isArray(si.parts) ? [...si.parts] : [];
+    parts.push({ text: note });
+    return { ...si, parts };
+  }
+  return { parts: [{ text: note }] };
+}
+
+/**
+ * Corta o array de cartas da resposta do Gemini ao teto do plano (lado da
+ * resposta = garantia real). Le o texto de candidates[0].content.parts, isola o
+ * array JSON (do primeiro "[" ao ultimo "]"), e se tiver mais que `maxCards`
+ * troca por um array cortado e re-serializado. Em qualquer formato inesperado
+ * (sem array, JSON invalido, dentro do teto) devolve a resposta INTACTA, entao
+ * nunca quebra o fluxo do cliente.
+ */
+export function capDeckCardsResponse(data: unknown, maxCards: number): unknown {
+  if (!data || typeof data !== 'object') return data;
+  const d = data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  const cand = d.candidates?.[0];
+  const parts = cand?.content?.parts;
+  if (!cand || !Array.isArray(parts)) return data;
+
+  const text = parts.map((p) => (typeof p.text === 'string' ? p.text : '')).join('\n');
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start < 0 || end < 0 || end < start) return data; // nao e um array: deixa como veio
+
+  let arr: unknown;
+  try {
+    arr = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return data; // JSON invalido: o cliente trata o erro
+  }
+  if (!Array.isArray(arr) || arr.length <= maxCards) return data; // dentro do teto: intacto
+
+  const newText = JSON.stringify(arr.slice(0, maxCards));
+  cand.content = { ...(cand.content ?? {}), parts: [{ text: newText }] };
+  return d;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -342,11 +428,25 @@ export default {
         }
       }
 
+      // 3b) Geracao de deck: o teto de cartas por deck depende do plano (free=20,
+      //     pagos=100). Lido do profiles via REST com o JWT do usuario (RLS limita
+      //     ao dono). E o teto REAL: o cliente pode ser adulterado, aqui nao.
+      let deckMaxCards = 0;
+      if (metric === 'deckGen') {
+        const plan = await fetchUserPlan(env, token, claims.sub);
+        deckMaxCards = maxCardsForPlan(plan);
+      }
+
       // A chave vai no cabecalho x-goog-api-key (fora da URL e dos logs). O `model`
       // vai na URL; o corpo repassado ao Google e so o do Gemini (sem `model`/`metric`).
       const geminiBody: Record<string, unknown> = { contents: body.contents };
       if (body.systemInstruction !== undefined) geminiBody.systemInstruction = body.systemInstruction;
       if (body.generationConfig !== undefined) geminiBody.generationConfig = body.generationConfig;
+      // deckGen: injeta o teto duro de cartas no pedido (steer do Gemini; a
+      // garantia real e o corte da resposta logo abaixo).
+      if (metric === 'deckGen') {
+        geminiBody.systemInstruction = withCardCapInstruction(geminiBody.systemInstruction, deckMaxCards);
+      }
 
       let googleRes: Response;
       try {
@@ -373,9 +473,11 @@ export default {
         return json({ error: detail }, googleRes.status, cors);
       }
 
-      // Repassa o JSON do Gemini como veio (o cliente le candidates[...]).
+      // Repassa o JSON do Gemini. Em deckGen, CORTA o array de cartas ao teto do
+      // plano (garantia real, mesmo que o cliente peca 50 ou o Gemini exagere).
       const data = await googleRes.json();
-      return json(data, 200, cors);
+      const out = metric === 'deckGen' ? capDeckCardsResponse(data, deckMaxCards) : data;
+      return json(out, 200, cors);
     }
 
     return json({ error: 'Não encontrado.' }, 404, cors);

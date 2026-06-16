@@ -5,7 +5,8 @@
   "description": "Cloudflare Worker que faz proxy da API do Google Gemini para o Kioku.",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250601.0",

@@ -22,12 +22,16 @@ import type { ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import { clearQueryCache } from '../../db/store';
+import { DEFAULT_PLAN } from '../usage/limits';
+import type { Plan } from '../usage/limits';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   /** profiles.display_name → metadata → email local-part → "Estudante". */
   displayName: string;
+  /** profiles.plan (free | basic | advanced). Defaults to free until loaded. */
+  plan: Plan;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -82,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileName, setProfileName] = useState<string | null>(null);
+  const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN);
   const [recovery, setRecovery] = useState(false);
 
   const user = session?.user ?? null;
@@ -123,20 +128,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Load the profile display name whenever the signed-in user changes.
+  // Load the profile display name + plan whenever the signed-in user changes.
   useEffect(() => {
     if (!user) {
       setProfileName(null);
+      setPlan(DEFAULT_PLAN);
       return;
     }
     let active = true;
     void supabase
       .from('profiles')
-      .select('display_name')
+      .select('display_name, plan')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (active) setProfileName((data?.display_name as string | null) ?? null);
+        if (!active) return;
+        setProfileName((data?.display_name as string | null) ?? null);
+        const p = (data?.plan as string | null) ?? null;
+        setPlan(p === 'basic' || p === 'advanced' ? p : DEFAULT_PLAN);
       });
     return () => {
       active = false;
@@ -167,7 +176,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Valid session in hand: reflect the name instantly and route into the app
       // (onAuthStateChange also fires; setting it here makes routing immediate).
+      // New accounts always start on the free plan.
       setProfileName(trimmed);
+      setPlan(DEFAULT_PLAN);
       setSession(data.session);
     },
     [],
@@ -205,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       displayName,
+      plan,
       signUp,
       signIn,
       signOut,
@@ -212,7 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetPassword,
       updatePassword,
     }),
-    [user, loading, displayName, signUp, signIn, signOut, recovery, resetPassword, updatePassword],
+    [user, loading, displayName, plan, signUp, signIn, signOut, recovery, resetPassword, updatePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

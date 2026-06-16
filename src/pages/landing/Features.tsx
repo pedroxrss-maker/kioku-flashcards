@@ -17,7 +17,7 @@ import {
   Globe,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { FloatCard, Reveal, StaggerCard, StaggerGroup } from './anim';
+import { Reveal, StaggerCard, StaggerGroup } from './anim';
 import brandLogo from '../../../neurofluency-logo-branca.png';
 import plantaImg from '../../../planta-kioku.png';
 
@@ -453,11 +453,9 @@ export function Features() {
       </Reveal>
 
       <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-7 md:gap-x-11 gap-y-5 md:gap-y-6 mt-10">
-        {FEATURES.map((f, i) => (
+        {FEATURES.map((f) => (
           <StaggerCard key={f.title} className="h-full">
-            <FloatCard className="h-full" dragPct={0.05} bob={5} dur={5 + (i % 3) * 0.6} delay={i * 0.35}>
-              <FeatureCard {...f} />
-            </FloatCard>
+            <FeatureCard {...f} />
           </StaggerCard>
         ))}
       </StaggerGroup>

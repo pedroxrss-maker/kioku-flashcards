@@ -32,8 +32,8 @@ export const DEFAULT_PLAN: Plan = 'free';
 // ── EDIT LIMITS HERE (keep in sync with quota_rules in the SQL) ──────────────
 export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
   free: {
-    deckGen: { period: 'day', limit: 6 },
-    tutor: { period: 'day', limit: 20 },
+    deckGen: { period: 'day', limit: 2 }, // free: 2 decks com IA por dia
+    tutor: { period: 'day', limit: 10 }, // free: 10 explicações do tutor por dia
     image: { period: 'month', limit: 0 }, // free: no AI images
     audio: { period: 'month', limit: 500 }, // free: 500 audios/month (paid = unlimited)
   },
@@ -51,6 +51,24 @@ export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
   },
 };
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Max number of cards a single AI-generated deck may contain, by plan. This is a
+ * PER-GENERATION cap (not a daily/monthly counter, so it is not in quota_rules):
+ * the free plan is held to 20 cards per generated deck; paid plans use the UI
+ * maximum (100). Enforced where the deck is generated (the quantity selector is
+ * capped AND the result is truncated, so instructions like "faça 50 cards" can
+ * never exceed it on the free plan).
+ */
+export const AI_DECK_MAX_CARDS: Record<Plan, number> = {
+  free: 20,
+  basic: 100,
+  advanced: 100,
+};
+
+/** The cards-per-AI-deck cap for a plan (falls back to free). */
+export const aiDeckMaxCards = (plan: Plan): number =>
+  AI_DECK_MAX_CARDS[plan] ?? AI_DECK_MAX_CARDS.free;
 
 /** pt-BR labels for the UI. */
 export const PLAN_LABELS: Record<Plan, string> = {

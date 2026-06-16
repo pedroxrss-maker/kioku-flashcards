@@ -93,8 +93,8 @@ as $$
   select r.metric, r.period, r.max_count
   from (values
     -- plano       metrica     periodo   teto
-    ('free',     'deckGen',  'day',       6),
-    ('free',     'tutor',    'day',      20),
+    ('free',     'deckGen',  'day',       2),
+    ('free',     'tutor',    'day',      10),
     ('free',     'image',    'month',     0),
     ('free',     'audio',    'month',   500),
     ('basic',    'deckGen',  'month',   300),

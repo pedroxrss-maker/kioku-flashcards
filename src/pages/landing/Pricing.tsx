@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
 import { Reveal } from './anim';
 import { PLAN_LABELS } from '../../features/usage/limits';
@@ -36,8 +36,8 @@ const PLANS_DATA: PlanCard[] = [
     free: true,
     cta: 'Começar grátis',
     features: [
-      { ok: true, label: '6 decks com IA por dia' },
-      { ok: true, label: '20 explicações do tutor por dia' },
+      { ok: true, label: '2 decks com IA por dia (até 20 cartas cada)' },
+      { ok: true, label: '10 explicações do tutor por dia' },
       { ok: true, label: '500 áudios por mês para seus cards' },
       { ok: false, label: 'Sem imagens nos cards' },
       { ok: false, label: 'Funções exclusivas de IA' },
@@ -267,6 +267,7 @@ function PlanCardView({
   /** No mobile o conteudo encolhe (padding/preco/textos) para caber sem quebrar. */
   compact: boolean;
 }) {
+  const reduce = useReducedMotion();
   const hi = !!plan.highlighted;
   const isAnnual = billing === 'anual';
 
@@ -291,6 +292,13 @@ function PlanCardView({
   const price = plan.free ? 'R$ 0' : isAnnual ? plan.annual! : plan.monthly!;
   const sub = plan.free ? 'Grátis para sempre' : '';
   const featText = compact ? 'text-[11px]' : 'text-sm';
+  const priceStyle: CSSProperties = {
+    fontSize: compact ? 23 : 40,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: c.title,
+    whiteSpace: 'nowrap',
+  };
 
   return (
     <div className={`${compact ? 'p-3.5' : 'p-6 md:p-7'} h-full flex flex-col`} style={cardStyle}>
@@ -311,15 +319,35 @@ function PlanCardView({
         {plan.tagline}
       </p>
 
-      {/* Preco */}
+      {/* Preco: ao alternar mensal/anual, o numero troca com um crossfade suave.
+          Um "sizer" invisivel (o maior preco) reserva a largura, entao o "/mês"
+          ao lado nao se desloca durante o fade. */}
       <div className={compact ? 'mt-2.5' : 'mt-5'}>
         <div className="flex items-baseline gap-1.5">
-          <span
-            className="display"
-            style={{ fontSize: compact ? 23 : 40, fontWeight: 600, lineHeight: 1, color: c.title, whiteSpace: 'nowrap' }}
-          >
-            {price}
-          </span>
+          {plan.free ? (
+            <span className="display" style={priceStyle}>
+              {price}
+            </span>
+          ) : (
+            <span style={{ position: 'relative', display: 'inline-block', whiteSpace: 'nowrap' }}>
+              <span aria-hidden className="display" style={{ ...priceStyle, visibility: 'hidden' }}>
+                {plan.monthly}
+              </span>
+              <AnimatePresence initial={false}>
+                <motion.span
+                  key={price}
+                  className="display"
+                  style={{ ...priceStyle, position: 'absolute', left: 0, top: 0 }}
+                  initial={reduce ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: reduce ? 0 : 0.28, ease: 'easeInOut' }}
+                >
+                  {price}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          )}
           {!plan.free && (
             <span className={compact ? 'text-[10px]' : 'text-sm'} style={{ color: c.muted }}>
               /mês

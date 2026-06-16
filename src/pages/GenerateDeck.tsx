@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Type, Volume2, Wand2 } from 'lucide-react';
@@ -11,6 +11,8 @@ import { Select } from '../components/Select';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
 import { generateCards, isAiConfigured } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
+import { useAuth } from '../features/auth/AuthContext';
+import { aiDeckMaxCards } from '../features/usage/limits';
 import { fileToBase64 } from '../features/ai/readFile';
 import { extractFromUrl } from '../features/ai/url';
 import { generateDeckAudio } from '../features/tts/audioGen';
@@ -72,6 +74,9 @@ const SOURCE_SLIDE = {
 export function GenerateDeck() {
   const nav = useNavigate();
   const configured = isAiConfigured();
+  // O plano do usuário limita o tamanho do deck gerado por IA (gratuito = 20).
+  const { plan } = useAuth();
+  const maxCards = aiDeckMaxCards(plan);
 
   const [mode, setMode] = useState<Mode>('topic');
   const [sourceDir, setSourceDir] = useState(0);
@@ -81,6 +86,10 @@ export function GenerateDeck() {
   const [instructions, setInstructions] = useState('');
   const [types, setTypes] = useState<CardType[]>(['basic']);
   const [count, setCount] = useState(20);
+  // Nunca deixa a quantidade passar do teto do plano (ex.: free resolve em 20).
+  useEffect(() => {
+    setCount((c) => Math.min(c, maxCards));
+  }, [maxCards]);
   const [language, setLanguage] = useState('Portuguese (Brazil)');
   const [deckName, setDeckName] = useState('');
 
@@ -185,8 +194,16 @@ export function GenerateDeck() {
 
     try {
       const aiInstructions = instructions.trim() || undefined;
-      const result = await generateCards({ types, count, language, source, instructions: aiInstructions });
-      setCards(result);
+      // O plano limita as cartas por deck: pede no máximo `maxCards` e ainda
+      // corta o resultado, então instruções como "faça 50 cards" não furam o teto.
+      const result = await generateCards({
+        types,
+        count: Math.min(count, maxCards),
+        language,
+        source,
+        instructions: aiInstructions,
+      });
+      setCards(result.slice(0, maxCards));
       setGenNonce((n) => n + 1); // clears the editor's image selection
       void recordFeatureUse('aigen');
       if (!deckName.trim()) {
@@ -556,10 +573,15 @@ export function GenerateDeck() {
                   value={count}
                   onChange={setCount}
                   min={1}
-                  max={100}
+                  max={maxCards}
                   suffix="cards"
                   ariaLabel="Quantidade de cards"
                 />
+                {plan === 'free' && (
+                  <p className="text-[11px] text-muted mt-1.5" style={{ lineHeight: 1.4 }}>
+                    Plano gratuito: até {maxCards} cartas por deck gerado.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="field-label" htmlFor="g-lang">
