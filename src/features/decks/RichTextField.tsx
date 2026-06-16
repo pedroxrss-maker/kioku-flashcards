@@ -3,6 +3,7 @@ import type {
   ChangeEvent,
   ClipboardEvent as ReactClipboardEvent,
   KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
   ReactNode,
 } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -33,6 +34,10 @@ import { pushToast } from '../../lib/toast';
 const TEXT_COLORS = ['#c44f6a', '#c17d2e', '#3f9460', '#3a8fb0', '#4d72c4', '#9059c0'];
 /** Pastel highlight backgrounds (soft; the chip rounds + clones across lines). */
 const HL_COLORS = ['#fff1a6', '#cdeccf', '#cfe3fb', '#fcd4e2', '#e6d6fb', '#fde2c4'];
+
+/** Lixeira (lucide trash-2) embutida no chip de áudio do editor (só UI). */
+const TRASH_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
 
 interface RichTextFieldProps {
   label: string;
@@ -161,6 +166,8 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
   const audioRef = useRef<HTMLInputElement>(null);
   const [canCloze, setCanCloze] = useState(false);
   const [colorMenu, setColorMenu] = useState<'text' | 'hl' | null>(null);
+  // Pilha de áudios deletados (LIFO) para o Ctrl+Z restaurar no mesmo lugar.
+  const deletedAudio = useRef<Array<{ node: Node; parent: Node; next: Node | null }>>([]);
 
   // The Cloze button lights up only while text is selected inside THIS field.
   useEffect(() => {
@@ -199,6 +206,7 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
     toEditorHtml(valueHtml).then((h) => {
       if (alive && ref.current) {
         ref.current.innerHTML = h;
+        decorateChips();
         if (autoFocus) ref.current.focus();
       }
     });
@@ -210,6 +218,48 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
 
   function emit() {
     if (ref.current) onChange(fromEditorHtml(ref.current.innerHTML));
+  }
+
+  /** Garante a lixeira (UI) no canto de cada chip de áudio anexado do editor. */
+  function decorateChips() {
+    const el = ref.current;
+    if (!el) return;
+    el.querySelectorAll('.kioku-audio-chip').forEach((chip) => {
+      if (chip.querySelector(':scope > .kioku-audio-del')) return;
+      const del = document.createElement('span');
+      del.className = 'kioku-audio-del';
+      del.setAttribute('contenteditable', 'false');
+      del.setAttribute('role', 'button');
+      del.setAttribute('aria-label', 'Excluir áudio anexado');
+      del.setAttribute('title', 'Excluir áudio anexado');
+      del.innerHTML = TRASH_SVG;
+      chip.appendChild(del);
+    });
+  }
+
+  /** Clique na lixeira: remove o chip de áudio (empilha para o Ctrl+Z). */
+  function onEditorClick(e: ReactMouseEvent<HTMLDivElement>) {
+    const del = (e.target as HTMLElement).closest('.kioku-audio-del');
+    if (!del) return;
+    e.preventDefault();
+    const chip = del.closest('.kioku-audio-chip');
+    if (!chip || !chip.parentNode) return;
+    deletedAudio.current.push({ node: chip, parent: chip.parentNode, next: chip.nextSibling });
+    chip.parentNode.removeChild(chip);
+    emit();
+  }
+
+  /** Desfaz a última exclusão de áudio (Ctrl+Z): reinsere o chip no mesmo lugar. */
+  function restoreLastAudio(): boolean {
+    const last = deletedAudio.current.pop();
+    if (!last) return false;
+    const el = ref.current;
+    const parent = el && (last.parent === el || el.contains(last.parent)) ? last.parent : el;
+    if (!parent) return false;
+    const next = last.next && parent.contains(last.next) ? last.next : null;
+    parent.insertBefore(last.node, next);
+    emit();
+    return true;
   }
 
   /**
@@ -274,6 +324,7 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
   function insertAudioChip(audio: { id: string; url: string; label: string }) {
     if (!ref.current) return;
     ref.current.insertAdjacentHTML('beforeend', audioChipHtml(audio));
+    decorateChips();
     emit();
   }
 
@@ -377,8 +428,18 @@ export const RichTextField = forwardRef<RichTextFieldHandle, RichTextFieldProps>
           suppressContentEditableWarning
           onInput={emit}
           onPaste={onPaste}
+          onClick={onEditorClick}
           onKeyDown={(e: ReactKeyboardEvent<HTMLDivElement>) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onCtrlEnter) {
+            // Ctrl+Z restaura o último áudio deletado (antes do undo nativo de texto).
+            if (
+              (e.ctrlKey || e.metaKey) &&
+              !e.shiftKey &&
+              e.key.toLowerCase() === 'z' &&
+              deletedAudio.current.length > 0
+            ) {
+              e.preventDefault();
+              restoreLastAudio();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onCtrlEnter) {
               e.preventDefault();
               onCtrlEnter();
             } else if (e.key === 'Tab' && !e.shiftKey && onTab) {

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion, useInView, useReducedMotion } from 'framer-motion';
 import {
   BarChart3,
   Bot,
@@ -17,7 +17,7 @@ import {
   Globe,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Reveal, StaggerCard, StaggerGroup } from './anim';
+import { FloatCard, Reveal, StaggerCard, StaggerGroup } from './anim';
 import brandLogo from '../../../neurofluency-logo-branca.png';
 import plantaImg from '../../../planta-kioku.png';
 
@@ -391,53 +391,48 @@ function DemoScreen({ children }: { children: ReactNode }) {
 
 function FeatureCard({ icon: Icon, title, desc, Demo }: Feature) {
   const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState(false);
+  // Ao passar o mouse, a capa off-white sobe (de baixo para cima) e revela a
+  // tela escondida atrás, que demonstra o recurso. A demo só roda enquanto o
+  // bloco está visível (ou em hover). Sem dobra de página.
+  const visible = useInView(ref, { amount: 0.05 });
+  const demoOn = hover || (visible && !reduce);
 
   return (
     <div
-      className="p-5 md:p-6 h-full relative overflow-hidden"
-      style={{
-        borderRadius: 'var(--r-lg)',
-        background: '#f5f4f1',
-        border: '1px solid #e6e5e0',
-        color: '#17171b',
-        minHeight: 198,
-        boxShadow: hover ? 'var(--shadow-card)' : 'none',
-        transition: 'box-shadow .3s ease',
-      }}
+      ref={ref}
+      className="relative overflow-hidden h-full"
+      style={{ borderRadius: 'var(--r-lg)', minHeight: 210 }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <span
-        className="icon-tile mb-4"
-        style={{ width: 42, height: 42, background: 'var(--accent-soft)', color: 'var(--accent)' }}
-      >
-        <Icon size={20} />
-      </span>
-      <h3 className="display" style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.2, color: '#17171b' }}>
-        {title}
-      </h3>
-      <p className="text-sm mt-2" style={{ lineHeight: 1.55, color: '#5b5b63' }}>
-        {desc}
-      </p>
+      {/* a tela escondida (atrás da capa), com a animação do recurso */}
+      <DemoScreen>
+        <Demo on={demoOn} reduce={!!reduce} />
+      </DemoScreen>
 
-      {/* A "tela" sobe de baixo, dentro do mesmo bloco, e demonstra o recurso. */}
-      <AnimatePresence>
-        {hover && (
-          <motion.div
-            key="demo"
-            className="absolute inset-0"
-            initial={reduce ? { opacity: 0 } : { y: '101%' }}
-            animate={reduce ? { opacity: 1 } : { y: 0 }}
-            exit={reduce ? { opacity: 0 } : { y: '101%' }}
-            transition={reduce ? { duration: 0.15 } : { type: 'spring', stiffness: 230, damping: 30 }}
-          >
-            <DemoScreen>
-              <Demo on={hover} reduce={!!reduce} />
-            </DemoScreen>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* a capa off-white por cima: sobe de baixo para cima revelando a tela */}
+      <motion.div
+        className="absolute inset-0 p-5 md:p-6"
+        style={{ background: '#f5f4f1', border: '1px solid #e6e5e0', borderRadius: 'var(--r-lg)', color: '#17171b' }}
+        initial={false}
+        animate={reduce ? { opacity: hover ? 0 : 1 } : { y: hover ? '-100%' : '0%' }}
+        transition={{ duration: reduce ? 0.15 : 0.55, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <span
+          className="icon-tile mb-4"
+          style={{ width: 42, height: 42, background: 'var(--accent-soft)', color: 'var(--accent)' }}
+        >
+          <Icon size={20} />
+        </span>
+        <h3 className="display" style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.2, color: '#17171b' }}>
+          {title}
+        </h3>
+        <p className="text-sm mt-2" style={{ lineHeight: 1.55, color: '#5b5b63' }}>
+          {desc}
+        </p>
+      </motion.div>
     </div>
   );
 }
@@ -457,10 +452,12 @@ export function Features() {
         </div>
       </Reveal>
 
-      <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 mt-10">
-        {FEATURES.map((f) => (
+      <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-7 md:gap-x-11 gap-y-5 md:gap-y-6 mt-10">
+        {FEATURES.map((f, i) => (
           <StaggerCard key={f.title} className="h-full">
-            <FeatureCard {...f} />
+            <FloatCard className="h-full" dragPct={0.05} bob={5} dur={5 + (i % 3) * 0.6} delay={i * 0.35}>
+              <FeatureCard {...f} />
+            </FloatCard>
           </StaggerCard>
         ))}
       </StaggerGroup>

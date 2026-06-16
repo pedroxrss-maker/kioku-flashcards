@@ -1,4 +1,4 @@
-import { Reveal, StaggerCard, StaggerGroup } from './anim';
+import { FloatCard, Reveal, StaggerCard, StaggerGroup } from './anim';
 
 function NumberBadge({ n }: { n: string }) {
   return (
@@ -39,14 +39,18 @@ export function Science() {
       </Reveal>
 
       <StaggerGroup className="grid md:grid-cols-3 gap-4 md:gap-5 mt-9">
-        {ITEMS.map((s) => (
-          <StaggerCard key={s.n} className="surface p-6 md:p-7 flex flex-col" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
-            <NumberBadge n={s.n} />
-            <h3 className="display mt-4" style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.25 }}>{s.title}</h3>
-            <p className="text-sm text-muted mt-2" style={{ lineHeight: 1.55 }}>{s.desc}</p>
-            <div className="mt-auto pt-8">
-              <img src={s.img} alt="" draggable={false} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
-            </div>
+        {ITEMS.map((s, i) => (
+          <StaggerCard key={s.n} className="h-full">
+            <FloatCard className="h-full" dur={5 + i * 0.7} delay={i * 0.5}>
+              <div className="surface p-6 md:p-7 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
+                <NumberBadge n={s.n} />
+                <h3 className="display mt-4" style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.25 }}>{s.title}</h3>
+                <p className="text-sm text-muted mt-2" style={{ lineHeight: 1.55 }}>{s.desc}</p>
+                <div className="mt-auto pt-8">
+                  <img src={s.img} alt="" draggable={false} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
+                </div>
+              </div>
+            </FloatCard>
           </StaggerCard>
         ))}
       </StaggerGroup>

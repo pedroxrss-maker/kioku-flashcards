@@ -1,4 +1,4 @@
-import { Reveal, StaggerCard, StaggerGroup } from './anim';
+import { FloatCard, Reveal, StaggerCard, StaggerGroup } from './anim';
 
 // bg matches each illustration's background so the image blends into the card.
 const STEPS: Array<{ n: string; title: string; desc: string; img: string; bg: string }> = [
@@ -34,16 +34,20 @@ export function HowItWorks() {
       </Reveal>
 
       <StaggerGroup className="grid md:grid-cols-3 gap-5 md:gap-6 mt-10">
-        {STEPS.map((s) => (
-          <StaggerCard key={s.n} className="surface p-7 md:p-8 flex flex-col" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
-            <span className="display" style={{ fontSize: 46, fontWeight: 600, color: 'var(--accent)', lineHeight: 1 }}>
-              {s.n}
-            </span>
-            <h3 className="display mt-3" style={{ fontSize: 20, fontWeight: 600 }}>{s.title}</h3>
-            <p className="text-muted mt-2" style={{ fontSize: 15, lineHeight: 1.6 }}>{s.desc}</p>
-            <div className="mt-auto pt-8">
-              <img src={s.img} alt="" draggable={false} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
-            </div>
+        {STEPS.map((s, i) => (
+          <StaggerCard key={s.n} className="h-full">
+            <FloatCard className="h-full" dur={5 + i * 0.7} delay={i * 0.5}>
+              <div className="surface p-7 md:p-8 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
+                <span className="display" style={{ fontSize: 46, fontWeight: 600, color: 'var(--accent)', lineHeight: 1 }}>
+                  {s.n}
+                </span>
+                <h3 className="display mt-3" style={{ fontSize: 20, fontWeight: 600 }}>{s.title}</h3>
+                <p className="text-muted mt-2" style={{ fontSize: 15, lineHeight: 1.6 }}>{s.desc}</p>
+                <div className="mt-auto pt-8">
+                  <img src={s.img} alt="" draggable={false} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
+                </div>
+              </div>
+            </FloatCard>
           </StaggerCard>
         ))}
       </StaggerGroup>

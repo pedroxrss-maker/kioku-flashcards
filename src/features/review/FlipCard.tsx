@@ -56,20 +56,26 @@ export function FlipCard({
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Grow the card to fit the visible face's content (front when showing, back
-  // when flipped), so the divider, buttons, text and any image all fit without
-  // clipping. ResizeObserver re-measures when content (e.g. an image) resizes.
+  // The card height is the TALLER of the two faces, so it stays constant through
+  // the flip: revealing the back (and the AI buttons that appear under it) never
+  // resizes the card. The card only grows when a card's own content (more text or
+  // an image) needs more room, and that growth animates smoothly (height
+  // transition in CSS). ResizeObserver re-measures when content (e.g. an image)
+  // resizes. Both faces are absolutely positioned, so both measure regardless of
+  // which side is showing.
   useLayoutEffect(() => {
-    const measure = () => {
-      const el = flipped ? backRef.current : frontRef.current;
-      if (!el) return;
+    const faceHeight = (el: HTMLDivElement | null): number => {
+      if (!el) return 0;
       const face = el.parentElement;
       let pad = 0;
       if (face) {
         const cs = getComputedStyle(face);
         pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
       }
-      const h = el.offsetHeight + pad;
+      return el.offsetHeight + pad;
+    };
+    const measure = () => {
+      const h = Math.max(faceHeight(frontRef.current), faceHeight(backRef.current));
       if (h > 0) setInnerH(Math.ceil(h)); // 0 in non-layout envs (jsdom): keep min
     };
     measure();
@@ -80,7 +86,7 @@ export function FlipCard({
     if (frontRef.current) ro.observe(frontRef.current);
     if (backRef.current) ro.observe(backRef.current);
     return () => ro.disconnect();
-  }, [flipped, front, back]);
+  }, [front, back]);
 
   const audioBtn = (onReplay?: () => void) => <PlayAudioButton onPlay={onReplay} />;
 

@@ -12,6 +12,9 @@ interface ModalProps {
   /** Optional footer actions row. */
   footer?: ReactNode;
   width?: number;
+  /** When set, Ctrl/Cmd+D fires this (the modal's primary "Salvar" action), a
+   *  keyboard shortcut to save without reaching for the mouse. */
+  onSubmit?: () => void;
 }
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -25,6 +28,7 @@ export function Modal({
   children,
   footer,
   width = 520,
+  onSubmit,
 }: ModalProps) {
   const reduce = useReducedMotion();
 
@@ -62,7 +66,16 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      // Ctrl/Cmd+D saves (the primary action). preventDefault stops the browser
+      // "bookmark this page" shortcut from hijacking it.
+      if (onSubmit && (e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        onSubmit();
+      }
     };
     window.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
@@ -70,7 +83,7 @@ export function Modal({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open, onClose, onSubmit]);
 
   return createPortal(
     <AnimatePresence>

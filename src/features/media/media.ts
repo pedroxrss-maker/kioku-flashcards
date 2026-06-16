@@ -126,6 +126,8 @@ export async function toEditorHtml(html: string): Promise<string> {
 /** Editor HTML -> storage HTML (data-kioku-* elements become custom-URI refs). */
 export function fromEditorHtml(html: string): string {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  // A lixeira do editor (canto do chip de áudio) é só UI: nunca é salva.
+  doc.querySelectorAll('.kioku-audio-del').forEach((el) => el.remove());
   doc.querySelectorAll('img[data-kioku-media]').forEach((img) => {
     const id = img.getAttribute('data-kioku-media');
     if (id) {

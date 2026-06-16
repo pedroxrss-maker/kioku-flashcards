@@ -78,6 +78,9 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       open={open}
       onClose={onClose}
       title="Novo deck"
+      onSubmit={() => {
+        if (name.trim() && !saving) void submit();
+      }}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

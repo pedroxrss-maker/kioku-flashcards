@@ -129,3 +129,74 @@ export function useCountUp(value: number, duration = 1.5) {
 
   return { ref, value: display };
 }
+
+/**
+ * Floating + draggable wrapper, like the hero pieces: a gentle vertical bob, drag
+ * within `dragPct` of the element's own size (springs back), and a bouncy scale
+ * on hover. Renders static (no float/drag) under reduced motion.
+ */
+export function FloatCard({
+  children,
+  className,
+  style,
+  dur = 5.5,
+  delay = 0,
+  bob = 6,
+  dragPct = 0.1,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  dur?: number;
+  delay?: number;
+  bob?: number;
+  dragPct?: number;
+}) {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  if (reduce) {
+    return (
+      <div className={className} style={style}>
+        {children}
+      </div>
+    );
+  }
+
+  const rx = size.w * dragPct;
+  const ry = size.h * dragPct;
+
+  return (
+    <motion.div
+      className={className}
+      style={style}
+      animate={{ y: [0, -bob, 0] }}
+      transition={{ duration: dur, repeat: Infinity, ease: 'easeInOut', delay }}
+    >
+      <motion.div
+        ref={ref}
+        drag
+        dragConstraints={{ left: -rx, right: rx, top: -ry, bottom: ry }}
+        dragElastic={0.16}
+        dragSnapToOrigin
+        whileHover={{ scale: 1.035 }}
+        whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
+        transition={{ type: 'spring', stiffness: 380, damping: 12 }}
+        style={{ height: '100%', cursor: 'grab', touchAction: 'none' }}
+      >
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+}

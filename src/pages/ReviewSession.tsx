@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Pencil, RotateCcw, X, Zap } from 'lucide-react';
+import { BackLink } from '../components/BackLink';
 import { useReviewSession } from '../features/review/useReviewSession';
 import { AnswerButtons } from '../features/review/AnswerButtons';
 import { buttonsFor } from '../features/review/buttons';
@@ -367,12 +368,7 @@ export function ReviewSession() {
         style={{ borderColor: 'var(--line)' }}
       >
         <div className="flex items-center gap-1">
-          <button
-            onClick={goBack}
-            className="mono text-xs text-muted hover:text-fg inline-flex items-center gap-1.5 transition-colors"
-          >
-            <ArrowLeft size={15} /> Sair
-          </button>
+          <BackLink onClick={goBack}>Sair</BackLink>
           {canUndo && (
             <button
               onClick={undo}
@@ -409,11 +405,18 @@ export function ReviewSession() {
 
       {/* Card */}
       <div ref={cardWrapRef} className="flex-1 flex flex-col items-center justify-center px-4 py-6">
-        {!flipped && current && cardTypeOf(current.front) !== 'typein' && (
-          <p className="mono text-[11px] text-muted mb-4 animate-pulse">
-            Clique ou pressione espaço para revelar
-          </p>
-        )}
+        {/* O card fica ancorado pelo próprio centro: a dica (acima) e os botões
+            de IA (abaixo) são posicionados de forma absoluta, então nunca
+            deslocam o card da sua linha horizontal original. */}
+        <div className="relative w-full flex justify-center">
+          {!flipped && current && cardTypeOf(current.front) !== 'typein' && (
+            <p
+              className="absolute left-0 right-0 text-center mono text-[11px] text-muted animate-pulse"
+              style={{ bottom: '100%', marginBottom: 16 }}
+            >
+              Clique ou pressione espaço para revelar
+            </p>
+          )}
         {/* Animate card hand-off: the answered card eases out (up + fade) and the
             next one rises in, so advancing never feels abrupt. mode="wait" keeps a
             single card on screen; the queue itself advances instantly (queueRef),
@@ -424,7 +427,8 @@ export function ReviewSession() {
               // Remount on every advance (incl. same card recurring after a lapse)
               // so the incoming card always starts on its front, no back-flash.
               key={`${current.id}:${counters.total}`}
-              className="w-full flex justify-center"
+              className="w-full flex justify-center relative"
+              style={{ zIndex: 1 }}
               initial={reduce ? false : { opacity: 0, y: 26, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={
@@ -486,21 +490,33 @@ export function ReviewSession() {
           )}
         </AnimatePresence>
 
-        {/* AI help on the back, under the card: assist actions + the tutor. */}
-        {current && flipped && (
-          <div className="w-full max-w-2xl mt-4 flex flex-col gap-3">
-            <CardAssistBar
-              key={current.id}
-              front={stripHtml(current.front)}
-              back={stripHtml(current.back)}
-            />
-            <TutorButton
-              key={`tutor-${current.id}`}
-              front={stripHtml(current.front)}
-              back={stripHtml(current.back)}
-            />
-          </div>
-        )}
+          {/* IA no verso: surge A PARTIR do card (desliza de trás dele para
+              baixo). É absoluta, então não levanta o card da sua linha. */}
+          <AnimatePresence>
+            {current && flipped && (
+              <motion.div
+                key={`ai-${current.id}`}
+                className="absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
+                style={{ top: '100%', zIndex: 0 }}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: -24 }}
+                animate={{ opacity: 1, y: 12 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16 }}
+                transition={{ duration: reduce ? 0 : 0.34, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.1 }}
+              >
+                <CardAssistBar
+                  key={current.id}
+                  front={stripHtml(current.front)}
+                  back={stripHtml(current.back)}
+                />
+                <TutorButton
+                  key={`tutor-${current.id}`}
+                  front={stripHtml(current.front)}
+                  back={stripHtml(current.back)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Bottom */}
@@ -524,6 +540,7 @@ export function ReviewSession() {
             <motion.button
               key="show"
               className="btn-mega w-full"
+              style={{ minHeight: 112 }}
               onClick={flip}
               initial={reduce ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}

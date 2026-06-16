@@ -335,6 +335,9 @@ export function CardEditorModal({
       onClose={onClose}
       title={editing ? 'Editar card' : 'Novo card'}
       width={640}
+      onSubmit={() => {
+        if (canSave) void save();
+      }}
       footer={
         <>
           <div className="flex flex-wrap items-center gap-2 mr-auto">

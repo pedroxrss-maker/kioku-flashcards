@@ -56,7 +56,7 @@ export function CardAssistBar({ front, back }: CardAssistBarProps) {
 
   return (
     <div className="w-full max-w-2xl flex flex-col gap-2">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
         {ACTIONS.map((a) => {
           const on = active === a.id;
           return (
@@ -65,7 +65,7 @@ export function CardAssistBar({ front, back }: CardAssistBarProps) {
               type="button"
               onClick={() => pick(a.id)}
               disabled={loading && !on}
-              className="px-2 py-1.5 text-xs sm:px-3 sm:text-[13px] rounded-[var(--r-sm)] text-center ai-hover-outline disabled:opacity-50"
+              className="px-2 py-1 text-[11px] sm:text-xs rounded-[var(--r-sm)] text-center ai-hover-outline disabled:opacity-50"
               style={{
                 background: on ? 'var(--accent-soft)' : 'var(--surface)',
                 border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,

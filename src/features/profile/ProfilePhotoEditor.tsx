@@ -106,6 +106,9 @@ export function ProfilePhotoEditor({
       onClose={onCancel}
       title="Ajustar foto de perfil"
       width={400}
+      onSubmit={() => {
+        if (img) save();
+      }}
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onCancel}>

@@ -163,6 +163,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       onClose={onClose}
       title="Configurações do deck"
       width={560}
+      onSubmit={() => void save()}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

@@ -6,6 +6,7 @@
  * prefers-reduced-motion via framer-motion's useReducedMotion.
  */
 import { useNavigate } from 'react-router-dom';
+import { ArrowRight, BarChart3, Lock, Rocket, ShieldCheck, Trophy, User } from 'lucide-react';
 import { SIGNUPS_ENABLED } from '../../config';
 import { Reveal } from './anim';
 import { NeuroLockup } from './brand';
@@ -59,7 +60,7 @@ function FinalCta() {
     <section className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28">
       <Reveal>
         <div
-          className="flex flex-col md:flex-row items-stretch overflow-hidden"
+          className="flex flex-col items-center text-center overflow-hidden px-5 md:px-8 pt-9 md:pt-11 pb-8 md:pb-10"
           style={{
             borderRadius: 'var(--r-lg)',
             border: '1px solid var(--line)',
@@ -67,27 +68,74 @@ function FinalCta() {
             boxShadow: 'var(--shadow-card)',
           }}
         >
-          {/* Logo à esquerda (mesmo preto do bloco, sem divisória). */}
-          <div className="flex items-center justify-center shrink-0 p-8">
-            <img
-              src={ctaLogo}
-              alt="Kioku"
-              draggable={false}
-              style={{ width: 210, maxWidth: '62vw', height: 'auto', display: 'block' }}
-            />
+          {/* Logo do Kioku, mantida. */}
+          <img src={ctaLogo} alt="Kioku" draggable={false} style={{ height: 173, width: 'auto', maxWidth: '64vw', display: 'block', marginBottom: 16 }} />
+
+          {/* Selo */}
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1 mb-5"
+            style={{ background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 'var(--r-full)' }}
+          >
+            <Trophy size={13} style={{ color: 'var(--accent)' }} />
+            <span className="text-[13px]" style={{ color: 'var(--fg)' }}>O primeiro passo é seu.</span>
           </div>
 
-          {/* Texto + botões à direita, na mesma disposição. */}
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-10 md:p-14">
-            <h2 className="display" style={{ fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 600, lineHeight: 1.08 }}>
-              Comece a vencer o esquecimento hoje<span style={{ color: 'var(--accent)' }}>.</span>
-            </h2>
-            <div className="mt-7">
-              <button type="button" className="btn-mega" onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}>
-                Criar conta grátis
-              </button>
-            </div>
-            <p className="text-muted mt-4">É grátis e seu progresso fica salvo na sua conta.</p>
+          {/* Título */}
+          <h2
+            className="display"
+            style={{ fontSize: 'clamp(27px, 4.3vw, 48px)', fontWeight: 600, lineHeight: 1.08, maxWidth: 656 }}
+          >
+            Comece a vencer o esquecimento <span style={{ color: 'var(--accent)' }}>hoje.</span>
+          </h2>
+
+          {/* Subtítulo */}
+          <p
+            className="mt-4"
+            style={{ color: 'var(--muted)', fontSize: 'clamp(13px, 1.3vw, 15px)', lineHeight: 1.55, maxWidth: 460 }}
+          >
+            Crie sua conta gratuita e transforme conhecimento em{' '}
+            <span style={{ color: 'var(--accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>progresso real</span>, todos os
+            dias.
+          </p>
+
+          {/* Botão */}
+          <button
+            type="button"
+            className="btn-mega mt-6"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 18px', fontSize: 14 }}
+            onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}
+          >
+            <User size={16} /> Criar conta grátis <ArrowRight size={16} />
+          </button>
+
+          {/* Linha de confiança */}
+          <p className="mt-3 inline-flex items-center gap-2" style={{ color: 'var(--muted)', fontSize: 12.5 }}>
+            <ShieldCheck size={13} style={{ color: 'var(--accent)' }} /> É grátis e seu progresso fica salvo na sua conta.
+          </p>
+
+          {/* Três destaques */}
+          <div
+            className="grid sm:grid-cols-3 gap-5 mt-8 w-full"
+            style={{ borderTop: '1px solid var(--line)', paddingTop: 22 }}
+          >
+            {[
+              { Icon: Rocket, title: '100% gratuito', desc: 'Acesso completo, sem custos e para sempre.' },
+              { Icon: BarChart3, title: 'Acompanhe seu progresso', desc: 'Veja sua evolução e mantenha a consistência.' },
+              { Icon: Lock, title: 'Seus dados protegidos', desc: 'Segurança e privacidade em primeiro lugar.' },
+            ].map(({ Icon, title, desc }) => (
+              <div key={title} className="flex items-start gap-2.5 text-left">
+                <span
+                  className="shrink-0 flex items-center justify-center rounded-full"
+                  style={{ width: 34, height: 34, background: 'var(--accent-soft)', color: 'var(--accent)' }}
+                >
+                  <Icon size={15} />
+                </span>
+                <div>
+                  <p style={{ fontWeight: 600, color: 'var(--fg)', fontSize: 13.5 }}>{title}</p>
+                  <p style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.45, marginTop: 2 }}>{desc}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </Reveal>

@@ -50,7 +50,7 @@ export function TutorButton({ front, back }: TutorButtonProps) {
       <button
         type="button"
         onClick={teach}
-        className="w-full px-4 py-2 text-xs sm:text-[13px] rounded-[var(--r-sm)] font-semibold text-center ai-hover-outline"
+        className="w-full px-3 py-1.5 text-[11px] sm:text-xs rounded-[var(--r-sm)] font-semibold text-center ai-hover-outline"
         style={{
           background: open ? `color-mix(in srgb, ${PURPLE} 14%, transparent)` : 'var(--surface)',
           border: `1px solid ${open ? PURPLE : 'var(--line)'}`,

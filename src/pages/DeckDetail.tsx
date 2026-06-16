@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Folder, Play, Plus, Search, Settings2, Volume2, Zap } from 'lucide-react';
+import { CalendarDays, Folder, Play, Plus, Search, Settings2, Volume2, Zap } from 'lucide-react';
+import { BackLink } from '../components/BackLink';
 import { useAllCards, useAllLogs, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
@@ -93,9 +94,7 @@ export function DeckDetail() {
   if (loading) {
     return (
       <div className="rise">
-        <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
-          ← Biblioteca
-        </Link>
+        <BackLink to="/decks">Biblioteca</BackLink>
         <p className="mono text-muted text-sm mt-6">Carregando…</p>
       </div>
     );
@@ -104,9 +103,7 @@ export function DeckDetail() {
   if (error) {
     return (
       <div className="rise">
-        <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
-          ← Biblioteca
-        </Link>
+        <BackLink to="/decks">Biblioteca</BackLink>
         <div className="mt-6 flex flex-col items-start gap-3">
           <p className="text-muted">Não foi possível carregar. Tente novamente.</p>
           <button type="button" className="btn btn-accent" onClick={reload}>
@@ -120,9 +117,7 @@ export function DeckDetail() {
   if (!deck) {
     return (
       <div className="rise">
-        <Link to="/decks" className="mono text-xs text-muted hover:text-fg">
-          ← Biblioteca
-        </Link>
+        <BackLink to="/decks">Biblioteca</BackLink>
         <p className="text-muted mt-6">Deck não encontrado.</p>
       </div>
     );
@@ -164,12 +159,9 @@ export function DeckDetail() {
         <div className="relative">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <Link
-                to="/decks"
-                className="mono text-[11px] text-muted hover:text-fg inline-flex items-center gap-1 mb-3"
-              >
-                <ArrowLeft size={13} /> Biblioteca
-              </Link>
+              <BackLink to="/decks" className="mb-3">
+                Biblioteca
+              </BackLink>
               <div className="flex items-center gap-3">
                 <DeckAvatar deck={deck} size={52} />
                 <div className="min-w-0">
