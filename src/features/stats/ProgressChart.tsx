@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { ChevronDown } from 'lucide-react';
 import { progressStats } from './compute';
 import type { ReviewLog } from '../../db/types';

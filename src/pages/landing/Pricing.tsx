@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Check, X } from 'lucide-react';
 import { Reveal } from './anim';
 import { PLAN_LABELS } from '../../features/usage/limits';

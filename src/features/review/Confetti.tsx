@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useReducedMotion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { playConfetti } from '../gamification/sound';
 
 /** Brand-palette confetti. */

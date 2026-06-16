@@ -93,7 +93,7 @@ export function DeckGridCard({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 15 }}>
+        <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 13 }}>
           {deck.name}
         </p>
         <DeckAvatar deck={deck} size={30} />

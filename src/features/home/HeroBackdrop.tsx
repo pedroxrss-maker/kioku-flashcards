@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 
 export type DayPart = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -82,7 +83,7 @@ const BIRD_VBW = 1000;
  * change (the outgoing frame fades out over the incoming one — no dip). On top
  * of whichever photo is shown, the same animated overlays persist: a soft
  * pulsing/floating sun-glow and a few drifting birds. The image also does a very
- * slight slow zoom + float. Everything is static under prefers-reduced-motion.
+ * slight slow zoom + float. Animations always play (reduced-motion is ignored).
  */
 export function HeroBackdrop({ part }: { part: DayPart }) {
   const reduce = useReducedMotion();

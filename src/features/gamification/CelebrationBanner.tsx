@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Sparkles, Trophy, X } from 'lucide-react';
 import { Confetti } from '../review/Confetti';
 import { useSettings } from '../../db/hooks';

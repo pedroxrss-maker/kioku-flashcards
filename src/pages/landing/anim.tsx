@@ -5,7 +5,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { animate, motion, useInView, useReducedMotion } from 'framer-motion';
+import { animate, motion, useInView } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 
 export const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 

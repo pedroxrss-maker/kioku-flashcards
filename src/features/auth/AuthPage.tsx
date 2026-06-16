@@ -7,7 +7,8 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { SIGNUPS_ENABLED } from '../../config';

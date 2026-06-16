@@ -6,11 +6,12 @@
  * shifts slightly on scroll. Absolute layout inside a responsive scaler so the
  * exact composition (tilt, offsets, layering) holds at any width.
  *
- * Respects prefers-reduced-motion: static final positions, no float/parallax.
+ * Animations always play: Kioku forces them on, ignoring prefers-reduced-motion.
  */
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
+import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import type { MotionValue } from 'framer-motion';
 import { ArrowRight, Flame, MoreVertical, Star } from 'lucide-react';
 import { makeSm2Scheduler } from '../../features/scheduling/sm2-adapter';

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useReducedMotion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { KiokuMark, NeuroWordmark } from './brand';
 import { scrollToId } from './anim';
 

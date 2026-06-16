@@ -1,4 +1,5 @@
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import type { CardStateCounts } from '../../lib/deckStats';
 
 /** Anki-style legend order + colors (new=blue, learning=amber, relearning=red,

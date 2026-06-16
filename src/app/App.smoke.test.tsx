@@ -15,6 +15,10 @@ vi.mock('../lib/supabase', async () => {
   };
 });
 
+// jsdom doesn't implement scrollTo; the app shell calls it to reset scroll on
+// every route change. Stub it so that doesn't log "Not implemented" noise.
+window.scrollTo = vi.fn();
+
 describe('App smoke test', () => {
   it('gates on auth, then boots, seeds the user\'s decks, and renders the shell', async () => {
     render(<App />);

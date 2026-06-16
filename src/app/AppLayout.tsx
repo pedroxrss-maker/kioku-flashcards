@@ -1,7 +1,8 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { TouchEvent } from 'react';
 import { useLocation, useNavigate, useOutlet } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../lib/useReducedMotion';
 import { MobileTopBar, Sidebar } from './Sidebar';
 import { NAV_ITEMS } from './nav';
 import { useInitialLoad } from '../db/hooks';
@@ -29,6 +30,15 @@ export function AppLayout() {
   const outlet = useOutlet();
   const reduce = useReducedMotion();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  // Every page change starts at the top — without this the new route inherits
+  // the previous page's scroll position (e.g. tapping a deck from a scrolled-down
+  // Home dropped you straight into its heatmap/card list). Skip when navigating to
+  // a specific card ("Ver no painel" passes focusCardId and scrolls to that row).
+  useEffect(() => {
+    if ((loc.state as { focusCardId?: string } | null)?.focusCardId) return;
+    window.scrollTo(0, 0);
+  }, [loc.pathname, loc.key]);
 
   function onTouchStart(e: TouchEvent) {
     const t = e.touches[0];

@@ -2,8 +2,8 @@
  * Public marketing landing for Kioku. Rendered at "/" for logged-out visitors
  * (see App routing). Self-contained under src/pages/landing/. Keeps the app's
  * identity: dark study-dashboard look, accent #ff3b1f, Fraunces titles, Manrope
- * body. All copy in Brazilian Portuguese, no em-dashes. Animations respect
- * prefers-reduced-motion via framer-motion's useReducedMotion.
+ * body. All copy in Brazilian Portuguese, no em-dashes. Animations always play:
+ * Kioku forces them on, intentionally ignoring the prefers-reduced-motion setting.
  */
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BarChart3, Lock, Rocket, ShieldCheck, Trophy, User } from 'lucide-react';

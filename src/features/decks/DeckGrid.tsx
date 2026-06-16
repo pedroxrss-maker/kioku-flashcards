@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Folder } from 'lucide-react';
 import { aggregateCounts, buildDeckTree, deckPathOf } from '../../lib/deckTree';
 import type { DeckTreeNode } from '../../lib/deckTree';
@@ -178,7 +179,7 @@ function FolderCard({
       style={{ minHeight: 104, background: 'var(--surface-2)', border: '1px solid var(--line)' }}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 15 }}>
+        <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 13 }}>
           {node.name}
         </p>
         <span

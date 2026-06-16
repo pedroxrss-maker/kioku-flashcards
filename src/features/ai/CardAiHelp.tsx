@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { GraduationCap, Loader2, Sparkles, X } from 'lucide-react';
 import { cardAssist, isAiConfigured, tutorTeach } from './client';
 import type { CardAssistAction } from './client';
@@ -70,16 +71,73 @@ function AiAnswer({ text }: { text: string }) {
   );
 }
 
+/** Header row for an AI answer: the AI mark (+ tutor cap) and the helper label. */
+function AiHeader({ isTutor, label, accent }: { isTutor: boolean; label: string; accent: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {/* Tutor mantém o capelo + ganha o símbolo de IA; os demais usam só o
+          símbolo de IA (Sparkles). */}
+      {isTutor && <GraduationCap size={13} style={{ color: accent }} />}
+      <Sparkles size={13} style={{ color: accent }} />
+      <span className="mono text-[11px]" style={{ color: isTutor ? TUTOR_INK : INK_MUTED }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/** Answer body: "Pensando..." -> answer (or error), with a soft crossfade between
+ *  states and when switching helpers. Shared by the desktop balloon and the
+ *  mobile in-card view, so both fade the text in the same way. */
+function AiBody({
+  loading,
+  error,
+  text,
+  stateKey,
+}: {
+  loading: boolean;
+  error: string | null;
+  text: string | undefined;
+  stateKey: string;
+}) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={stateKey}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+      >
+        {loading ? (
+          <span className="inline-flex items-center gap-2 text-sm" style={{ color: INK_MUTED }}>
+            <Loader2 size={14} className="animate-spin" /> Pensando...
+          </span>
+        ) : error ? (
+          <span className="text-sm" style={{ color: 'var(--accent)' }}>
+            {error}
+          </span>
+        ) : (
+          <AiAnswer text={text ?? ''} />
+        )}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 /**
  * AI help on the BACK of a review card. The action buttons sit just under the
  * card (emerging from behind it); the chosen helper's answer appears in a SINGLE
- * balloon that floats to the RIGHT of the card, in the empty space, on wide
- * screens — and as a bottom sheet ABOVE the grade buttons on narrow ones, so it
- * never overlays them (the previous inline balloon grew down over the grades).
+ * place that depends on width: on wide screens (xl+) a balloon floats to the
+ * RIGHT of the card, in the empty space; on narrow screens it takes over the card
+ * itself, covering the back face with the same background (the verso stays
+ * underneath) so it never crowds the grade buttons. Tapping the card on mobile
+ * fades the answer out, revealing the verso again; the cache is kept (tapping only
+ * closes the open answer, it does not erase it).
  *
- * Rendered inside the card's relative wrapper (`.relative.max-w-2xl`), so the
- * xl right-side balloon anchors to the card's right edge. Hidden entirely when
- * the AI is not configured.
+ * Rendered inside the card's relative wrapper (`.relative.max-w-2xl`), so the xl
+ * balloon anchors to the card's right edge and the mobile overlay (absolute
+ * inset-0) covers the card exactly. Hidden entirely when the AI is not configured.
  */
 export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
   const reduce = useReducedMotion();
@@ -167,14 +225,13 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
         )}
       </AnimatePresence>
 
-      {/* Balão da resposta: à direita do card no espaço vazio (xl+); folha
-          inferior acima das notas em telas menores. Nunca cobre as notas. Sai
-          com fade ao voltar à frente (flipped=false); o cache persiste. */}
+      {/* DESKTOP (xl+): balão à direita do card, no espaço preto vazio. Sai com
+          fade ao voltar à frente (flipped=false); o cache persiste. */}
       <AnimatePresence>
         {active && flipped && (
           <motion.div
             key="ai-balloon"
-            className="kioku-ai-balloon fixed left-3 right-3 bottom-[calc(130px_+_env(safe-area-inset-bottom))] z-40 max-h-[46vh] overflow-y-auto xl:absolute xl:left-full xl:right-auto xl:top-0 xl:bottom-auto xl:z-auto xl:ml-4 xl:max-h-[72vh]"
+            className="kioku-ai-balloon hidden xl:block xl:absolute xl:left-full xl:right-auto xl:top-0 xl:ml-4 xl:max-h-[72vh] xl:overflow-y-auto"
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
@@ -191,13 +248,7 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
               }}
             >
               <div className="flex items-center gap-1.5 mb-1.5">
-                {/* Tutor mantém o capelo + ganha o símbolo de IA; os demais usam
-                    só o símbolo de IA (Sparkles). */}
-                {isTutor && <GraduationCap size={13} style={{ color: accent }} />}
-                <Sparkles size={13} style={{ color: accent }} />
-                <span className="mono text-[11px]" style={{ color: isTutor ? TUTOR_INK : INK_MUTED }}>
-                  {activeLabel}
-                </span>
+                <AiHeader isTutor={isTutor} label={activeLabel ?? ''} accent={accent} />
                 <button
                   type="button"
                   onClick={() => setActive(null)}
@@ -207,29 +258,41 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
                   <X size={14} />
                 </button>
               </div>
-              {/* Switching helpers fades the old answer out and the new one in. */}
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={stateKey}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.12, ease: 'easeOut' }}
-                >
-                  {loading ? (
-                    <span className="inline-flex items-center gap-2 text-sm" style={{ color: INK_MUTED }}>
-                      <Loader2 size={14} className="animate-spin" /> Pensando...
-                    </span>
-                  ) : error ? (
-                    <span className="text-sm" style={{ color: 'var(--accent)' }}>
-                      {error}
-                    </span>
-                  ) : (
-                    <AiAnswer text={text ?? ''} />
-                  )}
-                </motion.div>
-              </AnimatePresence>
+              <AiBody loading={loading} error={error} text={text} stateKey={stateKey} />
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MOBILE (< xl): a resposta da IA assume o lugar do verso DENTRO do card,
+          cobrindo a face de trás com o mesmo fundo (o verso continua por baixo).
+          O título do botão de IA fica no canto superior esquerdo e o texto entra
+          com fade. Tocar no card fecha o balão com fade, revelando o verso de
+          novo; o cache é preservado (só fecha, não apaga). */}
+      <AnimatePresence>
+        {active && flipped && (
+          <motion.div
+            key="ai-incard"
+            onClick={() => setActive(null)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Voltar ao verso do card"
+            className="xl:hidden absolute inset-0 z-20 cursor-pointer overflow-y-auto"
+            style={{
+              background: '#fbfbfa',
+              borderRadius: 'var(--r-lg)',
+              padding: 'clamp(20px, 4vw, 40px)',
+              fontWeight: 700,
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduce ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="mb-2">
+              <AiHeader isTutor={isTutor} label={activeLabel ?? ''} accent={accent} />
+            </div>
+            <AiBody loading={loading} error={error} text={text} stateKey={stateKey} />
           </motion.div>
         )}
       </AnimatePresence>

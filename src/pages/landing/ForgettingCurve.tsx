@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { motion, useInView, useReducedMotion } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Reveal } from './anim';
 
 const DRAW_DUR = 4.2;

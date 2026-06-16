@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Folder, MoreVertical, Pencil, Play, Settings2, Trash2 } from 'lucide-react';
 import { repo } from '../../db/repositories';

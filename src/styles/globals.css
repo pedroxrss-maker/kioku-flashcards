@@ -337,12 +337,6 @@ button.pill.pill-active:hover {
   transform: scale(1);
   opacity: 1;
 }
-@media (prefers-reduced-motion: reduce) {
-  .hero-ink {
-    transform: scale(1);
-    transition: opacity 0.3s ease;
-  }
-}
 
 /* Recent decks (sidebar): a gentle forward "jump" as the mouse passes each one. */
 .recent-deck {
@@ -351,14 +345,6 @@ button.pill.pill-active:hover {
 }
 .recent-deck:hover {
   transform: translateX(6px) scale(1.03);
-}
-@media (prefers-reduced-motion: reduce) {
-  .recent-deck {
-    transition: color 0.16s ease;
-  }
-  .recent-deck:hover {
-    transform: none;
-  }
 }
 
 /* Sidebar nav items ("Início", "Biblioteca", ...): the same hover "jump"
@@ -422,20 +408,6 @@ button.pill.pill-active:hover {
   100% {
     transform: translateY(0);
     filter: drop-shadow(0 0 0 transparent);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .nav-jump {
-    transition: color 0.16s ease, background-color 0.16s ease;
-  }
-  .nav-jump:hover {
-    transform: none;
-  }
-  .deck-jump:hover {
-    transform: none;
-  }
-  .card-jump {
-    animation: none;
   }
 }
 
@@ -822,12 +794,6 @@ button.pill.pill-active:hover {
 .back-link:hover .back-link-arrow {
   transform: translateX(-3px);
 }
-@media (prefers-reduced-motion: reduce) {
-  .back-link,
-  .back-link-arrow {
-    transition: none;
-  }
-}
 
 /* ------------------------------------------- balão de resposta da IA (revisão) */
 /* Todo o texto do balão (cabeçalho, resposta, estados) em negrito. */
@@ -960,12 +926,6 @@ button.pill.pill-active:hover {
 .cloze-revealed .cloze::after {
   opacity: 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  .cloze,
-  .cloze::after {
-    transition: none;
-  }
-}
 
 /* The type-in marker is invisible in rendered cards. */
 .kioku-typein {
@@ -1067,12 +1027,6 @@ button.pill.pill-active:hover {
   letter-spacing: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .answer-btn:hover {
-    transform: none;
-  }
-}
-
 /* ------------------------------------------------- tech tracing border ---- */
 /* On hover, a glowing accent segment slowly traces the element's border
    (masked conic gradient on a ::before ring). Add the `tech-border` class to a
@@ -1118,11 +1072,6 @@ button.pill.pill-active:hover {
     --trace-angle: 360deg;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .tech-border:hover::before {
-    animation: none;
-  }
-}
 
 /* --------------------------------------------- hero answer chips (hover) -- */
 /* On hover: fill with the role color (--bc), flip text to a readable tone
@@ -1159,11 +1108,6 @@ button.pill.pill-active:hover {
 .answer-chip:hover .chip-sub,
 .answer-chip:hover .chip-rating {
   color: var(--tc);
-}
-@media (prefers-reduced-motion: reduce) {
-  .answer-chip:hover {
-    transform: none;
-  }
 }
 
 /* A simple accent outline that fades in on hover (deck-overview card rows). */
@@ -1224,11 +1168,6 @@ button.pill.pill-active:hover {
 }
 .nav-link:hover::after {
   transform: scaleX(1);
-}
-@media (prefers-reduced-motion: reduce) {
-  .nav-link::after {
-    transition: none;
-  }
 }
 
 /* ------------------------------------------- settings algorithm options --- */
@@ -1294,11 +1233,6 @@ button.pill.pill-active:hover {
   transform-origin: 50% 95%;
   will-change: transform, filter, opacity;
 }
-@media (prefers-reduced-motion: reduce) {
-  .flame-anim {
-    animation: none;
-  }
-}
 
 /* --------------------------------------------------------------- a11y ----- */
 :focus-visible {
@@ -1337,22 +1271,4 @@ button.pill.pill-active:hover {
 }
 .rise {
   animation: kioku-rise 0.18s ease-out both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-  .btn-mega:hover,
-  .btn:hover,
-  .hover-lift:hover {
-    transform: none;
-  }
-  .flip-inner {
-    transition: none;
-  }
 }

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useReducedMotion } from 'framer-motion';
+import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Brain, FlaskConical, RefreshCw } from 'lucide-react';
 import { Reveal, scrollToId } from './anim';
 import { NeuroWordmark } from './brand';
