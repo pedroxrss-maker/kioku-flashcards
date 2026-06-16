@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { SIGNUPS_ENABLED } from '../../config';
 import { Reveal } from './anim';
 import { NeuroLockup } from './brand';
+import ctaLogo from '../../../kioku logo.png';
 import { LandingNav } from './LandingNav';
 import { Hero } from './Hero';
 import { ForgettingCurve } from './ForgettingCurve';
@@ -58,23 +59,36 @@ function FinalCta() {
     <section className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28">
       <Reveal>
         <div
-          className="text-center p-10 md:p-16"
+          className="flex flex-col md:flex-row items-stretch overflow-hidden"
           style={{
             borderRadius: 'var(--r-lg)',
             border: '1px solid var(--line)',
-            background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, var(--surface)), var(--surface))',
+            background: '#000',
             boxShadow: 'var(--shadow-card)',
           }}
         >
-          <h2 className="display mx-auto" style={{ fontSize: 'clamp(34px, 5.4vw, 58px)', fontWeight: 600, maxWidth: 760, lineHeight: 1.08 }}>
-            Comece a vencer o esquecimento hoje<span style={{ color: 'var(--accent)' }}>.</span>
-          </h2>
-          <div className="mt-7 flex justify-center">
-            <button type="button" className="btn-mega" onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}>
-              Criar conta grátis
-            </button>
+          {/* Logo à esquerda (mesmo preto do bloco, sem divisória). */}
+          <div className="flex items-center justify-center shrink-0 p-8">
+            <img
+              src={ctaLogo}
+              alt="Kioku"
+              draggable={false}
+              style={{ width: 210, maxWidth: '62vw', height: 'auto', display: 'block' }}
+            />
           </div>
-          <p className="text-muted mt-4">É grátis e seu progresso fica salvo na sua conta.</p>
+
+          {/* Texto + botões à direita, na mesma disposição. */}
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-10 md:p-14">
+            <h2 className="display" style={{ fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 600, lineHeight: 1.08 }}>
+              Comece a vencer o esquecimento hoje<span style={{ color: 'var(--accent)' }}>.</span>
+            </h2>
+            <div className="mt-7">
+              <button type="button" className="btn-mega" onClick={() => nav(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar')}>
+                Criar conta grátis
+              </button>
+            </div>
+            <p className="text-muted mt-4">É grátis e seu progresso fica salvo na sua conta.</p>
+          </div>
         </div>
       </Reveal>
     </section>
