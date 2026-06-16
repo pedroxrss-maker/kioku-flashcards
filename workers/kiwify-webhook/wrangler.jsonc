@@ -1,0 +1,15 @@
+{
+  // Worker que recebe os webhooks de venda da Kiwify e atualiza profiles.plan.
+  //
+  // Deploy (rode DENTRO de workers/kiwify-webhook): `npx wrangler deploy`.
+  // Segredos NUNCA ficam neste arquivo. Defina-os com `wrangler secret put`:
+  //   npx wrangler secret put SUPABASE_URL          # https://zsvxrbvxlxurendqaree.supabase.co
+  //   npx wrangler secret put SUPABASE_SECRET_KEY   # sb_secret_... (service role)
+  //   npx wrangler secret put KIWIFY_WEBHOOK_TOKEN  # token do webhook (painel Kiwify)
+  //
+  // Sem CORS/ALLOWED_ORIGINS: a Kiwify chama de servidor para servidor (sem
+  // navegador, sem cabecalho Origin). A autenticidade vem da assinatura HMAC.
+  "name": "kioku-kiwify-webhook",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01"
+}

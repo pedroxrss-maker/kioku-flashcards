@@ -3,9 +3,14 @@ import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Check, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Reveal } from './anim';
 import { PLAN_LABELS } from '../../features/usage/limits';
 import type { Plan } from '../../features/usage/limits';
+import { useAuth } from '../../features/auth/AuthContext';
+import { checkoutUrl, setCheckoutIntent } from '../../features/billing/checkout';
+import type { BillingCycle } from '../../features/billing/checkout';
+import { SIGNUPS_ENABLED } from '../../config';
 
 type Billing = 'mensal' | 'anual';
 
@@ -88,6 +93,28 @@ export function Pricing() {
   const [active, setActive] = useState(1); // Basico no centro por padrao
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageW, setStageW] = useState(0);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // CTA de cada plano. O gratuito NUNCA vai para o checkout. Os planos pagos abrem
+  // o checkout certo da Kiwify (com o email do usuario) quando logado; quando
+  // deslogado, guardam a escolha e mandam para o cadastro/login -
+  // CheckoutIntentRedirect conclui o redirect ao checkout apos autenticar. A
+  // tabela de links e o nome do param vivem em features/billing/checkout.
+  function handleCta(planKey: Plan) {
+    if (planKey === 'free') {
+      if (user) navigate('/');
+      else navigate(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar');
+      return;
+    }
+    const cycle: BillingCycle = billing === 'anual' ? 'annual' : 'monthly';
+    if (user?.email) {
+      window.open(checkoutUrl(planKey, cycle, user.email), '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setCheckoutIntent(planKey, cycle);
+    navigate(SIGNUPS_ENABLED ? '/entrar?mode=signup' : '/entrar');
+  }
 
   useLayoutEffect(() => {
     const el = stageRef.current;
@@ -153,7 +180,7 @@ export function Pricing() {
           <div aria-hidden className="mx-auto grid" style={{ width: cardW, visibility: 'hidden' }}>
             {PLANS_DATA.map((p) => (
               <div key={p.key} style={{ gridArea: '1 / 1' }}>
-                <PlanCardView plan={p} billing={billing} active compact={compact} />
+                <PlanCardView plan={p} billing={billing} active compact={compact} onCta={handleCta} />
               </div>
             ))}
           </div>
@@ -185,7 +212,7 @@ export function Pricing() {
                 transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 210, damping: 26 }}
                 onClick={() => !center && setActive(i)}
               >
-                <PlanCardView plan={plan} billing={billing} active={center} compact={compact} />
+                <PlanCardView plan={plan} billing={billing} active={center} compact={compact} onCta={handleCta} />
               </motion.div>
             );
           })}
@@ -261,12 +288,15 @@ function PlanCardView({
   billing,
   active,
   compact,
+  onCta,
 }: {
   plan: PlanCard;
   billing: Billing;
   active: boolean;
   /** No mobile o conteudo encolhe (padding/preco/textos) para caber sem quebrar. */
   compact: boolean;
+  /** Acao do botao do plano (assinar / começar grátis). */
+  onCta: (plan: Plan) => void;
 }) {
   const reduce = useReducedMotion();
   const hi = !!plan.highlighted;
@@ -395,12 +425,11 @@ function PlanCardView({
         ))}
       </ul>
 
-      {/* Botao inerte (visual-only) */}
+      {/* Assinar / Começar grátis: vai para o checkout da Kiwify (planos pagos) ou
+          para o cadastro/login (gratuito), via onCta. */}
       <button
         type="button"
-        onClick={() => {
-          /* TODO: ligar ao checkout/assinatura. Sem acao no passo visual. */
-        }}
+        onClick={() => onCta(plan.key)}
         className={`${hi ? 'btn btn-accent' : 'btn'} ${compact ? 'btn-sm ' : ''}w-full ${compact ? 'mt-3' : 'mt-6'}`}
         style={hi ? undefined : { background: '#17171b', color: '#fff', borderColor: 'transparent' }}
       >

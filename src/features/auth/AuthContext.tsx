@@ -136,17 +136,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     let active = true;
-    void supabase
-      .from('profiles')
-      .select('display_name, plan')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!active) return;
-        setProfileName((data?.display_name as string | null) ?? null);
-        const p = (data?.plan as string | null) ?? null;
-        setPlan(p === 'basic' || p === 'advanced' ? p : DEFAULT_PLAN);
-      });
+    void (async () => {
+      // Auto-reconcile a plan that was paid for before this account existed (or
+      // bought with a different-cased email): the Kiwify webhook parked it in
+      // pending_plans, and apply_pending_plan() moves it onto THIS user's profile.
+      // Tamper-proof: it takes no plan argument and only applies what the service
+      // role already recorded as paid for this user's own email, so a user can
+      // never grant themselves basic/advanced. Cheap + idempotent (returns null
+      // when nothing is pending), so it is safe on every authenticated load.
+      try {
+        await supabase.rpc('apply_pending_plan');
+      } catch {
+        /* best-effort: nothing pending or a transient error; just load below */
+      }
+      if (!active) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, plan')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!active) return;
+      setProfileName((data?.display_name as string | null) ?? null);
+      const p = (data?.plan as string | null) ?? null;
+      setPlan(p === 'basic' || p === 'advanced' ? p : DEFAULT_PLAN);
+    })();
     return () => {
       active = false;
     };

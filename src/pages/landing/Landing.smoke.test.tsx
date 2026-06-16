@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { AuthProvider } from '../../features/auth/AuthContext';
 import { Landing } from './Landing';
 
 // framer-motion needs these browser APIs, which jsdom does not implement.
@@ -31,10 +32,15 @@ beforeAll(() => {
 
 describe('Landing page', () => {
   it('mounts and renders the hero, live features, and badged coming-soon items', () => {
+    // Landing is always rendered under AuthProvider in the app (Pricing reads the
+    // auth context for the subscribe flow); the placeholder Supabase client used
+    // in tests resolves to no session, i.e. the logged-out landing.
     render(
-      <MemoryRouter>
-        <Landing />
-      </MemoryRouter>,
+      <AuthProvider>
+        <MemoryRouter>
+          <Landing />
+        </MemoryRouter>
+      </AuthProvider>,
     );
 
     // Hero headline (text node split from the accent period).

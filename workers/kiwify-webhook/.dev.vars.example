@@ -1,0 +1,7 @@
+# Exemplo. Copie para `.dev.vars` (ignorado pelo git) e preencha para rodar
+# `wrangler dev` localmente. NUNCA cometa o arquivo .dev.vars real.
+SUPABASE_URL=https://seu-projeto.supabase.co
+# Chave SECRETA (service-role-level), comeca com sb_secret_...
+SUPABASE_SECRET_KEY=sb_secret_xxx
+# Token do webhook (painel da Kiwify). E a CHAVE do HMAC-SHA1 da assinatura.
+KIWIFY_WEBHOOK_TOKEN=coloque-o-token-do-webhook-da-kiwify

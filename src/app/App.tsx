@@ -4,6 +4,7 @@ import { seedForUserIfEmpty } from '../db';
 import { Toaster } from '../components/Toaster';
 import { CelebrationBanner } from '../features/gamification/CelebrationBanner';
 import { PwaAutoUpdate } from '../features/pwa/PwaAutoUpdate';
+import { CheckoutIntentRedirect } from '../features/billing/CheckoutIntentRedirect';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
 import { Decks } from '../pages/Decks';
@@ -91,6 +92,9 @@ function AuthedApp() {
       </Routes>
       <Toaster />
       <CelebrationBanner />
+      {/* Conclui o fluxo "assinar deslogado": ao autenticar, redireciona ao
+          checkout da Kiwify do plano escolhido na landing (se houver intent). */}
+      <CheckoutIntentRedirect />
     </>
   );
 }
