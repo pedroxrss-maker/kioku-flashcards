@@ -228,7 +228,7 @@ export function ForgettingCurve() {
       </Reveal>
 
       <Reveal delay={0.1}>
-        <div className="surface mt-10 p-5 md:p-7 mx-auto" style={{ borderRadius: 'var(--r-lg)', maxWidth: 760 }}>
+        <div className="surface mt-10 p-5 md:p-7 mx-auto" style={{ borderRadius: 'var(--r-lg)', maxWidth: 836 }}>
           <Chart />
         </div>
       </Reveal>
