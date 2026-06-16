@@ -96,7 +96,7 @@ as $$
     ('free',     'deckGen',  'day',       2),
     ('free',     'tutor',    'day',      10),
     ('free',     'image',    'month',     0),
-    ('free',     'audio',    'month',   500),
+    ('free',     'audio',    'month',   200),
     ('basic',    'deckGen',  'month',   300),
     ('basic',    'tutor',    'month',  1000),
     ('basic',    'image',    'month',   100),

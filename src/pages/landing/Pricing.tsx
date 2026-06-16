@@ -38,7 +38,7 @@ const PLANS_DATA: PlanCard[] = [
     features: [
       { ok: true, label: '2 decks com IA por dia (até 20 cartas cada)' },
       { ok: true, label: '10 explicações do tutor por dia' },
-      { ok: true, label: '500 áudios por mês para seus cards' },
+      { ok: true, label: '200 áudios por mês para seus cards' },
       { ok: false, label: 'Sem imagens nos cards' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],

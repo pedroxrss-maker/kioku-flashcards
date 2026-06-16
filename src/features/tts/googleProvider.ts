@@ -107,7 +107,8 @@ export async function synthesizeGoogle(text: string, opts: GoogleSynthOptions): 
       /* corpo não-JSON: usa o status abaixo */
     }
     const detail = typeof payload?.error === 'string' ? payload.error : '';
-    // Limite de áudios do plano (hoje: 500/mês no gratuito; pagos ilimitados).
+    // Limite mensal de áudios do plano (gratuito limitado; pagos ilimitados). O
+    // teto exibido vem do servidor (max_count), nunca fixo aqui.
     if (res.status === 429 && payload?.code === 'quota_exceeded') {
       const cap = typeof payload.max_count === 'number' && payload.max_count > 0 ? ` (${payload.max_count})` : '';
       throw new TtsProviderError(
