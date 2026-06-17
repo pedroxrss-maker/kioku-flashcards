@@ -34,6 +34,10 @@ export interface KiokuRepository {
   allCards(): Promise<Card[]>;
   createCard(input: CardInput): Promise<Card>;
   bulkInsertCards(cards: Card[]): Promise<void>;
+  /** First-run seed: insert a deck + its cards as one unit with a SINGLE
+   *  invalidate at the end, so the optimistic seed cache isn't churned by a
+   *  per-insert refetch mid-seed. */
+  seedDeckWithCards(deck: Deck, cards: Card[]): Promise<void>;
   updateCard(id: string, patch: Partial<Card>): Promise<void>;
   putCard(card: Card): Promise<void>;
   deleteCard(id: string): Promise<void>;

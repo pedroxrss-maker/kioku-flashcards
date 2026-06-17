@@ -151,19 +151,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     let active = true;
     void (async () => {
-      // Auto-reconcile a plan that was paid for before this account existed (or
-      // bought with a different-cased email): the Kiwify webhook parked it in
-      // pending_plans, and apply_pending_plan() moves it onto THIS user's profile.
-      // Tamper-proof: it takes no plan argument and only applies what the service
-      // role already recorded as paid for this user's own email, so a user can
-      // never grant themselves basic/advanced. Cheap + idempotent (returns null
-      // when nothing is pending), so it is safe on every authenticated load.
-      try {
-        await supabase.rpc('apply_pending_plan');
-      } catch {
-        /* best-effort: nothing pending or a transient error; just load below */
-      }
-      if (!active) return;
+      // Read the profile (name + plan) FIRST so the UI reflects it after a single
+      // round-trip — apply_pending_plan no longer blocks it.
       const { data } = await supabase
         .from('profiles')
         .select('display_name, plan')
@@ -173,6 +162,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileName((data?.display_name as string | null) ?? null);
       const p = (data?.plan as string | null) ?? null;
       setPlan(p === 'basic' || p === 'advanced' ? p : DEFAULT_PLAN);
+
+      // Off the critical path: reconcile a plan that was paid for before this
+      // account existed (parked in pending_plans by the Kiwify webhook). It runs
+      // AFTER the read above, so it never delays showing the profile/plan. Still
+      // runs on every authenticated load/login, so existing users' pending plans
+      // are applied as before — just not blocking. Tamper-proof: it takes no plan
+      // argument and only applies what the service role recorded as paid for this
+      // user's own email. If it applied a paid plan (returns it), reflect that.
+      try {
+        const { data: applied } = await supabase.rpc('apply_pending_plan');
+        if (active && (applied === 'basic' || applied === 'advanced')) {
+          setPlan(applied);
+        }
+      } catch {
+        /* nothing pending or a transient error */
+      }
     })();
     return () => {
       active = false;
@@ -183,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, name: string, opts?: SignUpOptions) => {
       const trimmed = name.trim();
       const phone = opts?.phone?.trim();
+      // TEMP [signup-timing]: mede só a ida-e-volta do auth.signUp (remover depois).
+      const t0 = performance.now();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -204,6 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         },
       });
+      console.log(
+        `[signup-timing] auth.signUp ${Math.round(performance.now() - t0)}ms`,
+        { hasSession: !!data.session, error: error?.message },
+      );
       if (error) throw new Error(mapAuthError(error.message));
 
       if (!data.session) {

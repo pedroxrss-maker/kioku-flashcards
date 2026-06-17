@@ -329,6 +329,24 @@ export class SupabaseRepository implements KiokuRepository {
     }
     invalidate();
   }
+  async seedDeckWithCards(deck: Deck, cards: Card[]): Promise<void> {
+    // First-run seed persistence: insert the deck and its cards as ONE unit with
+    // a SINGLE invalidate at the END (in `finally`, so even a partial failure
+    // reconciles the optimistic cache against the server's real state). Deck
+    // first — the cards carry its id.
+    const userId = await currentUserId();
+    try {
+      const { error: deckErr } = await supabase.from('decks').insert(deckToRow(deck, userId));
+      if (deckErr) writeFail(deckErr);
+      if (cards.length > 0) {
+        const rows = cards.map((c) => cardToRow(c, userId));
+        const { error: cardErr } = await supabase.from('cards').insert(rows);
+        if (cardErr) writeFail(cardErr);
+      }
+    } finally {
+      invalidate();
+    }
+  }
   async updateCard(id: string, patch: Partial<Card>): Promise<void> {
     const row: Record<string, unknown> = {};
     if (patch.front !== undefined) row.front = patch.front;

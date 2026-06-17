@@ -43,8 +43,8 @@ describe('Landing page', () => {
       </AuthProvider>,
     );
 
-    // Hero headline, now uppercase across decorated lines ("A CURA / PARA O / ESQUECIMENTO.").
-    expect(screen.getByText('CURA')).toBeTruthy();
+    // Hero headline across stacked lines ("A CURA / para o / ESQUECIMENTO").
+    expect(screen.getByText('A CURA')).toBeTruthy();
     expect(screen.getByText('ESQUECIMENTO')).toBeTruthy();
 
     // Available-now features in "Recursos", including the AI ones now live.

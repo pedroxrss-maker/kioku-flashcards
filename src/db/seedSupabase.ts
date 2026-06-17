@@ -1,43 +1,56 @@
 /**
- * Per-user first-run seed (replaces the old local seed). On login, if the
- * signed-in user has zero decks in Supabase, create two sample decks in THEIR
- * account — one FSRS, one SM-2 — with text-only cards (no media, no em-dashes).
+ * Per-user first-run seed. On the first authenticated load with zero decks, give
+ * the account ONE sample deck ("Conhecimentos Gerais") + its cards.
+ *
+ * Optimistic + non-blocking: the deck and cards are generated client-side and
+ * written to the query cache IMMEDIATELY (setQueryData), so Home is populated
+ * instantly without waiting on the network. The real insert then persists in the
+ * BACKGROUND via repo.seedDeckWithCards, which does a SINGLE invalidate at the
+ * end — reconciling the cache with the server, and (if the insert failed)
+ * dropping the optimistic rows so the cache never diverges permanently.
+ *
  * Idempotent and de-duped so concurrent mounts (StrictMode) can't double-seed.
  */
 import { repo } from './repositories';
-import { makeCard } from './factories';
-import { invalidate } from './store';
-import { ENGLISH_VOCAB, GENERAL } from './seed';
+import { makeCard, makeDeck } from './factories';
+import { getQueryData, setQueryData } from './store';
+import { GENERAL } from './seed';
+import type { Card, Deck } from './types';
 
 let inFlight: Promise<void> | null = null;
 
 export async function seedForUserIfEmpty(): Promise<void> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
-    const decks = await repo.listDecks(); // RLS-scoped to the current user
-    if (decks.length > 0) return;
+    // Only seed an empty account. Prefer the warm 'decks' cache (the shell's
+    // initial load already fetches it) to skip a redundant round-trip; fall back
+    // to a network read only when the cache isn't loaded yet.
+    const cached = getQueryData<Deck[]>('decks');
+    const existing = cached ?? (await repo.listDecks());
+    if (existing.length > 0) return;
 
-    const english = await repo.createDeck({
-      name: 'Inglês: Vocabulário Essencial',
-      color: '#1f6dff',
-      category: 'Idiomas',
-      algorithm: 'fsrs',
-      ttsLang: 'en-US',
-    });
-    const general = await repo.createDeck({
+    const general = makeDeck({
       name: 'Conhecimentos Gerais',
       color: '#ff9d00',
       category: 'Geral',
       algorithm: 'sm2',
       ttsLang: 'pt-BR',
     });
+    const cards = GENERAL.map((p) => makeCard({ deckId: general.id, front: p.front, back: p.back }));
 
-    const cards = [
-      ...ENGLISH_VOCAB.map((p) => makeCard({ deckId: english.id, front: p.front, back: p.back })),
-      ...GENERAL.map((p) => makeCard({ deckId: general.id, front: p.front, back: p.back })),
-    ];
-    await repo.bulkInsertCards(cards);
-    invalidate();
+    // 1) Optimistic: populate the cache so Home shows the deck + cards instantly.
+    //    The UI does not wait on the network for this.
+    setQueryData<Deck[]>('decks', [general]);
+    setQueryData<Card[]>('cards:all', cards);
+
+    // 2) Persist in the background. seedDeckWithCards invalidates ONCE at the end
+    //    (success or failure), which reconciles the cache with the server — so a
+    //    failed insert drops the optimistic rows instead of diverging.
+    try {
+      await repo.seedDeckWithCards(general, cards);
+    } catch {
+      /* persistence failed; the single invalidate inside already reconciled */
+    }
   })().finally(() => {
     inFlight = null;
   });

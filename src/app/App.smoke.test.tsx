@@ -26,9 +26,9 @@ describe('App smoke test', () => {
     // The Kioku wordmark renders in the shell (sidebar + mobile bar).
     expect((await screen.findAllByText('Kioku')).length).toBeGreaterThan(0);
 
-    // First-run per-user seed creates the sample decks in Supabase.
+    // First-run per-user seed creates the sample deck in Supabase.
     const decks = await screen.findAllByText(
-      /Inglês: Vocabulário Essencial/,
+      /Conhecimentos Gerais/,
       {},
       { timeout: 8000 },
     );

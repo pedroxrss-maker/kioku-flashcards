@@ -1128,7 +1128,9 @@ button.pill.pill-active:hover {
    at the 1024px grid breakpoint; bumped up on wide screens. */
 .hero-title {
   font-size: clamp(30px, 5vw, 46px);
-  line-height: 1.08;
+  /* Espaçamento entre as linhas mais aberto: preenche o espaço que o ponto
+     (removido) ocupava entre "ESQUECIMENTO" e o subtítulo. */
+  line-height: 1.4;
   font-weight: 600;
   letter-spacing: -0.005em;
 }
