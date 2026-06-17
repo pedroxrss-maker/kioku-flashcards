@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../lib/useReducedMotion';
-import { Brain, Camera, Check, Database, Eye, Palette, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { AlertTriangle, Brain, Camera, Check, Database, Eye, Palette, SlidersHorizontal, Trash2, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -10,6 +10,7 @@ import { Toggle } from '../components/Toggle';
 import { SmoothSlider } from '../components/SmoothSlider';
 import { ProfilePhotoEditor } from '../features/profile/ProfilePhotoEditor';
 import { TtsSettings } from '../features/tts/TtsSettings';
+import { DeleteAccountModal } from '../features/account/DeleteAccountModal';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { seedForUserIfEmpty } from '../db/seedSupabase';
@@ -39,6 +40,7 @@ function Section({
 export function Settings() {
   const settings = useSettings();
   const [confirmReset, setConfirmReset] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [editorSrc, setEditorSrc] = useState<string | null>(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -450,6 +452,35 @@ export function Settings() {
         )}
       </Section>
 
+      {/* Zona de perigo — exclusão de conta (diferente do "Apagar dados" acima). */}
+      <section
+        className="p-5 md:p-6 rounded-[var(--r-lg)]"
+        style={{
+          border: '1px solid color-mix(in srgb, var(--accent) 45%, var(--line))',
+          background: 'color-mix(in srgb, var(--accent) 6%, var(--surface))',
+        }}
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle size={16} style={{ color: 'var(--accent)' }} />
+          <h2 className="mono text-sm" style={{ color: 'var(--accent)' }}>
+            Zona de perigo
+          </h2>
+        </div>
+        <p className="text-sm text-muted mb-3" style={{ lineHeight: 1.5 }}>
+          Excluir a conta é diferente de apagar os dados acima: remove{' '}
+          <b style={{ color: 'var(--fg)' }}>permanentemente</b> a sua conta e tudo nela (decks,
+          cards, histórico e mídias). Esta ação não pode ser desfeita.
+        </p>
+        <button
+          type="button"
+          onClick={() => setDeleteAccountOpen(true)}
+          className="btn btn-sm"
+          style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+        >
+          <Trash2 size={14} /> Excluir minha conta
+        </button>
+      </section>
+
       <p className="mono text-[10px] text-muted text-center pb-4">Kioku v1.0.0 · feito com foco em memória</p>
 
       <ProfilePhotoEditor
@@ -477,6 +508,8 @@ export function Settings() {
           />
         </div>
       </Modal>
+
+      <DeleteAccountModal open={deleteAccountOpen} onClose={() => setDeleteAccountOpen(false)} />
     </div>
   );
 }
