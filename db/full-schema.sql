@@ -274,16 +274,16 @@ immutable
 as $$
   select r.metric, r.period, r.max_count
   from (values
-    ('free',     'deckGen',  'day',       2),
-    ('free',     'tutor',    'day',      50),
+    ('free',     'deckGen',  'month',     2),
+    ('free',     'tutor',    'day',      15),
     ('free',     'image',    'month',     0),
-    ('free',     'audio',    'month',   200),
-    ('basic',    'deckGen',  'month',   300),
-    ('basic',    'tutor',    'month',  1000),
+    ('free',     'audio',    'month',    50),
+    ('basic',    'deckGen',  'day',       5),
+    ('basic',    'tutor',    'day',     100),
     ('basic',    'image',    'month',   100),
-    ('basic',    'audio',    'month',    -1),
-    ('advanced', 'deckGen',  'month',  1000),
-    ('advanced', 'tutor',    'month',  5000),
+    ('basic',    'audio',    'month',   500),
+    ('advanced', 'deckGen',  'month',    -1),
+    ('advanced', 'tutor',    'month',    -1),
     ('advanced', 'image',    'month',   300),
     ('advanced', 'audio',    'month',    -1)
   ) as r(plan, metric, period, max_count)

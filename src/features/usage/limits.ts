@@ -12,8 +12,8 @@
  *   -1  -> unlimited: always allowed, not metered.
  *    0  -> always denied (e.g. images on the free plan).
  *   > 0 -> the cap for the period.
- * The `period` (day | month) is part of the rule: free is gated DAILY, the paid
- * plans are gated MONTHLY.
+ * The `period` (day | month) is part of EACH rule and is mixed per plan/metric
+ * (some caps are daily, some monthly) — read it off the rule, don't assume.
  */
 
 export type Plan = 'free' | 'basic' | 'advanced';
@@ -32,20 +32,20 @@ export const DEFAULT_PLAN: Plan = 'free';
 // ── EDIT LIMITS HERE (keep in sync with quota_rules in the SQL) ──────────────
 export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
   free: {
-    deckGen: { period: 'day', limit: 2 }, // free: 2 decks com IA por dia
-    tutor: { period: 'day', limit: 50 }, // free: 50 usos/dia, pool unico das 5 ferramentas de IA da revisao
+    deckGen: { period: 'month', limit: 2 }, // free: 2 decks com IA por mes
+    tutor: { period: 'day', limit: 15 }, // free: 15 usos/dia, pool unico das 5 ferramentas de IA da revisao
     image: { period: 'month', limit: 0 }, // free: no AI images
-    audio: { period: 'month', limit: 200 }, // free: 200 audios/month (paid = unlimited)
+    audio: { period: 'month', limit: 50 }, // free: 50 audios/mes
   },
   basic: {
-    deckGen: { period: 'month', limit: 300 }, // soft-high
-    tutor: { period: 'month', limit: 1000 }, // soft-high
+    deckGen: { period: 'day', limit: 5 }, // basic: 5 decks com IA por dia
+    tutor: { period: 'day', limit: 100 }, // basic: 100 usos/dia
     image: { period: 'month', limit: 100 },
-    audio: { period: 'month', limit: -1 },
+    audio: { period: 'month', limit: 500 },
   },
   advanced: {
-    deckGen: { period: 'month', limit: 1000 },
-    tutor: { period: 'month', limit: 5000 },
+    deckGen: { period: 'month', limit: -1 }, // ilimitado
+    tutor: { period: 'month', limit: -1 }, // ilimitado
     image: { period: 'month', limit: 300 }, // hidden cap behind "ilimitado"
     audio: { period: 'month', limit: -1 },
   },
@@ -55,13 +55,13 @@ export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
 /**
  * Max number of cards a single AI-generated deck may contain, by plan. This is a
  * PER-GENERATION cap (not a daily/monthly counter, so it is not in quota_rules):
- * the free plan is held to 20 cards per generated deck; paid plans use the UI
+ * the free plan is held to 50 cards per generated deck; paid plans use the UI
  * maximum (100). Enforced where the deck is generated (the quantity selector is
- * capped AND the result is truncated, so instructions like "faça 50 cards" can
+ * capped AND the result is truncated, so instructions like "faça 100 cards" can
  * never exceed it on the free plan).
  */
 export const AI_DECK_MAX_CARDS: Record<Plan, number> = {
-  free: 20,
+  free: 50,
   basic: 100,
   advanced: 100,
 };

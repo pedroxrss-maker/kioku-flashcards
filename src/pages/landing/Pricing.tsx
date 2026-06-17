@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Check, X } from 'lucide-react';
@@ -18,6 +18,8 @@ type Billing = 'mensal' | 'anual';
 interface Cell {
   ok: boolean;
   label: string;
+  /** Optional substring of `label` to underline for emphasis (e.g. "dia"). */
+  emphasis?: string;
   badge?: string;
 }
 
@@ -42,9 +44,9 @@ const PLANS_DATA: PlanCard[] = [
     free: true,
     cta: 'Começar grátis',
     features: [
-      { ok: true, label: '2 decks com IA por dia (até 20 cartas cada)' },
-      { ok: true, label: '50 usos das ferramentas de IA por dia (tutor, exemplos, analogias e mais)' },
-      { ok: true, label: '200 áudios por mês para seus cards' },
+      { ok: true, label: '2 decks de IA por mês' },
+      { ok: true, label: '15 usos das ferramentas de IA por dia' },
+      { ok: true, label: '50 áudios por mês para seus cards' },
       { ok: false, label: 'Sem imagens nos cards' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],
@@ -52,16 +54,16 @@ const PLANS_DATA: PlanCard[] = [
   {
     key: 'basic',
     tagline: 'Para estudar sem limites no dia a dia',
-    monthly: 'R$ 14,90',
+    monthly: 'R$ 19,90',
     annual: 'R$ 9,90',
     cta: 'Assinar Básico',
     highlighted: true,
     badge: 'Mais popular',
     features: [
-      { ok: true, label: 'Crie decks com IA o dia inteiro' },
-      { ok: true, label: 'Tutor sempre que travar numa matéria' },
-      { ok: true, label: 'Áudios ilimitados para seus cards' },
-      { ok: true, label: 'Geração de 100 imagens' },
+      { ok: true, label: '5 decks de IA por dia', emphasis: 'dia' },
+      { ok: true, label: '100 usos das ferramentas de IA por dia' },
+      { ok: true, label: '500 áudios por mês para seus cards' },
+      { ok: true, label: 'Geração de 100 imagens por mês' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],
   },
@@ -69,13 +71,13 @@ const PLANS_DATA: PlanCard[] = [
     key: 'advanced',
     tagline: 'Para quem não aceita esquecer nada',
     monthly: 'R$ 29,90',
-    annual: 'R$ 19,90',
+    annual: 'R$ 22,90',
     cta: 'Assinar Avançado',
     features: [
-      { ok: true, label: 'IA sem freio para maratonar estudos' },
-      { ok: true, label: 'Tutor ilimitado em qualquer matéria' },
-      { ok: true, label: 'Áudio em todos os cards' },
-      { ok: true, label: 'Imagens ilimitadas nos seus cards', badge: 'Ilimitadas' },
+      { ok: true, label: 'Decks de IA ilimitados' },
+      { ok: true, label: 'Ferramentas de IA ilimitadas' },
+      { ok: true, label: 'Áudios ilimitados' },
+      { ok: true, label: 'Imagens ilimitadas nos cards', badge: 'Ilimitadas' },
       { ok: true, label: 'Recursos exclusivos que chegam primeiro pra você', badge: 'Em breve' },
     ],
   },
@@ -165,7 +167,7 @@ export function Pricing() {
         <div className="flex items-center justify-center gap-1.5 mt-7">
           <BillingToggle billing={billing} onChange={setBilling} reduce={!!reduce} />
           <span className="text-[8px]" style={{ color: 'var(--muted)' }}>
-            Economize 33%
+            Economize
           </span>
         </div>
       </Reveal>
@@ -280,6 +282,20 @@ function BillingToggle({
         );
       })}
     </div>
+  );
+}
+
+/** A feature label, optionally underlining one emphasized word (e.g. "dia"). */
+function renderFeatureLabel(cell: Cell): ReactNode {
+  if (!cell.emphasis) return cell.label;
+  const i = cell.label.indexOf(cell.emphasis);
+  if (i < 0) return cell.label;
+  return (
+    <>
+      {cell.label.slice(0, i)}
+      <u style={{ textUnderlineOffset: 2 }}>{cell.emphasis}</u>
+      {cell.label.slice(i + cell.emphasis.length)}
+    </>
   );
 }
 
@@ -406,7 +422,7 @@ function PlanCardView({
               <X size={compact ? 13 : 16} style={{ color: c.faded, flexShrink: 0 }} />
             )}
             <span className={featText} style={{ color: cell.ok ? c.body : c.faded, lineHeight: 1.3 }}>
-              {cell.label}
+              {renderFeatureLabel(cell)}
             </span>
             {cell.badge && (
               <span
