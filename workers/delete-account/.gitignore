@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+dist/
+# Segredos de desenvolvimento local. NUNCA cometa este arquivo.
+.dev.vars

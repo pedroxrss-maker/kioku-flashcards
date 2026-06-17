@@ -1,0 +1,7 @@
+# Exemplo. Copie para `.dev.vars` (ignorado pelo git) e preencha para rodar
+# `wrangler dev` localmente. NUNCA cometa o arquivo .dev.vars real.
+SUPABASE_URL=https://seu-projeto.supabase.co
+# Publishable key (sb_publishable_...): usada como apikey na verificacao do JWT (JWKS).
+SUPABASE_ANON_KEY=sb_publishable_xxx
+# Chave SECRETA (service role, sb_secret_...): le profiles e chama a Auth Admin API.
+SUPABASE_SECRET_KEY=sb_secret_xxx

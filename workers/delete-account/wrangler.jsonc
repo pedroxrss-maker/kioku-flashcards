@@ -1,0 +1,17 @@
+{
+  // Worker que exclui a PRÓPRIA conta do usuário autenticado (Supabase Auth Admin).
+  //
+  // Deploy (rode DENTRO de workers/delete-account): `npx wrangler deploy`.
+  // Segredos NUNCA ficam neste arquivo. Defina-os com `wrangler secret put`:
+  //   npx wrangler secret put SUPABASE_URL          # https://zsvxrbvxlxurendqaree.supabase.co
+  //   npx wrangler secret put SUPABASE_ANON_KEY     # publishable key (sb_publishable_...), p/ o JWKS
+  //   npx wrangler secret put SUPABASE_SECRET_KEY   # service role (sb_secret_...)
+  // O JWT do usuario e validado via JWKS (ES256), derivado de SUPABASE_URL.
+  // Ajuste ALLOWED_ORIGINS para o dominio de producao (mantendo localhost p/ dev).
+  "name": "kioku-delete-account",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "vars": {
+    "ALLOWED_ORIGINS": "https://kioku.com.br,http://localhost:5173"
+  }
+}

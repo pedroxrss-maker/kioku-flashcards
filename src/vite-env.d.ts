@@ -19,6 +19,10 @@ interface ImportMetaEnv {
    *  server-side). When unset, AI image generation is disabled and the controls
    *  are hidden. Baked in at build time. */
   readonly VITE_IMAGE_PROXY_URL?: string;
+  /** Base URL of the delete-account Worker (holds the service key; deletes the
+   *  caller's own account via the Supabase Auth Admin API). When unset, account
+   *  deletion is unavailable and the flow throws a clear pt-BR message. */
+  readonly VITE_DELETE_ACCOUNT_URL?: string;
 }
 
 interface ImportMeta {

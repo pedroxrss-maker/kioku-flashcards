@@ -2,16 +2,21 @@
  * Exclusão de conta (IRREVERSÍVEL), na ordem fixa:
  *  (a) confirma a senha com signInWithPassword (aborta se errada);
  *  (b) limpa a mídia do usuário no Storage (best-effort, com a sessão AINDA válida);
- *  (c) chama a RPC delete_my_account() (apaga auth.users + cascata + pending_plans);
+ *  (c) chama o Worker delete-account (Authorization: Bearer) — ele valida o JWT,
+ *      reconfere o plano e apaga via Auth Admin API (cascata + pending_plans);
  *  (d) limpa caches locais, faz signOut e volta para a landing.
  *
- * Se a RPC falhar, NÃO faz signOut: lança DeleteAccountError com mensagem pt-BR
- * para a UI exibir, deixando o usuário tentar de novo.
+ * Se o Worker falhar, NÃO faz signOut: lança DeleteAccountError com mensagem
+ * pt-BR para a UI exibir, deixando o usuário tentar de novo.
  */
 import { supabase } from '../../lib/supabase';
 import { MEDIA_BUCKET } from '../media/storage';
 import { clearQueryCache } from '../../db/store';
 import { db } from '../../db';
+
+/** Worker que apaga a conta (guarda a service key + chama a Auth Admin API).
+ *  Sem ele definido, a exclusão não está disponível. */
+const DELETE_ACCOUNT_URL = import.meta.env.VITE_DELETE_ACCOUNT_URL;
 
 /** Erro com mensagem pt-BR pronta para exibir ao usuário. */
 export class DeleteAccountError extends Error {}
@@ -40,8 +45,8 @@ async function listAllFilePaths(prefix: string): Promise<string[]> {
   return paths;
 }
 
-/** Remove toda a mídia do usuário (chunks). Best-effort: o backstop da RPC limpa
- *  qualquer linha de storage.objects que sobrar. */
+/** Remove toda a mídia do usuário (chunks), via Storage API. Best-effort: o que
+ *  sobrar fica órfão (privado, inacessível) — não há backstop no servidor. */
 async function removeUserMedia(uid: string): Promise<void> {
   const paths = await listAllFilePaths(uid);
   const CHUNK = 100;
@@ -50,12 +55,49 @@ async function removeUserMedia(uid: string): Promise<void> {
   }
 }
 
-function friendlyRpcError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes('plano ativo') || m.includes('basic') || m.includes('advanced')) {
-    return 'Você tem um plano ativo. Cancele a assinatura na Kiwify antes de excluir a conta.';
+/**
+ * Chama o Worker delete-account com o access token do usuário. O Worker valida o
+ * JWT (o id a apagar vem só do `sub` do token), reconfere o plano (403 se pago) e
+ * apaga a conta via Auth Admin API. Lança DeleteAccountError (pt-BR) em falha.
+ */
+async function callDeleteWorker(): Promise<void> {
+  if (!DELETE_ACCOUNT_URL) {
+    throw new DeleteAccountError('Exclusão de conta não está disponível no momento.');
   }
-  return 'Não foi possível excluir a conta. Tente novamente.';
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  if (!token) {
+    throw new DeleteAccountError('Sessão expirada. Entre novamente.');
+  }
+  let res: Response;
+  try {
+    res = await fetch(DELETE_ACCOUNT_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new DeleteAccountError('Não foi possível excluir a conta. Tente novamente.');
+  }
+  if (res.ok) return;
+
+  // Erro: extrai code/message do corpo (quando JSON) para uma mensagem clara.
+  let code = '';
+  let message = '';
+  try {
+    const body = (await res.json()) as { code?: string; error?: string };
+    code = body.code ?? '';
+    message = body.error ?? '';
+  } catch {
+    /* corpo não-JSON: decide pelo status */
+  }
+  if (res.status === 403 && (code === 'paid_plan' || message.includes('plano ativo'))) {
+    throw new DeleteAccountError(
+      'Você tem um plano ativo. Cancele a assinatura na Kiwify antes de excluir a conta.',
+    );
+  }
+  if (res.status === 401) {
+    throw new DeleteAccountError('Sessão expirada. Entre novamente.');
+  }
+  throw new DeleteAccountError('Não foi possível excluir a conta. Tente novamente.');
 }
 
 export async function deleteMyAccount(email: string, password: string): Promise<void> {
@@ -68,15 +110,12 @@ export async function deleteMyAccount(email: string, password: string): Promise<
     const uid = (await supabase.auth.getSession()).data.session?.user?.id;
     if (uid) await removeUserMedia(uid);
   } catch {
-    /* best-effort: o backstop da RPC remove as linhas restantes */
+    /* best-effort: o que sobrar fica órfão (privado, inacessível) */
   }
 
-  // (c) Apaga a conta no servidor.
-  const { error: rpcErr } = await supabase.rpc('delete_my_account');
-  if (rpcErr) {
-    // NÃO desloga: deixa o usuário ler a mensagem e tentar de novo.
-    throw new DeleteAccountError(friendlyRpcError(rpcErr.message ?? ''));
-  }
+  // (c) Apaga a conta no servidor: o Worker valida o JWT, reconfere o plano e
+  //     apaga via Auth Admin API. Em falha, lança (NÃO desloga) p/ tentar de novo.
+  await callDeleteWorker();
 
   // (d) Sucesso: limpa caches locais, desloga e volta para a landing.
   try {
