@@ -13,12 +13,12 @@ export type BillingCycle = 'monthly' | 'annual';
 /** The 4 Kiwify checkout links, indexed [plan][cycle]. */
 const CHECKOUT_LINKS: Record<PaidPlan, Record<BillingCycle, string>> = {
   basic: {
-    monthly: 'https://pay.kiwify.com.br/MLPjpgX',
+    monthly: 'https://pay.kiwify.com.br/dzaX3IL',
     annual: 'https://pay.kiwify.com.br/vzou6fl',
   },
   advanced: {
     monthly: 'https://pay.kiwify.com.br/b0NzTPr',
-    annual: 'https://pay.kiwify.com.br/bebyMfO',
+    annual: 'https://pay.kiwify.com.br/1nLz295',
   },
 };
 
