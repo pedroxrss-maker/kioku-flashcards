@@ -198,18 +198,24 @@ async function verifySupabaseJwt(token: string, env: Env): Promise<JwtClaims | n
 
 // ── Supabase REST + Auth Admin (com a SERVICE key) ───────────────────────────
 
-/** Le profiles.plan com a service key (ignora RLS). null = falha de leitura;
- *  'free' quando nao ha linha (conta sem plano pago). */
-async function fetchPlan(env: Env, uid: string): Promise<string | null> {
+/**
+ * Le profiles.plan como o PRÓPRIO usuário: apikey = publishable, Authorization =
+ * Bearer <JWT do usuário> — MESMA abordagem do ai-proxy (que funciona). O
+ * endpoint /rest/v1 (PostgREST) decodifica o Bearer como JWT para definir o
+ * papel; a service key nova (sb_secret_) NAO e um JWT, por isso falhava. A RLS de
+ * profiles libera a própria linha (auth.uid() = id) e o usuário nao consegue
+ * adulterar o plano (trigger guard_profile_plan), entao a leitura e confiavel.
+ *
+ * Retorna: o plano; 'free' quando nao ha linha (conta sem plano pago -> liberar);
+ * ou null APENAS em FALHA de leitura (-> 500 reentrante; nunca apaga sem checar).
+ */
+async function fetchPlan(env: Env, userToken: string, uid: string): Promise<string | null> {
   const base = env.SUPABASE_URL.replace(/\/+$/, '');
   const url = `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(uid)}&select=plan&limit=1`;
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: {
-        apikey: env.SUPABASE_SECRET_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
-      },
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` },
     });
   } catch {
     return null;
@@ -221,6 +227,7 @@ async function fetchPlan(env: Env, uid: string): Promise<string | null> {
   } catch {
     return null;
   }
+  // Sem linha -> conta sem plano pago -> 'free' (libera a exclusão).
   return rows[0]?.plan ?? 'free';
 }
 
@@ -299,8 +306,9 @@ export default {
       // O id a apagar vem SOMENTE do token verificado.
       const uid = claims.sub;
 
-      // 2) Guarda de plano pago (service key, ignora RLS). null = nao deu p/ ler.
-      const plan = await fetchPlan(env, uid);
+      // 2) Guarda de plano pago: le profiles.plan como o PRÓPRIO usuário (JWT +
+      //    publishable), igual ao ai-proxy. null = nao deu p/ ler -> 500.
+      const plan = await fetchPlan(env, token, uid);
       if (plan === null) {
         console.error('delete-account: falha ao ler o plano', { uid });
         return json({ error: 'Não foi possível verificar seu plano. Tente novamente.' }, 500, cors);
