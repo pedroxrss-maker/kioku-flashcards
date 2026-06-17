@@ -24,6 +24,15 @@ import { supabase } from '../../lib/supabase';
 import { clearQueryCache } from '../../db/store';
 import { DEFAULT_PLAN } from '../usage/limits';
 import type { Plan } from '../usage/limits';
+import { PRIVACY_POLICY_VERSION } from '../../config';
+
+/** Extra signup-only data: optional phone + the marketing-consent choice. The
+ *  privacy-policy acceptance is REQUIRED by the form (signup is blocked without
+ *  it), so it is always sent and is not part of this object. */
+export interface SignUpOptions {
+  phone?: string;
+  marketingConsent: boolean;
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -32,7 +41,12 @@ interface AuthContextValue {
   displayName: string;
   /** profiles.plan (free | basic | advanced). Defaults to free until loaded. */
   plan: Plan;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    opts?: SignUpOptions,
+  ) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** A password-recovery link was opened; show the "set new password" screen. */
@@ -166,18 +180,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const signUp = useCallback(
-    async (email: string, password: string, name: string) => {
+    async (email: string, password: string, name: string, opts?: SignUpOptions) => {
       const trimmed = name.trim();
+      const phone = opts?.phone?.trim();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        // Pass the display name as user metadata. The DB trigger that creates
-        // the profiles row reads this and persists display_name at creation
-        // time, so we must NOT PATCH/insert profiles here — doing it before the
-        // new session's token is established 401s ("permission denied"). Any
-        // later profile write goes through the data layer, which only runs with
-        // a confirmed session and UPDATEs the existing row.
-        options: { data: { display_name: trimmed } },
+        // Pass the display name + LGPD consent as user metadata. The DB trigger
+        // that creates the profiles row reads these from raw_user_meta_data and
+        // persists them (display_name, phone, privacy_consent_*, marketing_consent),
+        // so we must NOT PATCH/insert profiles here — doing it before the new
+        // session's token is established 401s ("permission denied"). Any later
+        // profile write goes through the data layer, which UPDATEs the existing row.
+        // Phone is included only when non-empty (it is optional).
+        options: {
+          data: {
+            display_name: trimmed,
+            ...(phone ? { phone } : {}),
+            privacy_consent: true,
+            privacy_consent_version: PRIVACY_POLICY_VERSION,
+            privacy_consent_at: new Date().toISOString(),
+            marketing_consent: opts?.marketingConsent ?? false,
+          },
+        },
       });
       if (error) throw new Error(mapAuthError(error.message));
 

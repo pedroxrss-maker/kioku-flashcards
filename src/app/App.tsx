@@ -17,6 +17,7 @@ import { Awards } from '../pages/Awards';
 import { Settings } from '../pages/Settings';
 import { scheduleAchievementCheck } from '../features/gamification/achievements';
 import { Landing } from '../pages/landing/Landing';
+import { PrivacyPolicy } from '../pages/legal/PrivacyPolicy';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
 import { AuthLoading, AuthPage, ResetPasswordPage, SupabaseConfigNotice } from '../features/auth/AuthPage';
@@ -53,6 +54,8 @@ function PublicApp() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/entrar" element={<AuthPage />} />
+      {/* Página legal pública: acessível sem login, não redireciona para /entrar. */}
+      <Route path="/privacidade" element={<PrivacyPolicy />} />
       <Route path="*" element={<Navigate to="/entrar" replace />} />
     </Routes>
   );
@@ -73,6 +76,9 @@ function AuthedApp() {
       <Routes>
         {/* Full-screen review session (no sidebar). */}
         <Route path="/review/:deckId" element={<ReviewSession />} />
+
+        {/* Página legal pública, também alcançável logado (standalone, sem shell). */}
+        <Route path="/privacidade" element={<PrivacyPolicy />} />
 
         {/* A logged-in user has no use for the auth page. */}
         <Route path="/entrar" element={<Navigate to="/" replace />} />

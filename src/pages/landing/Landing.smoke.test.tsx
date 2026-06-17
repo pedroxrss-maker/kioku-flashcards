@@ -43,8 +43,9 @@ describe('Landing page', () => {
       </AuthProvider>,
     );
 
-    // Hero headline (text node split from the accent period).
-    expect(screen.getByText(/A cura para o esquecimento/)).toBeTruthy();
+    // Hero headline, now uppercase across decorated lines ("A CURA / PARA O / ESQUECIMENTO.").
+    expect(screen.getByText('CURA')).toBeTruthy();
+    expect(screen.getByText('ESQUECIMENTO')).toBeTruthy();
 
     // Available-now features in "Recursos", including the AI ones now live.
     expect(screen.getByText(/Importe do Anki/)).toBeTruthy();

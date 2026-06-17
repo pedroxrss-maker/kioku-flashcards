@@ -28,8 +28,72 @@ export function Hero() {
           </Reveal>
 
           <Reveal delay={0.06}>
-            <h1 className="display mt-5" style={{ fontSize: 'clamp(41px, 7.2vw, 70px)', fontWeight: 600, lineHeight: 1.04 }}>
-              A cura para o esquecimento<span style={{ color: 'var(--accent)' }}>.</span>
+            <h1 className="display hero-title mt-5">
+              {/* Linha 1: "A CURA", com CURA dentro de uma elipse desenhada à mão. */}
+              <span style={{ display: 'block' }}>
+                A{' '}
+                <span style={{ position: 'relative', display: 'inline-block' }}>
+                  CURA
+                  <svg
+                    viewBox="0 0 100 64"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      left: '-12%',
+                      top: '-30%',
+                      width: '124%',
+                      height: '158%',
+                      fill: 'none',
+                      stroke: 'var(--accent)',
+                      strokeWidth: 'clamp(3px, 0.5vw, 5px)',
+                      strokeLinecap: 'round',
+                      strokeLinejoin: 'round',
+                      overflow: 'visible',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <path
+                      vectorEffect="non-scaling-stroke"
+                      d="M26 14 C6 22 4 50 30 58 C58 67 92 60 95 34 C97 16 78 7 46 9 C28 10 16 16 20 30"
+                    />
+                  </svg>
+                </span>
+              </span>
+
+              {/* Linha 2 */}
+              <span style={{ display: 'block' }}>PARA O</span>
+
+              {/* Linha 3: "ESQUECIMENTO." com pincelada laranja embaixo e o ponto em accent. */}
+              <span style={{ display: 'block' }}>
+                <span style={{ position: 'relative', display: 'inline-block' }}>
+                  ESQUECIMENTO
+                  <svg
+                    viewBox="0 0 300 20"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      bottom: '-0.14em',
+                      width: '100%',
+                      height: '0.32em',
+                      fill: 'none',
+                      stroke: 'var(--accent)',
+                      strokeWidth: 'clamp(5px, 0.85vw, 9px)',
+                      strokeLinecap: 'round',
+                      overflow: 'visible',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <path
+                      vectorEffect="non-scaling-stroke"
+                      d="M8 12 C80 5 170 6 230 9 C262 10 286 11 296 6"
+                    />
+                  </svg>
+                </span>
+                <span style={{ color: 'var(--accent)' }}>.</span>
+              </span>
             </h1>
           </Reveal>
         </div>

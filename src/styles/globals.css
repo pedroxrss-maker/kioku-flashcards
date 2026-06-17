@@ -1123,6 +1123,21 @@ button.pill.pill-active:hover {
 /* ----------------------------------------------- hero responsive layout -- */
 /* Mobile: single column with the product mockup right after the title.
    Desktop: two columns (text left, mockup spanning both rows on the right). */
+/* Hero headline: 3 forced lines, uppercase, with the hand-drawn marks. Capped so
+   the longest single word ("ESQUECIMENTO") never overflows the narrow head column
+   at the 1024px grid breakpoint; bumped up on wide screens. */
+.hero-title {
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+@media (min-width: 1180px) {
+  .hero-title {
+    font-size: 54px;
+  }
+}
+
 .hero-head {
   grid-area: head;
 }
@@ -1271,4 +1286,46 @@ button.pill.pill-active:hover {
 }
 .rise {
   animation: kioku-rise 0.18s ease-out both;
+}
+
+/* --------------------------------------------------- legal / long-form ---- */
+/* Documentos longos (ex.: Política de Privacidade): leitura confortável, com
+   medida de linha controlada, hierarquia de títulos (Fraunces) e corpo Manrope. */
+.legal-doc {
+  font-family: var(--body);
+  color: color-mix(in srgb, var(--fg) 86%, transparent);
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+.legal-doc p {
+  margin-top: 1.05em;
+}
+.legal-doc h2 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.25;
+  color: var(--fg);
+  margin-top: 2.4em;
+  margin-bottom: 0.15em;
+}
+.legal-doc strong {
+  color: var(--fg);
+  font-weight: 700;
+}
+.legal-doc ul {
+  margin-top: 0.6em;
+  padding-left: 1.25em;
+  list-style: disc;
+}
+.legal-doc li {
+  margin-top: 0.55em;
+}
+.legal-doc li::marker {
+  color: var(--accent);
+}
+.legal-doc a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

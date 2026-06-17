@@ -53,7 +53,16 @@ export function LandingFooter() {
           <span className="inline-flex items-center gap-1.5 text-xs text-muted">
             powered by <NeuroWordmark size={12} />
           </span>
-          <span className="text-xs text-muted">© Kioku</span>
+          <div className="flex items-center gap-4 text-xs text-muted">
+            <button
+              type="button"
+              onClick={() => nav('/privacidade')}
+              className="hover:text-fg transition-colors"
+            >
+              Política de Privacidade
+            </button>
+            <span>© Kioku</span>
+          </div>
         </div>
       </div>
     </footer>

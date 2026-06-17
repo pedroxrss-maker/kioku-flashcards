@@ -49,6 +49,10 @@ export function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [forgot, setForgot] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  // Signup-only: optional phone + LGPD consents.
+  const [phone, setPhone] = useState('');
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [acceptMarketing, setAcceptMarketing] = useState(false);
 
   const isSignup = mode === 'signup';
 
@@ -75,11 +79,18 @@ export function AuthPage() {
       setError('A senha precisa de ao menos 6 caracteres');
       return;
     }
+    if (isSignup && !acceptPrivacy) {
+      setError('Você precisa aceitar a Política de Privacidade para criar a conta.');
+      return;
+    }
 
     setSubmitting(true);
     try {
       if (isSignup) {
-        await signUp(mail, password, displayName);
+        await signUp(mail, password, displayName, {
+          phone,
+          marketingConsent: acceptMarketing,
+        });
       } else {
         await signIn(mail, password);
       }
@@ -314,6 +325,81 @@ export function AuthPage() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Signup-only: telefone (opcional) + consentimentos LGPD. Expande e
+                colapsa suavemente ao alternar entre entrar e criar conta. */}
+            <AnimatePresence initial={false}>
+              {isSignup && (
+                <motion.div
+                  key="signup-extra"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: reduce ? 0 : 0.3, ease: EASE }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div style={{ marginBottom: 16 }}>
+                    <label className="field-label" htmlFor="auth-phone">
+                      Telefone (opcional)
+                    </label>
+                    <input
+                      id="auth-phone"
+                      className="field"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(11) 99999-9999"
+                    />
+                  </div>
+
+                  {/* Obrigatório: sem aceitar, o cadastro é bloqueado no submit. O
+                      link abre a política em nova aba sem alternar o checkbox. */}
+                  <label
+                    className="flex items-start gap-2.5 cursor-pointer"
+                    style={{ marginBottom: 12 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={acceptPrivacy}
+                      onChange={(e) => setAcceptPrivacy(e.target.checked)}
+                      className="shrink-0"
+                      style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--accent)' }}
+                    />
+                    <span className="text-sm" style={{ color: 'var(--muted)', lineHeight: 1.5 }}>
+                      Li e aceito a{' '}
+                      <a
+                        href="/privacidade"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+                      >
+                        Política de Privacidade
+                      </a>
+                    </span>
+                  </label>
+
+                  {/* Opcional: consentimento de marketing. Nunca obrigatório. */}
+                  <label
+                    className="flex items-start gap-2.5 cursor-pointer"
+                    style={{ marginBottom: 16 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={acceptMarketing}
+                      onChange={(e) => setAcceptMarketing(e.target.checked)}
+                      className="shrink-0"
+                      style={{ width: 16, height: 16, marginTop: 2, accentColor: 'var(--accent)' }}
+                    />
+                    <span className="text-sm" style={{ color: 'var(--muted)', lineHeight: 1.5 }}>
+                      Aceito receber comunicações e novidades do Kioku por e-mail
+                    </span>
+                  </label>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {!isSignup && (
               <button
