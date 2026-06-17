@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Folder } from 'lucide-react';
-import { aggregateCounts, buildDeckTree, deckPathOf } from '../../lib/deckTree';
+import { aggregateCounts, buildDeckTree, deckPathOf, nestDeckPaths } from '../../lib/deckTree';
 import type { DeckTreeNode } from '../../lib/deckTree';
 import { countCards } from '../../lib/deckStats';
+import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DeckGridCard, GridCounts, SubdeckToggle } from './DeckGridCard';
+import { useNestDrag } from './nestDrag';
 import type { Card, Deck } from '../../db/types';
 
 /**
@@ -30,6 +32,14 @@ export function DeckGrid({
 }) {
   const settings = useSettings();
   const deckPaths = settings?.deckPaths;
+  // Re-parent a deck (drag source) under a target path, persisting deckPaths.
+  const onNest = useCallback(
+    (dragPath: string, targetPath: string) => {
+      const next = nestDeckPaths(decks, deckPaths, dragPath, targetPath);
+      if (next) void repo.saveSettings({ deckPaths: next });
+    },
+    [decks, deckPaths],
+  );
   const roots = useMemo(
     () => buildDeckTree(decks, deckPaths, cardsByDeck),
     [decks, deckPaths, cardsByDeck],
@@ -63,7 +73,13 @@ export function DeckGrid({
       <TwoColumns
         items={matches}
         render={(d) => (
-          <DeckGridCard key={d.id} deck={d} counts={countCards(cardsByDeck.get(d.id) ?? [], now, d)} />
+          <DeckGridCard
+            key={d.id}
+            deck={d}
+            counts={countCards(cardsByDeck.get(d.id) ?? [], now, d)}
+            nestPath={deckPathOf(d, deckPaths)}
+            onNest={onNest}
+          />
         )}
       />
     );
@@ -74,7 +90,14 @@ export function DeckGrid({
     <TwoColumns
       items={top}
       render={(node) => (
-        <GridNode key={node.path} node={node} now={now} expandedSet={expanded} toggle={toggle} />
+        <GridNode
+          key={node.path}
+          node={node}
+          now={now}
+          expandedSet={expanded}
+          toggle={toggle}
+          onNest={onNest}
+        />
       )}
     />
   );
@@ -100,11 +123,13 @@ function GridNode({
   now,
   expandedSet,
   toggle,
+  onNest,
 }: {
   node: DeckTreeNode;
   now: number;
   expandedSet: Set<string>;
   toggle: (path: string) => void;
+  onNest: (dragPath: string, targetPath: string) => void;
 }) {
   const reduce = useReducedMotion();
   const counts = aggregateCounts(node, now);
@@ -112,7 +137,9 @@ function GridNode({
   const open = expandedSet.has(node.path);
 
   if (!hasKids) {
-    return node.deck ? <DeckGridCard deck={node.deck} counts={counts} /> : null;
+    return node.deck ? (
+      <DeckGridCard deck={node.deck} counts={counts} nestPath={node.path} onNest={onNest} />
+    ) : null;
   }
 
   // Parent (deck or pure folder): the tile, with its subdecks revealed below it
@@ -126,9 +153,17 @@ function GridNode({
           subdeckCount={node.children.length}
           expanded={open}
           onToggleSubdecks={() => toggle(node.path)}
+          nestPath={node.path}
+          onNest={onNest}
         />
       ) : (
-        <FolderCard node={node} counts={counts} expanded={open} onToggle={() => toggle(node.path)} />
+        <FolderCard
+          node={node}
+          counts={counts}
+          expanded={open}
+          onToggle={() => toggle(node.path)}
+          onNest={onNest}
+        />
       )}
       <AnimatePresence initial={false}>
         {open && (
@@ -145,7 +180,14 @@ function GridNode({
               style={{ borderLeft: '2px solid var(--line)' }}
             >
               {node.children.map((child) => (
-                <GridNode key={child.path} node={child} now={now} expandedSet={expandedSet} toggle={toggle} />
+                <GridNode
+                  key={child.path}
+                  node={child}
+                  now={now}
+                  expandedSet={expandedSet}
+                  toggle={toggle}
+                  onNest={onNest}
+                />
               ))}
             </div>
           </motion.div>
@@ -161,14 +203,24 @@ function FolderCard({
   counts,
   expanded,
   onToggle,
+  onNest,
 }: {
   node: DeckTreeNode;
   counts: ReturnType<typeof aggregateCounts>;
   expanded: boolean;
   onToggle: () => void;
+  onNest: (dragPath: string, targetPath: string) => void;
 }) {
+  // Folders are drop targets only (you nest decks INTO them); never dragged.
+  const { nestProps, isTarget } = useNestDrag({
+    path: node.path,
+    label: node.name,
+    enabled: false,
+    onDrop: onNest,
+  });
   return (
     <div
+      {...nestProps}
       role="button"
       tabIndex={0}
       onClick={onToggle}
@@ -176,7 +228,11 @@ function FolderCard({
         if (e.key === 'Enter') onToggle();
       }}
       className="relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden min-w-0 cursor-pointer"
-      style={{ minHeight: 104, background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+      style={{
+        minHeight: 104,
+        background: isTarget ? 'var(--surface)' : 'var(--surface-2)',
+        border: isTarget ? '2px solid var(--accent)' : '1px solid var(--line)',
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 13 }}>

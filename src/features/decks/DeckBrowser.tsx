@@ -329,7 +329,7 @@ function HeroCard({
   };
   // Half-height on mobile (compact padding, no min-height); full card on sm+.
   const className =
-    'hero-card hover-lift flex items-center justify-start sm:justify-center px-5 py-3 sm:px-6 sm:py-7 sm:min-h-[150px]';
+    'hero-card hover-lift flex items-center justify-start sm:justify-center px-5 py-3 sm:px-6 sm:py-[24px] sm:min-h-[128px]';
 
   return to ? (
     <Link to={to} className={className} style={style}>

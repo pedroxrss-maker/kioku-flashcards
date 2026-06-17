@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { DeckAvatar } from './deckIcons';
+import { useNestDrag, NestGhost } from './nestDrag';
 import type { Deck } from '../../db/types';
 import type { DeckCounts } from '../../lib/deckStats';
 
@@ -66,18 +67,30 @@ export function DeckGridCard({
   subdeckCount,
   expanded,
   onToggleSubdecks,
+  nestPath,
+  onNest,
 }: {
   deck: Deck;
   counts: DeckCounts;
   subdeckCount?: number;
   expanded?: boolean;
   onToggleSubdecks?: () => void;
+  /** Hierarchical path (enables drag-to-nest when given with onNest). */
+  nestPath?: string;
+  onNest?: (dragPath: string, targetPath: string) => void;
 }) {
   const nav = useNavigate();
   const open = () => nav(`/decks/${deck.id}`);
+  const { nestProps, dragging, isTarget } = useNestDrag({
+    path: nestPath ?? deck.name,
+    label: deck.name,
+    enabled: !!nestPath && !!onNest,
+    onDrop: onNest ?? (() => {}),
+  });
 
   return (
     <div
+      {...nestProps}
       role="button"
       tabIndex={0}
       onClick={open}
@@ -88,10 +101,15 @@ export function DeckGridCard({
       className="relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden transition-transform active:scale-[0.98] min-w-0 cursor-pointer"
       style={{
         minHeight: 116,
-        border: `1px solid color-mix(in srgb, ${deck.color} 38%, transparent)`,
+        border: isTarget
+          ? '2px solid var(--accent)'
+          : `1px solid color-mix(in srgb, ${deck.color} 38%, transparent)`,
         background: `linear-gradient(145deg, color-mix(in srgb, ${deck.color} 34%, var(--surface)) 0%, color-mix(in srgb, ${deck.color} 10%, var(--surface)) 100%)`,
+        opacity: dragging ? 0.5 : undefined,
+        touchAction: 'pan-y',
       }}
     >
+      {dragging && <NestGhost />}
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold leading-snug line-clamp-2 min-w-0" style={{ fontSize: 13 }}>
           {deck.name}

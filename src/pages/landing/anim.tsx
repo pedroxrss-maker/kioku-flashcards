@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { animate, motion, useInView } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
+import { cn } from '../../lib/cn';
 
 export const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -132,17 +133,23 @@ export function useCountUp(value: number, duration = 1.5) {
 }
 
 /**
- * Floating + draggable wrapper, like the hero pieces: a gentle vertical bob, drag
- * within `dragPct` of the element's own size (springs back), and a bouncy scale
- * on hover. Renders static (no float/drag) under reduced motion.
+ * Floating + draggable wrapper, like the hero pieces. The continuous float is a
+ * compositor-only CSS animation (`.kf-float` = vertical bob, `.kf-float-x` = a
+ * slower horizontal drift): two pure translations on different periods, so the
+ * motion is organic, never pauses at the extremes, stays razor-sharp (no
+ * rotate/scale to blur text), and costs the main thread nothing even with many
+ * cards floating at once. Framer-motion is used ONLY for the interactive drag
+ * (springs back within `dragPct` of the element's size) and the hover scale.
+ * Renders static (no float/drag) under reduced motion.
  */
 export function FloatCard({
   children,
   className,
   style,
-  dur = 5.5,
+  dur = 6,
   delay = 0,
-  bob = 6,
+  bob = 11,
+  drift = 5,
   dragPct = 0.1,
 }: {
   children: ReactNode;
@@ -151,6 +158,7 @@ export function FloatCard({
   dur?: number;
   delay?: number;
   bob?: number;
+  drift?: number;
   dragPct?: number;
 }) {
   const reduce = useReducedMotion();
@@ -177,27 +185,30 @@ export function FloatCard({
 
   const rx = size.w * dragPct;
   const ry = size.h * dragPct;
+  const floatVars = {
+    '--float-dur': `${dur}s`,
+    '--float-delay': `${delay}s`,
+    '--float-bob': `${bob}px`,
+    '--float-drift': `${drift}px`,
+  } as CSSProperties;
 
   return (
-    <motion.div
-      className={className}
-      style={style}
-      animate={{ y: [0, -bob, 0] }}
-      transition={{ duration: dur, repeat: Infinity, ease: 'easeInOut', delay }}
-    >
-      <motion.div
-        ref={ref}
-        drag
-        dragConstraints={{ left: -rx, right: rx, top: -ry, bottom: ry }}
-        dragElastic={0.16}
-        dragSnapToOrigin
-        whileHover={{ scale: 1.035 }}
-        whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
-        transition={{ type: 'spring', stiffness: 380, damping: 12 }}
-        style={{ height: '100%', cursor: 'grab', touchAction: 'none' }}
-      >
-        {children}
-      </motion.div>
-    </motion.div>
+    <div className={cn('kf-float', className)} style={{ ...floatVars, ...style }}>
+      <div className="kf-float-x">
+        <motion.div
+          ref={ref}
+          drag
+          dragConstraints={{ left: -rx, right: rx, top: -ry, bottom: ry }}
+          dragElastic={0.16}
+          dragSnapToOrigin
+          whileHover={{ scale: 1.035 }}
+          whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
+          transition={{ type: 'spring', stiffness: 380, damping: 12 }}
+          style={{ height: '100%', cursor: 'grab', touchAction: 'none', backfaceVisibility: 'hidden' }}
+        >
+          {children}
+        </motion.div>
+      </div>
+    </div>
   );
 }

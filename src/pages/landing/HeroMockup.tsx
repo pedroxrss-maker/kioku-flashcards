@@ -158,10 +158,23 @@ function Scaler({ designWidth, designHeight, maxWidth, children }: { designWidth
 /* ----------------------------------------------- float primitives --------- */
 function Bob({ children, dur, delay, disabled }: { children: ReactNode; dur: number; delay: number; disabled: boolean }) {
   if (disabled) return <>{children}</>;
+  // Compositor-only float: gentle vertical bob + a slower, out-of-phase sideways
+  // drift. Pure translations keep the tilted cards sharp and the motion organic
+  // (never "stuck"); see .kf-float in globals.css.
   return (
-    <motion.div animate={{ y: [0, -9, 0] }} transition={{ duration: dur, repeat: Infinity, ease: 'easeInOut', delay }}>
-      {children}
-    </motion.div>
+    <div
+      className="kf-float"
+      style={
+        {
+          '--float-dur': `${dur}s`,
+          '--float-delay': `${delay}s`,
+          '--float-bob': '10px',
+          '--float-drift': '4px',
+        } as CSSProperties
+      }
+    >
+      <div className="kf-float-x">{children}</div>
+    </div>
   );
 }
 

@@ -37,6 +37,10 @@ export function CardRow({ card, deck, onEdit }: CardRowProps) {
       <div
         className="flex-1 min-w-0 grid sm:grid-cols-2 gap-4 cursor-pointer"
         onClick={onEdit}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onEdit();
+        }}
         role="button"
         tabIndex={0}
         title="Editar card"

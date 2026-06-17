@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
@@ -15,8 +15,10 @@ import {
   deckPathOf,
   groupReviewToken,
   isStudiable,
+  nestDeckPaths,
 } from '../../lib/deckTree';
 import type { DeckTreeNode } from '../../lib/deckTree';
+import { useNestDrag, NestGhost } from './nestDrag';
 import { cn } from '../../lib/cn';
 import type { Card, Deck } from '../../db/types';
 
@@ -131,6 +133,14 @@ export function DeckTree({
     setCollapsed(new Set(settings?.deckTreeCollapsed ?? []));
   }, [settings?.deckTreeCollapsed]);
   const [menuPath, setMenuPath] = useState<string | null>(null);
+  // Re-parent a deck (drag source) under a target path, persisting deckPaths.
+  const onNest = useCallback(
+    (dragPath: string, targetPath: string) => {
+      const next = nestDeckPaths(decks, deckPaths, dragPath, targetPath);
+      if (next) void repo.saveSettings({ deckPaths: next });
+    },
+    [decks, deckPaths],
+  );
   const table = variant === 'table';
   // Table rows are flush (separated by hairlines); the plain list keeps a gap.
   const listClass = table ? 'flex flex-col' : 'flex flex-col gap-1';
@@ -177,9 +187,11 @@ export function DeckTree({
               onToggle={() => {}}
               menuOpen={menuPath === path}
               onMenu={() => setMenuPath((p) => (p === path ? null : path))}
+              onOpenMenu={() => setMenuPath(path)}
               onCloseMenu={() => setMenuPath(null)}
               onConfig={onConfig}
               onDelete={onDelete}
+              onNest={onNest}
             />
           );
         })}
@@ -209,9 +221,11 @@ export function DeckTree({
             onToggle={() => toggle(node.path)}
             menuOpen={menuPath === node.path}
             onMenu={() => setMenuPath((p) => (p === node.path ? null : node.path))}
+            onOpenMenu={() => setMenuPath(node.path)}
             onCloseMenu={() => setMenuPath(null)}
             onConfig={onConfig}
             onDelete={onDelete}
+            onNest={onNest}
           />
           {node.children.length > 0 && (
             // Gate the recursion on `expanded` so collapsed subtrees neither
@@ -240,9 +254,11 @@ function DeckTreeRow({
   onToggle,
   menuOpen,
   onMenu,
+  onOpenMenu,
   onCloseMenu,
   onConfig,
   onDelete,
+  onNest,
 }: {
   node: DeckTreeNode;
   counts: ReturnType<typeof aggregateCounts>;
@@ -252,14 +268,22 @@ function DeckTreeRow({
   onToggle: () => void;
   menuOpen: boolean;
   onMenu: () => void;
+  onOpenMenu: () => void;
   onCloseMenu: () => void;
   onConfig?: (deck: Deck) => void;
   onDelete?: (deck: Deck) => void;
+  onNest: (dragPath: string, targetPath: string) => void;
 }) {
   const nav = useNavigate();
   const hasChildren = node.children.length > 0;
   const studiable = isStudiable(node);
   const table = variant === 'table';
+  const { nestProps, dragging, isTarget } = useNestDrag({
+    path: node.path,
+    label: node.name,
+    enabled: !!node.deck,
+    onDrop: onNest,
+  });
 
   const studyBtn = studiable ? (
     <Link
@@ -341,12 +365,19 @@ function DeckTreeRow({
 
   return (
     <div
+      {...nestProps}
+      onContextMenu={(e) => {
+        // Right-click a deck opens its settings/kebab menu (desktop).
+        if (!node.deck) return;
+        e.preventDefault();
+        onOpenMenu();
+      }}
       className={cn(
         // Sidebar-style hover "jump" (rightward nudge). Locked while this row's
         // menu is open so the dropdown stays put. Tight left spacing on mobile so
         // the deck name gets the room (icons sit further left).
         'deck-jump flex items-center gap-1.5 sm:gap-3 hover:bg-[color:var(--surface-2)] min-w-0',
-        menuOpen && 'deck-jump-locked',
+        (menuOpen || dragging) && 'deck-jump-locked',
         table ? 'px-2 sm:px-3 py-2.5' : 'py-2.5 pl-1.5 pr-2 sm:p-3 rounded-[var(--r-sm)]',
       )}
       style={{
@@ -354,9 +385,17 @@ function DeckTreeRow({
         borderLeft: node.depth > 0 ? '1px solid var(--line)' : undefined,
         paddingLeft: node.depth > 0 ? 12 : undefined,
         borderBottom: table ? '1px solid var(--line)' : undefined,
+        opacity: dragging ? 0.5 : undefined,
+        outline: isTarget ? '2px solid var(--accent)' : undefined,
+        outlineOffset: isTarget ? -2 : undefined,
+        background: isTarget ? 'var(--surface-2)' : undefined,
+        borderRadius: isTarget && !table ? 'var(--r-sm)' : undefined,
+        cursor: dragging ? 'grabbing' : undefined,
+        touchAction: node.deck ? 'pan-y' : undefined,
       }}
       title={fullPath}
     >
+      {dragging && <NestGhost />}
       {/* Chevron (or aligned spacer so rows line up) */}
       {hasChildren ? (
         <button

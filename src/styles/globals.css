@@ -1290,6 +1290,67 @@ button.pill.pill-active:hover {
   animation: kioku-rise 0.18s ease-out both;
 }
 
+/* Bounce ao passar o mouse: usado nas opções de telas de edição (cores, logos,
+   algoritmo, ações). Só translada em Y, para compor com qualquer realce próprio. */
+@keyframes kioku-hover-bounce {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-4px);
+  }
+  65% {
+    transform: translateY(1px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+.hover-bounce {
+  transition: transform 0.16s ease;
+}
+.hover-bounce:hover {
+  animation: kioku-hover-bounce 0.42s ease;
+}
+
+/* Realistic, crisp "floating" for landing-page blocks. Two pure-translate
+   oscillations on DIFFERENT axes and DIFFERENT periods (Y on the outer wrapper,
+   X on the inner), so the drift is organic and never pauses at the extremes —
+   killing the old "stuck/stepped" look. Translations only (no rotate/scale) keep
+   text and artwork razor-sharp, and the whole thing runs on the compositor (off
+   the main thread), so many blocks can float together without stutter. */
+@keyframes kioku-float-y {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, calc(var(--float-bob, 11px) * -1), 0);
+  }
+}
+@keyframes kioku-float-x {
+  0%,
+  100% {
+    transform: translate3d(calc(var(--float-drift, 5px) * -1), 0, 0);
+  }
+  50% {
+    transform: translate3d(var(--float-drift, 5px), 0, 0);
+  }
+}
+.kf-float {
+  height: 100%;
+  animation: kioku-float-y var(--float-dur, 6s) ease-in-out var(--float-delay, 0s) infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.kf-float-x {
+  height: 100%;
+  animation: kioku-float-x calc(var(--float-dur, 6s) * 1.6) ease-in-out var(--float-delay, 0s)
+    infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
 /* --------------------------------------------------- legal / long-form ---- */
 /* Documentos longos (ex.: Política de Privacidade): leitura confortável, com
    medida de linha controlada, hierarquia de títulos (Fraunces) e corpo Manrope. */

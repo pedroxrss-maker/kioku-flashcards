@@ -16,6 +16,9 @@ interface ModalProps {
   /** When set, Ctrl/Cmd+D fires this (the modal's primary "Salvar" action), a
    *  keyboard shortcut to save without reaching for the mouse. */
   onSubmit?: () => void;
+  /** Edit screens: when true, a backdrop tap and ESC do NOT close the modal —
+   *  only the X button or a programmatic close (e.g. "Salvar") can. */
+  persistent?: boolean;
 }
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -30,6 +33,7 @@ export function Modal({
   footer,
   width = 520,
   onSubmit,
+  persistent = false,
 }: ModalProps) {
   const reduce = useReducedMotion();
 
@@ -61,6 +65,7 @@ export function Modal({
       lastContextMenu.current = 0;
       return;
     }
+    if (persistent) return; // edit screens: backdrop tap never closes
     onClose();
   };
 
@@ -68,7 +73,7 @@ export function Modal({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (!persistent) onClose(); // edit screens: ESC never closes
         return;
       }
       // Ctrl/Cmd+D saves (the primary action). preventDefault stops the browser
@@ -84,7 +89,7 @@ export function Modal({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose, onSubmit]);
+  }, [open, onClose, onSubmit, persistent]);
 
   return createPortal(
     <AnimatePresence>

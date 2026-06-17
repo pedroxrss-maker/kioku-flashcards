@@ -163,13 +163,14 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       onClose={onClose}
       title="Configurações do deck"
       width={560}
+      persistent
       onSubmit={() => void save()}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" className="hover-bounce" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant="accent" onClick={save} disabled={!name.trim()}>
+          <Button variant="accent" className="hover-bounce" onClick={save} disabled={!name.trim()}>
             Salvar
           </Button>
         </>
@@ -205,7 +206,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
                 type="button"
                 aria-label={`Cor ${c}`}
                 onClick={() => setColor(c)}
-                className={cn('h-8 w-8 rounded-[var(--r-sm)] transition-transform', color === c ? 'scale-110' : 'opacity-70 hover:opacity-100')}
+                className={cn('hover-bounce h-8 w-8 rounded-[var(--r-sm)] transition-transform', color === c ? 'scale-110' : 'opacity-70 hover:opacity-100')}
                 style={{ background: c, outline: color === c ? '2px solid var(--fg)' : 'none', outlineOffset: 2 }}
               />
             ))}
@@ -226,7 +227,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
                 type="button"
                 onClick={() => setAlgorithm(a)}
                 className={cn(
-                  'rounded-[var(--r-sm)] border px-3 py-2 text-left transition-colors',
+                  'hover-bounce rounded-[var(--r-sm)] border px-3 py-2 text-left transition-colors',
                   algorithm === a
                     ? 'border-[color:var(--accent)] bg-[color:var(--accent-soft)]'
                     : 'border-[color:var(--line-strong)] bg-[color:var(--surface-2)] hover:border-[color:var(--fg)]',
@@ -295,7 +296,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
             type="button"
             onClick={() => setConfirmStrip(true)}
             disabled={stripping}
-            className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors mt-3 disabled:opacity-50"
+            className="hover-bounce flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors mt-3 disabled:opacity-50"
             title="Apaga arquivos de áudio anexados aos cards. Não afeta a voz (TTS) — para isso use o botão acima."
           >
             <VolumeX size={15} />
@@ -307,7 +308,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
           <button
             type="button"
             onClick={() => setResetOpen(true)}
-            className="flex items-center gap-2 text-sm text-muted hover:text-fg transition-colors"
+            className="hover-bounce flex items-center gap-2 text-sm text-muted hover:text-fg transition-colors"
           >
             <RotateCcw size={15} /> Reiniciar deck
           </button>
@@ -348,7 +349,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
                 transition={{ duration: 0.14, ease: 'easeOut' }}
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
+                className="hover-bounce flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
               >
                 <Trash2 size={15} /> Excluir deck
               </motion.button>

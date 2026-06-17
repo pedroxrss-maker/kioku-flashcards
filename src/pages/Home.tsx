@@ -366,20 +366,21 @@ export function Home() {
                   >
                     <Settings2 size={14} /> Configurações
                   </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-[color:var(--surface-2)] transition-colors"
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      void signOut();
-                    }}
-                  >
-                    <LogOut size={14} /> Sair
-                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            aria-label="Sair"
+            title="Sair"
+            className="inline-flex shrink-0 items-center gap-2 rounded-[var(--r-sm)] px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: 'var(--accent)' }}
+          >
+            <LogOut size={16} />
+            <span className="hidden sm:inline">Sair</span>
+          </button>
         </div>
       </div>
 

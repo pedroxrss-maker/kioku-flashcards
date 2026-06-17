@@ -334,6 +334,7 @@ export function CardEditorModal({
     <Modal
       open={open}
       onClose={onClose}
+      persistent
       title={editing ? 'Editar card' : 'Novo card'}
       width={640}
       onSubmit={() => {

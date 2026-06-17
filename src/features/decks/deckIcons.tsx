@@ -173,7 +173,7 @@ export function DeckIconPicker({
             aria-pressed={selected}
             aria-label={id}
             onClick={() => onChange(id)}
-            className="icon-tile"
+            className="icon-tile hover-bounce"
             style={{
               '--tile': selected ? `color-mix(in srgb, ${iconColor} 26%, transparent)` : 'var(--surface-2)',
               color: iconColor,
@@ -193,7 +193,7 @@ export function DeckIconPicker({
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
-        className="icon-tile"
+        className="icon-tile hover-bounce"
         title="Anexar imagem do computador"
         aria-label="Anexar imagem do computador"
         style={{

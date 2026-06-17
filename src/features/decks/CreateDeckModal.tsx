@@ -77,6 +77,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
     <Modal
       open={open}
       onClose={onClose}
+      persistent
       title="Novo deck"
       onSubmit={() => {
         if (name.trim() && !saving) void submit();

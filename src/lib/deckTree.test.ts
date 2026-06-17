@@ -3,6 +3,7 @@ import { makeCard, makeDeck } from '../db/factories';
 import type { Card, Deck } from '../db/types';
 import { groupCardsByDeck } from './deckStats';
 import {
+  ROOT_DROP_TARGET,
   aggregateCards,
   aggregateCounts,
   buildDeckTree,
@@ -11,6 +12,7 @@ import {
   isStudiable,
   leafName,
   memberDeckIdsForPath,
+  nestDeckPaths,
   subtreeDeckIds,
 } from './deckTree';
 
@@ -125,5 +127,53 @@ describe('deckTree', () => {
     const d = deck('Solo');
     expect(deckPathOf(d, {})).toBe('Solo');
     expect(deckPathOf(d, { [d.id]: 'A::Solo' })).toBe('A::Solo');
+  });
+});
+
+describe('nestDeckPaths', () => {
+  it('nests a top-level deck under another', () => {
+    const a = deck('A');
+    const b = deck('B');
+    expect(nestDeckPaths([a, b], {}, 'B', 'A')).toEqual({ [b.id]: 'A::B' });
+  });
+
+  it('re-prefixes the whole subtree when nesting a parent', () => {
+    const a = deck('A');
+    const c = deck('C');
+    const b = deck('B');
+    const paths = { [c.id]: 'A::C' };
+    expect(nestDeckPaths([a, c, b], paths, 'A', 'B')).toEqual({
+      [c.id]: 'B::A::C',
+      [a.id]: 'B::A',
+    });
+  });
+
+  it('lifts a nested deck back to the top level on a root drop', () => {
+    const a = deck('A');
+    const b = deck('B');
+    const paths = { [b.id]: 'A::B' };
+    expect(nestDeckPaths([a, b], paths, 'A::B', ROOT_DROP_TARGET)).toEqual({ [b.id]: 'B' });
+  });
+
+  it('re-prefixes descendants when lifting a subtree to the top level', () => {
+    const b = deck('B');
+    const c = deck('C');
+    const paths = { [b.id]: 'A::B', [c.id]: 'A::B::C' };
+    expect(nestDeckPaths([b, c], paths, 'A::B', ROOT_DROP_TARGET)).toEqual({
+      [b.id]: 'B',
+      [c.id]: 'B::C',
+    });
+  });
+
+  it('rejects illegal or no-op moves', () => {
+    const a = deck('A');
+    const b = deck('B');
+    const c = deck('C');
+    const paths = { [b.id]: 'A::B', [c.id]: 'A::C' };
+    const all = [a, b, c];
+    expect(nestDeckPaths(all, paths, 'A', 'A')).toBeNull(); // onto itself
+    expect(nestDeckPaths(all, paths, 'A', 'A::C')).toBeNull(); // into own descendant
+    expect(nestDeckPaths(all, paths, 'A::B', 'A')).toBeNull(); // already that parent
+    expect(nestDeckPaths(all, {}, 'A', ROOT_DROP_TARGET)).toBeNull(); // already top-level
   });
 });

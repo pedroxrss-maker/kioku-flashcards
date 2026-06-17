@@ -104,6 +104,7 @@ export function ProfilePhotoEditor({
     <Modal
       open={open}
       onClose={onCancel}
+      persistent
       title="Ajustar foto de perfil"
       width={400}
       onSubmit={() => {
