@@ -18,21 +18,32 @@ function reviewCard(overrides: Partial<Card['sm2']>): Card {
 describe('SM-2 adapter', () => {
   const sched = makeSm2Scheduler(DEFAULT_SM2);
 
-  it('a new card rated good graduates to review in one pass (single learning step)', () => {
+  it('a new card rated good steps 1m -> 10m -> graduates to review @ 1 day (Anki two steps)', () => {
     const fresh = makeCard({ deckId: 'deck-1', front: 'a', back: 'b' });
 
-    // One good -> straight to review @ the 1-day graduating interval (no in-session
-    // re-show), so a deck of N new cards never inflates past N "good" reviews.
-    const out = sched.apply(fresh, 'good', NOW, 1000).card;
+    // First good: advance to the SECOND learning step (10m), STILL learning, so
+    // the card re-shows within the same session before it graduates.
+    const step2 = sched.apply(fresh, 'good', NOW, 1000).card;
+    expect(step2.state).toBe('learning');
+    expect(step2.sm2.step).toBe(1);
+    expect(step2.due - NOW).toBe(10 * 60_000); // 10 minutes
+
+    // Second good: graduate to review @ the 1-day graduating interval.
+    const out = sched.apply(step2, 'good', NOW, 1000).card;
     expect(out.state).toBe('review');
     expect(out.sm2.intervalDays).toBe(1);
   });
 
-  it('a new card rated again relearns, then one good graduates it', () => {
+  it('a new card rated again returns to the first step; two goods then graduate it', () => {
     const fresh = makeCard({ deckId: 'deck-1', front: 'a', back: 'b' });
     const lapsed = sched.apply(fresh, 'again', NOW, 1000).card;
     expect(lapsed.state).toBe('learning');
-    const graduated = sched.apply(lapsed, 'good', NOW, 1000).card;
+    expect(lapsed.sm2.step).toBe(0);
+    expect(lapsed.due - NOW).toBe(1 * 60_000); // back to the 1m first step
+
+    const step2 = sched.apply(lapsed, 'good', NOW, 1000).card;
+    expect(step2.state).toBe('learning'); // advanced to the 10m step
+    const graduated = sched.apply(step2, 'good', NOW, 1000).card;
     expect(graduated.state).toBe('review');
   });
 
@@ -41,6 +52,26 @@ describe('SM-2 adapter', () => {
     const out = sched.apply(fresh, 'easy', NOW, 1000).card;
     expect(out.state).toBe('review');
     expect(out.sm2.intervalDays).toBe(4);
+  });
+
+  it('hard on a new card (first step) waits the average of the first two steps (~6 min)', () => {
+    const fresh = makeCard({ deckId: 'deck-1', front: 'a', back: 'b' });
+    // (1m + 10m) / 2 = 5.5m, labeled "6 min"; Hard never advances the step.
+    expect(sched.preview(fresh, NOW).hard.intervalLabel).toBe('6 min');
+    const out = sched.apply(fresh, 'hard', NOW, 1000).card;
+    expect(out.state).toBe('learning');
+    expect(out.sm2.step).toBe(0);
+    expect(out.due - NOW).toBe(5.5 * 60_000);
+  });
+
+  it('hard on a later learning step repeats that step (10 min)', () => {
+    const fresh = makeCard({ deckId: 'deck-1', front: 'a', back: 'b' });
+    const step2 = sched.apply(fresh, 'good', NOW, 1000).card; // now on the 10m step
+    expect(step2.sm2.step).toBe(1);
+    const out = sched.apply(step2, 'hard', NOW, 1000).card;
+    expect(out.state).toBe('learning');
+    expect(out.sm2.step).toBe(1);
+    expect(out.due - NOW).toBe(10 * 60_000);
   });
 
   it('a review card rated again increments lapses, drops ease by 0.20, relearns', () => {

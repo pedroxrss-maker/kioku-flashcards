@@ -19,11 +19,11 @@ export interface Sm2Config {
 }
 
 export const DEFAULT_SM2: Sm2Config = {
-  // A SINGLE learning step so "Good" graduates a new card in one pass (to a
-  // 1-day Review interval) instead of re-showing it intraday. Multiple steps
-  // made the session queue reinsert each new card again and again — matching
-  // the FSRS adapter's `enable_short_term: false` fix.
-  learningStepsMin: [1],
+  // Anki's default learning steps ("1m 10m"): a new card pressing Good goes
+  // 1m -> 10m -> graduates to a 1-day Review. The 10m step recurs within the
+  // SAME session — reinsertLearning() puts a still-learning card a couple of
+  // slots back in the queue — matching Anki's same-day reintroduction.
+  learningStepsMin: [1, 10],
   relearningStepsMin: [10],
   graduatingIntervalDays: 1,
   easyIntervalDays: 4,
@@ -87,7 +87,17 @@ function transition(
       due = now + steps[0] * MIN;
     } else if (rating === 'hard') {
       state = 'learning';
-      due = now + steps[Math.min(s.step, steps.length - 1)] * MIN;
+      // Anki's Hard on a learning card: on the FIRST step, delay by the AVERAGE
+      // of the first two steps (1m,10m -> 5.5m, shown ~6m); with a single step it
+      // would be 1.5x that step. On a LATER step, repeat the current step. Hard
+      // never advances the step.
+      const hardMin =
+        s.step === 0
+          ? steps.length >= 2
+            ? (steps[0] + steps[1]) / 2
+            : steps[0] * 1.5
+          : steps[Math.min(s.step, steps.length - 1)];
+      due = now + hardMin * MIN;
     } else if (rating === 'good') {
       if (s.step + 1 >= steps.length) {
         state = 'review';
