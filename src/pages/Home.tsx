@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Bell,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -32,6 +31,7 @@ import { DeckAvatar } from '../features/decks/deckIcons';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
+import { PlanUsageBadge } from '../features/usage/PlanUsageBadge';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
@@ -290,7 +290,7 @@ export function Home() {
       {/* Top bar */}
       <div className="sticky top-0 z-30 -mx-5 md:-mx-8 px-5 md:px-8 py-3" style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center gap-3">
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
               className="field field-round"
@@ -300,14 +300,7 @@ export function Home() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <button
-            type="button"
-            aria-label="Notificações"
-            className="hidden md:inline-flex items-center justify-center p-2.5 rounded-[var(--r-sm)] text-muted hover:text-fg transition-colors shrink-0"
-            style={{ background: 'var(--surface-2)' }}
-          >
-            <Bell size={18} />
-          </button>
+          <PlanUsageBadge />
           <div className="relative shrink-0">
             <button
               type="button"
@@ -375,11 +368,10 @@ export function Home() {
             onClick={() => void signOut()}
             aria-label="Sair"
             title="Sair"
-            className="inline-flex shrink-0 items-center gap-2 rounded-[var(--r-sm)] px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="inline-flex shrink-0 items-center justify-center rounded-[var(--r-sm)] p-2.5 text-white transition-opacity hover:opacity-90"
             style={{ background: 'var(--accent)' }}
           >
-            <LogOut size={16} />
-            <span className="hidden sm:inline">Sair</span>
+            <LogOut size={18} />
           </button>
         </div>
       </div>

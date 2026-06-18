@@ -18,13 +18,11 @@ import { extractFromUrl } from '../features/ai/url';
 import { generateDeckAudio } from '../features/tts/audioGen';
 import { recordFeatureUse, scheduleAchievementCheck } from '../features/gamification/achievements';
 import {
-  IMAGE_GEN_CAP,
   appendImageHtml,
   atImageCap,
   generateCardImage,
   imageSideForType,
   imagesRemaining,
-  imagesUsed,
   isImageGenConfigured,
   recordImageGeneration,
 } from '../features/ai/image';
@@ -287,28 +285,57 @@ export function GenerateDeck() {
           .map((i) => ({ card: indexToCard.get(i), type: cards[i]?.type }))
           .filter((t): t is { card: Card; type: GeneratedCard['type'] } => !!t.card && !!t.type);
         const total = Math.min(targets.length, imagesRemaining(s));
-        let used = imagesUsed(s);
+        // Respect the remaining cap up front: never start more than allowed.
+        const batch = targets.slice(0, total);
         let made = 0;
         let failed = 0;
+        let done = 0;
         setImageProgress({ done: 0, total });
-        for (const t of targets) {
-          if (used >= IMAGE_GEN_CAP) break;
-          try {
-            const img = await generateCardImage({ front: t.card.front, back: t.card.back, deckId: deck.id });
-            const side = imageSideForType(t.type);
-            const patch: Partial<Card> =
-              side === 'front'
-                ? { front: appendImageHtml(t.card.front, img.path) }
-                : { back: appendImageHtml(t.card.back, img.path) };
-            await repo.updateCard(t.card.id, patch);
-            await recordImageGeneration();
-            used += 1;
-            made += 1;
-          } catch {
-            failed += 1;
+
+        // Generate concurrently with a SMALL pool so several images overlap (much
+        // faster than one-at-a-time) WITHOUT hammering OpenAI into 429s. Each task
+        // owns its try/catch — one failure never aborts the batch — and bumps the
+        // progress as it settles. updateCard stays per card (each image URL saved).
+        const CONCURRENCY = 3;
+        const runTask = (t: { card: Card; type: GeneratedCard['type'] }): Promise<void> =>
+          generateCardImage({ front: t.card.front, back: t.card.back, deckId: deck.id })
+            .then(async (img) => {
+              const side = imageSideForType(t.type);
+              const patch: Partial<Card> =
+                side === 'front'
+                  ? { front: appendImageHtml(t.card.front, img.path) }
+                  : { back: appendImageHtml(t.card.back, img.path) };
+              await repo.updateCard(t.card.id, patch);
+              made += 1;
+            })
+            .catch(() => {
+              failed += 1;
+            })
+            .finally(() => {
+              done += 1;
+              setImageProgress({ done, total });
+            });
+
+        // Worker pool: each worker claims the next index SYNCHRONOUSLY (before the
+        // await) so two workers never grab the same card; at most CONCURRENCY run
+        // at once. allSettled never rejects, so the batch always completes.
+        let cursor = 0;
+        const worker = async (): Promise<void> => {
+          while (cursor < batch.length) {
+            const i = cursor;
+            cursor += 1;
+            await runTask(batch[i]);
           }
-          setImageProgress({ done: made, total });
-        }
+        };
+        await Promise.allSettled(
+          Array.from({ length: Math.min(CONCURRENCY, batch.length) }, () => worker()),
+        );
+
+        // Increment the provisional global counter ONCE by the number made — the
+        // atomic server-side quota in image-proxy already counted each image, so a
+        // per-task +1 here would race and lose updates.
+        if (made > 0) await recordImageGeneration(made);
+
         setImageProgress(null);
         if (made > 0) scheduleAchievementCheck(); // feat_image
         if (made > 0 || failed > 0) {

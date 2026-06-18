@@ -340,7 +340,7 @@ export function AuthPage() {
                 >
                   <div style={{ marginBottom: 16 }}>
                     <label className="field-label" htmlFor="auth-phone">
-                      Telefone (opcional)
+                      Telefone
                     </label>
                     <input
                       id="auth-phone"

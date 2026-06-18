@@ -66,10 +66,16 @@ export function atImageCap(settings?: AppSettings | null): boolean {
   return imagesUsed(settings) >= IMAGE_GEN_CAP;
 }
 
-/** Increment the persisted counter (call once per SUCCESSFUL generation). */
-export async function recordImageGeneration(): Promise<void> {
+/**
+ * Increment the persisted counter by `count` (call after SUCCESSFUL generations).
+ * Batched callers pass the TOTAL made at once, so concurrent generations never
+ * race on the read-modify-write of settings.imageGenCount (each per-task +1 would
+ * read the same value and clobber the others). Defaults to 1 for single callers.
+ */
+export async function recordImageGeneration(count = 1): Promise<void> {
+  if (count <= 0) return;
   const settings = getQueryData<AppSettings>('settings') ?? (await repo.getSettings());
-  await repo.saveSettings({ imageGenCount: imagesUsed(settings) + 1 });
+  await repo.saveSettings({ imageGenCount: imagesUsed(settings) + count });
 }
 
 /* ---------------------------------------------------------- attach helpers - */
