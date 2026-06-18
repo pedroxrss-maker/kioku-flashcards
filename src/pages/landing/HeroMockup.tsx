@@ -12,6 +12,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { CSSProperties, ReactNode } from 'react';
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
+import { useIsMobile } from '../../lib/useIsMobile';
 import type { MotionValue } from 'framer-motion';
 import { ArrowRight, Flame, MoreVertical, Star } from 'lucide-react';
 import { makeSm2Scheduler } from '../../features/scheduling/sm2-adapter';
@@ -207,7 +208,9 @@ function FloatItem({ left, top, width, zIndex = 1, rotate = 0, dur, delay, paral
  */
 function Draggable({ width, pct = 0.1, children }: { width: number; pct?: number; children: ReactNode }) {
   const reduce = useReducedMotion();
-  if (reduce) return <>{children}</>;
+  const isMobile = useIsMobile();
+  // No mobile: sem arrastar (nao competir com o scroll); o float/parallax segue.
+  if (reduce || isMobile) return <>{children}</>;
   const r = width * pct;
   return (
     <motion.div
@@ -376,6 +379,7 @@ function MainCard() {
  *  and advances the deck. Still individually draggable (springs back). */
 function AnswerButtons() {
   const reduce = useReducedMotion();
+  const isMobile = useIsMobile();
   const { preview, rate, flipped } = useDemo();
   const active = flipped;
 
@@ -396,7 +400,7 @@ function AnswerButtons() {
             </div>
           </Tilt3D>
         );
-        if (reduce) return <div key={a.rating}>{chip}</div>;
+        if (reduce || isMobile) return <div key={a.rating}>{chip}</div>;
         // Draggable on its own up to ~5% of the button row, then springs back to
         // its EXACT original position on release — so the order never changes.
         const lim = 300 * 0.05;

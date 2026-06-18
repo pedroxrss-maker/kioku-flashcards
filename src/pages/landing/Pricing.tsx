@@ -77,7 +77,7 @@ const PLANS_DATA: PlanCard[] = [
       { ok: true, label: 'Decks de IA ilimitados' },
       { ok: true, label: 'Ferramentas de IA ilimitadas' },
       { ok: true, label: 'Áudios ilimitados' },
-      { ok: true, label: 'Imagens ilimitadas nos cards', badge: 'Ilimitadas' },
+      { ok: true, label: '300 imagens de IA por mês para seus cards' },
       { ok: true, label: 'Recursos exclusivos que chegam primeiro pra você', badge: 'Em breve' },
     ],
   },

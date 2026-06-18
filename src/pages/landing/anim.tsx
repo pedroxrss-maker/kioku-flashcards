@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { animate, motion, useInView } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
+import { useIsMobile } from '../../lib/useIsMobile';
 import { cn } from '../../lib/cn';
 
 export const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -162,6 +163,7 @@ export function FloatCard({
   dragPct?: number;
 }) {
   const reduce = useReducedMotion();
+  const isMobile = useIsMobile();
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -197,14 +199,21 @@ export function FloatCard({
       <div className="kf-float-x">
         <motion.div
           ref={ref}
-          drag
+          // No mobile o card NAO e arrastavel (nao competir com o scroll da
+          // pagina); o float em CSS continua. No desktop, arrasto normal.
+          drag={!isMobile}
           dragConstraints={{ left: -rx, right: rx, top: -ry, bottom: ry }}
           dragElastic={0.16}
           dragSnapToOrigin
-          whileHover={{ scale: 1.035 }}
+          whileHover={isMobile ? undefined : { scale: 1.035 }}
           whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
           transition={{ type: 'spring', stiffness: 380, damping: 12 }}
-          style={{ height: '100%', cursor: 'grab', touchAction: 'none', backfaceVisibility: 'hidden' }}
+          style={{
+            height: '100%',
+            cursor: isMobile ? 'default' : 'grab',
+            touchAction: isMobile ? undefined : 'none',
+            backfaceVisibility: 'hidden',
+          }}
         >
           {children}
         </motion.div>
