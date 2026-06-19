@@ -8,19 +8,19 @@ export default defineConfig({
   plugins: [
     react(),
     // PWA: makes Kioku installable and serves the app shell from a precache so
-    // it opens fast in its own standalone window. autoUpdate => a new deploy
-    // silently replaces the installed version on next load.
+    // it opens fast in its own standalone window.
     //
     // We deliberately do NOT cache Supabase API/Storage calls — data lives in
     // Supabase and studying still requires the network. Only the static app
     // shell (built JS/CSS/HTML + icons) is precached.
     VitePWA({
-      // 'prompt': a new deploy does NOT auto-reload. We register the SW ourselves
-      // (src/features/pwa) and apply the update SILENTLY at a safe moment (route
-      // change / refocus, never mid-review) via <PwaAutoUpdate> — no banner. We
-      // keep 'prompt' (NOT 'autoUpdate') precisely so the SW never reloads on its
-      // own; injectRegister is off so the plugin doesn't add its own script.
-      registerType: 'prompt',
+      // FORCED auto-update: a new deploy must take over and reload on its own, so
+      // a returning browser is NEVER stuck on a stale cached build. With
+      // 'autoUpdate' + workbox.skipWaiting the new service worker activates
+      // IMMEDIATELY (instead of waiting for every tab to close) and claims the
+      // page; registerPwa then reloads once into the new build. injectRegister is
+      // off because we register the SW ourselves (src/features/pwa/registerPwa).
+      registerType: 'autoUpdate',
       injectRegister: false,
       includeAssets: [
         'favicon-32.png',
@@ -71,7 +71,12 @@ export default defineConfig({
           },
         ],
         cleanupOutdatedCaches: true,
+        // skipWaiting: a freshly installed worker activates immediately (it does
+        // NOT wait for open tabs to close); clientsClaim: it then takes control of
+        // the open page at once → controllerchange → registerPwa reloads into the
+        // new build. Together they make a new deploy land without a hard refresh.
         clientsClaim: true,
+        skipWaiting: true,
       },
       // Service worker is generated for the production build only.
       devOptions: { enabled: false },

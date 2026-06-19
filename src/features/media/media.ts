@@ -89,6 +89,35 @@ export async function firstAudioUrl(html: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Warm the cache for a card's images BEFORE it is shown: resolve each ref's
+ * (signed) URL ahead of time — reusing the in-memory signed-URL cache so it is
+ * not re-signed at render — and kick off the download via `new Image()`. By the
+ * time the user advances, the next card's media is already cached and paints with
+ * no blank flash. Best-effort and non-throwing; ignores audio refs.
+ */
+export async function prefetchMediaHtml(html: string): Promise<void> {
+  if (!html || typeof Image === 'undefined') return;
+  if (!html.includes(MEDIA_PROTOCOL) && !/<img/i.test(html)) return;
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  const imgs = Array.from(doc.querySelectorAll('img'));
+  if (imgs.length === 0) return;
+  await Promise.all(
+    imgs.map(async (el) => {
+      const src = el.getAttribute('src') ?? '';
+      const ref = refId(src);
+      let url: string | null = null;
+      if (ref && !ref.isAudio) url = await urlForRef(ref.id);
+      else if (/^(https?:|blob:|data:)/i.test(src)) url = src;
+      if (!url) return;
+      // Decode off the main thread; never inserted into the document.
+      const im = new Image();
+      im.decoding = 'async';
+      im.src = url; // warms the browser HTTP/image cache
+    }),
+  );
+}
+
 /** Storage HTML (kioku-media / kioku-audio refs) -> display HTML (object URLs). */
 export async function resolveMediaHtml(html: string): Promise<string> {
   if (!html.includes(MEDIA_PROTOCOL) && !html.includes(AUDIO_PROTOCOL)) return html;

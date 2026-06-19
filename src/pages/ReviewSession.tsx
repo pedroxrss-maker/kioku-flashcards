@@ -20,6 +20,7 @@ import { CardAiHelp } from '../features/ai/CardAiHelp';
 import { useGamification, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { stripHtml } from '../lib/text';
+import { prefetchMediaHtml } from '../features/media/media';
 import { deckAudioEnabled } from '../lib/deckAudio';
 import { faceAudioUrl, faceHasAudio } from '../features/tts/cardAudio';
 
@@ -39,7 +40,7 @@ export function ReviewSession() {
   const settings = useSettings();
   const gamification = useGamification();
   const session = useReviewSession(deckId);
-  const { deck, currentDeck, current, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
+  const { deck, currentDeck, current, next, flipped, preview, counters, canUndo, flip, rate, undo, updateCurrentCard } = session;
   const [editOpen, setEditOpen] = useState(false);
   // XP is awarded once when a session completes; `award.leveledUp` lets the
   // completion screen mute the confetti pop on a level-up (the banner chimes).
@@ -236,6 +237,15 @@ export function ReviewSession() {
     replayBackAudio();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipped, current?.id, backAudioUrl]);
+
+  // Warm the NEXT card's images while the current one is on screen, so advancing
+  // never flashes blank (its signed URL + bytes are cached by then). Keyed by the
+  // next card object, which changes only when the upcoming card actually changes.
+  useEffect(() => {
+    if (!next) return;
+    void prefetchMediaHtml(next.front);
+    void prefetchMediaHtml(next.back);
+  }, [next]);
 
   // Award XP once the session finishes (XP_REWARDS.reviewCard per card rated),
   // then celebrate a level-up. Level-up is decided from the warm cached XP/level

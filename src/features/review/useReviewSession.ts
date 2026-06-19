@@ -33,6 +33,8 @@ export interface ReviewSession {
    *  Same as `deck` for a single-deck session. */
   currentDeck: Deck | null;
   current: Card | null;
+  /** The card after `current` (queue[1]), so the UI can prefetch its media. */
+  next: Card | null;
   flipped: boolean;
   preview: Record<Rating, RatingPreview> | null;
   counters: SessionCounters;
@@ -182,6 +184,7 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
   }, [deckId, setQueueSynced]);
 
   const current = queue[0] ?? null;
+  const next = queue[1] ?? null;
   const currentDeck = current ? deckById.current.get(current.deckId) ?? deck : deck;
 
   const preview = useMemo(() => {
@@ -256,6 +259,7 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
     deck,
     currentDeck,
     current,
+    next,
     flipped,
     preview,
     counters,

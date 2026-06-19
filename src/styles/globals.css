@@ -673,6 +673,75 @@ button.pill.pill-active:hover {
   display: block;
   border-radius: var(--r-sm);
 }
+
+/* ---- card media skeleton: reserve space + shimmer until an image paints, so an
+   image-only card (flag/map) never flashes blank on first view. Dark-theme
+   neutral; the placeholder collapses to the image's natural size on load
+   (FlipCard's ResizeObserver animates the height change). ---- */
+.card-img-skeleton {
+  display: block;
+  width: min(220px, 100%);
+  height: 150px;
+  margin: 12px auto;
+  border-radius: var(--r-sm);
+}
+.card-img-skeleton,
+.card-content img.card-img--loading,
+.card-content-sm img.card-img--loading {
+  background-color: var(--surface-2);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--line) 65%, transparent) 50%,
+    transparent 70%
+  );
+  background-repeat: no-repeat;
+  background-size: 220% 100%;
+  animation: card-img-shimmer 1.15s ease-in-out infinite;
+}
+.card-content img.card-img--loading {
+  width: 200px !important;
+  height: 150px !important;
+  color: transparent; /* hide any alt text under the shimmer */
+}
+.card-content-sm img.card-img--loading {
+  width: 150px !important;
+  height: 100px !important;
+  color: transparent;
+}
+.card-content img.card-img--ready,
+.card-content-sm img.card-img--ready {
+  animation: card-img-fade 0.28s ease both;
+}
+.card-content img.card-img--failed,
+.card-content-sm img.card-img--failed {
+  display: none !important; /* no broken-image icon */
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-img-skeleton,
+  .card-content img.card-img--loading,
+  .card-content-sm img.card-img--loading,
+  .card-content img.card-img--ready,
+  .card-content-sm img.card-img--ready {
+    animation: none;
+  }
+}
+@keyframes card-img-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+@keyframes card-img-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 /* Rounded pastel highlight behind text. box-decoration-break clones the rounding
    across line wraps; the dark ink keeps it readable on the light review card and
    in the dark editor alike. */

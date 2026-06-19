@@ -1,22 +1,19 @@
-import { setPendingUpdate } from './updateStore';
-
 /**
- * Service-worker registration + SOFT auto-update (no user prompt).
+ * Service-worker registration + FORCED auto-update.
  *
- * The SW (vite-plugin-pwa, 'prompt' mode) serves page navigations NETWORK-FIRST,
- * so a normal reload already fetches the newest index.html → newest hashed
- * bundles, with no hard refresh. This module additionally:
- *  - registers with updateViaCache:'none' so /sw.js is never served stale,
- *  - polls for a new deploy hourly (covers long-open standalone PWA sessions),
- *  - when a new SW is installed and waiting, records a PENDING update (the
- *    skip-waiting trigger) in updateStore instead of showing a banner. The new
- *    version is then applied SILENTLY by <PwaAutoUpdate> at the next safe moment
- *    (a route change or app refocus, never mid-review): it posts SKIP_WAITING →
- *    the new SW activates → controllerchange reloads into the new version.
+ * The SW (vite-plugin-pwa, 'autoUpdate' mode) is generated with skipWaiting +
+ * clientsClaim, so a newly deployed worker activates IMMEDIATELY — it does not
+ * wait for every tab to close — and takes control of the open page. That fires a
+ * `controllerchange`, and we reload exactly once into the new build. No banner,
+ * no button: a returning browser can never get stuck on a stale version.
  *
- * We register ourselves (vite-plugin-pwa injectRegister is off) to control all of
- * the above precisely. 'prompt' mode is kept (NOT 'autoUpdate') so the SW never
- * reloads on its own; we decide exactly when it is safe to apply.
+ * Page navigations are also network-first (see vite.config workbox), so a normal
+ * load already serves the freshest index.html → newest hashed bundles; this just
+ * guarantees an ALREADY-OPEN browser picks up a new deploy on its own.
+ *
+ * We register ourselves (injectRegister is off) with updateViaCache:'none' so
+ * /sw.js is never served stale, and poll hourly to cover long-open standalone
+ * sessions.
  */
 const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
 
@@ -29,6 +26,19 @@ export function registerPwaUpdates(): void {
 }
 
 async function register(): Promise<void> {
+  // On a RETURNING visit the page is already controlled by the old worker; when a
+  // new deploy's worker takes over, controllerchange fires and we reload once into
+  // it. Skip the very first install (no prior controller) — the page is already
+  // running the latest, nothing to refresh — and guard against a reload loop
+  // (controllerchange can fire more than once).
+  let reloaded = false;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded || !hadController) return;
+    reloaded = true;
+    window.location.reload();
+  });
+
   let reg: ServiceWorkerRegistration;
   try {
     reg = await navigator.serviceWorker.register('/sw.js', {
@@ -36,40 +46,12 @@ async function register(): Promise<void> {
       updateViaCache: 'none',
     });
   } catch {
-    return; // no SW available — the app still works, just without offline/prompt
+    return; // no SW available — the app still works, just without offline/auto-update
   }
 
-  // Reload once the (user-approved) new SW takes control. Guarded against loops.
-  let reloading = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
-    reloading = true;
-    window.location.reload();
-  });
-
-  const offerUpdate = (worker: ServiceWorker | null) => {
-    if (!worker) return;
-    // Record the pending update; <PwaAutoUpdate> applies it at a safe moment.
-    setPendingUpdate(() => worker.postMessage({ type: 'SKIP_WAITING' }));
-  };
-
-  // A new SW may already be waiting (installed on a previous visit).
-  if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
-
-  // A new SW that finishes installing while the page is open.
-  reg.addEventListener('updatefound', () => {
-    const installing = reg.installing;
-    if (!installing) return;
-    installing.addEventListener('statechange', () => {
-      // 'installed' WITH an existing controller = an update (not the first install
-      // on a fresh visit, which shouldn't prompt).
-      if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-        offerUpdate(reg.waiting ?? installing);
-      }
-    });
-  });
-
-  // Long-open sessions: poll for a new deploy.
+  // Long-open sessions (e.g. an installed standalone window kept open for days):
+  // poll for a new deploy. When found, the new worker installs, self-activates
+  // (skipWaiting) and claims the page → controllerchange → the reload above.
   window.setInterval(() => {
     reg.update().catch(() => {});
   }, UPDATE_CHECK_INTERVAL);

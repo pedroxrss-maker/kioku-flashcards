@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { seedForUserIfEmpty } from '../db';
 import { Toaster } from '../components/Toaster';
 import { CelebrationBanner } from '../features/gamification/CelebrationBanner';
-import { PwaAutoUpdate } from '../features/pwa/PwaAutoUpdate';
 import { CheckoutIntentRedirect } from '../features/billing/CheckoutIntentRedirect';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
@@ -30,9 +29,6 @@ export function App() {
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <RootGate />
-        {/* Soft auto-update: silently applies a new version at a safe moment
-            (route change / app refocus), never mid-review. No UI. */}
-        <PwaAutoUpdate />
       </BrowserRouter>
     </AuthProvider>
   );
