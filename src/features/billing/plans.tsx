@@ -16,8 +16,6 @@ export type Billing = 'mensal' | 'anual';
 export interface Cell {
   ok: boolean;
   label: string;
-  /** Optional substring of `label` to underline for emphasis (e.g. "dia"). */
-  emphasis?: string;
   badge?: string;
 }
 
@@ -43,8 +41,8 @@ export const PLANS_DATA: PlanCard[] = [
     cta: 'Começar grátis',
     features: [
       { ok: true, label: '2 decks de IA por mês' },
-      { ok: true, label: '15 usos das ferramentas de IA por dia' },
-      { ok: true, label: '50 áudios por mês para seus cards' },
+      { ok: true, label: '15 usos de IA por dia' },
+      { ok: true, label: '50 áudios por mês' },
       { ok: false, label: 'Sem imagens nos cards' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],
@@ -58,10 +56,10 @@ export const PLANS_DATA: PlanCard[] = [
     highlighted: true,
     badge: 'Mais popular',
     features: [
-      { ok: true, label: '5 decks de IA por dia', emphasis: 'dia' },
-      { ok: true, label: '100 usos das ferramentas de IA por dia' },
-      { ok: true, label: '500 áudios por mês para seus cards' },
-      { ok: true, label: 'Geração de 100 imagens por mês' },
+      { ok: true, label: '5 decks de IA por dia' },
+      { ok: true, label: '100 usos de IA por dia' },
+      { ok: true, label: '500 áudios por mês' },
+      { ok: true, label: '100 imagens por mês' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],
   },
@@ -73,13 +71,60 @@ export const PLANS_DATA: PlanCard[] = [
     cta: 'Assinar Avançado',
     features: [
       { ok: true, label: 'Decks de IA ilimitados' },
-      { ok: true, label: 'Ferramentas de IA ilimitadas' },
+      { ok: true, label: 'Usos de IA ilimitados' },
       { ok: true, label: 'Áudios ilimitados' },
-      { ok: true, label: '300 imagens de IA por mês para seus cards' },
-      { ok: true, label: 'Recursos exclusivos que chegam primeiro pra você', badge: 'Em breve' },
+      { ok: true, label: '300 imagens por mês' },
+      { ok: true, label: 'Funções exclusivas de IA', badge: 'Em breve' },
     ],
   },
 ];
+
+/** Parse a BRL price string ("R$ 29,90") to a number (29.9). */
+function parseBRL(s?: string): number {
+  if (!s) return 0;
+  const cleaned = s.replace(/[^\d.,]/g, '').replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleaned) || 0;
+}
+
+/** Format a BRL amount without the symbol: whole numbers drop the decimals
+ *  ("120"), otherwise two decimals with a comma ("120,50"). */
+function formatBRLAmount(n: number): string {
+  const r = Math.round(n * 100) / 100;
+  return Number.isInteger(r) ? String(r) : r.toFixed(2).replace('.', ',');
+}
+
+/** Annual savings vs paying monthly for 12 months, from the plan's OWN prices
+ *  (so it stays correct if the numbers change). 0 for the free plan. */
+function annualSavings(plan: PlanCard): number {
+  if (plan.free || !plan.monthly || !plan.annual) return 0;
+  return (parseBRL(plan.monthly) - parseBRL(plan.annual)) * 12;
+}
+
+/** Savings-pill colors per plan, readable on EACH card's background: Basic is
+ *  the dark highlighted card (light green); Advanced is the light card (deep
+ *  gold). */
+function savingsBadgeStyle(plan: PlanCard): CSSProperties {
+  return plan.key === 'basic'
+    ? { color: '#4ade80', background: 'rgba(22,163,74,0.18)', border: '1px solid rgba(22,163,74,0.35)' }
+    : { color: '#8a5e0a', background: 'rgba(186,117,23,0.18)', border: '1px solid rgba(186,117,23,0.45)' };
+}
+
+/** Annual discount as a rounded percentage, from the plan's OWN prices
+ *  (Básico 50%, Avançado 33% today). 0 for the free plan. */
+function annualDiscountPct(plan: PlanCard): number {
+  if (plan.free || !plan.monthly || !plan.annual) return 0;
+  const m = parseBRL(plan.monthly);
+  if (m <= 0) return 0;
+  return Math.round((1 - parseBRL(plan.annual) / m) * 100);
+}
+
+/** Green "-X%" discount pill shown next to the struck price; readable on each
+ *  card (Básico is the dark highlighted card, Avançado is light). */
+function discountBadgeStyle(plan: PlanCard): CSSProperties {
+  return plan.key === 'basic'
+    ? { color: '#4ade80', background: 'rgba(22,163,74,0.20)', border: '1px solid rgba(22,163,74,0.35)' }
+    : { color: '#15803d', background: 'rgba(22,163,74,0.16)', border: '1px solid rgba(22,163,74,0.4)' };
+}
 
 /** Toggle compacto mensal/anual com indicador deslizante (layout animation). */
 export function BillingToggle({
@@ -94,7 +139,12 @@ export function BillingToggle({
   return (
     <div
       className="relative inline-flex p-[2px]"
-      style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-full)' }}
+      style={{
+        background: 'var(--surface-2)',
+        border: '1px solid var(--line)',
+        borderRadius: 'var(--r-full)',
+        transform: 'scale(0.8)', // 20% menor
+      }}
     >
       {(['mensal', 'anual'] as Billing[]).map((b) => {
         const a = billing === b;
@@ -111,7 +161,7 @@ export function BillingToggle({
               <motion.span
                 layoutId="billing-knob"
                 className="absolute inset-0"
-                style={{ background: 'var(--accent)', borderRadius: 'var(--r-full)', zIndex: -1 }}
+                style={{ background: 'rgba(255, 255, 255, 0.16)', borderRadius: 'var(--r-full)', zIndex: -1 }}
                 transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
               />
             )}
@@ -123,18 +173,46 @@ export function BillingToggle({
   );
 }
 
-/** A feature label, optionally underlining one emphasized word (e.g. "dia"). */
-function renderFeatureLabel(cell: Cell): ReactNode {
-  if (!cell.emphasis) return cell.label;
-  const i = cell.label.indexOf(cell.emphasis);
-  if (i < 0) return cell.label;
-  return (
-    <>
-      {cell.label.slice(0, i)}
-      <u style={{ textUnderlineOffset: 2 }}>{cell.emphasis}</u>
-      {cell.label.slice(i + cell.emphasis.length)}
-    </>
-  );
+/** Render a feature label: when `numberStyle` is given (paid plans), bold the
+ *  LEADING number token so magnitudes pop ("5 decks…", "100 usos…"); the billing
+ *  period words ("dia"/"mês") are always underlined + UPPERCASED. Free passes no
+ *  numberStyle, so its numbers stay flat/gray with the rest of the (dim) label. */
+function renderFeatureLabel(cell: Cell, numberStyle?: CSSProperties): ReactNode {
+  // Free plan (no numberStyle): plain label — numbers stay dim and "dia"/"mês"
+  // are lowercase with NO underline. Only paid plans get the period highlight.
+  if (!numberStyle) return cell.label;
+  const m = cell.label.match(/^(\d[\d.,]*)(\s*)([\s\S]*)$/);
+  if (m) {
+    return (
+      <>
+        <strong style={numberStyle}>{m[1]}</strong>
+        {m[2]}
+        {withPeriods(m[3])}
+      </>
+    );
+  }
+  return withPeriods(cell.label);
+}
+
+/** Underline + UPPERCASE the billing-period words ("dia"/"mês") in a text run. */
+function withPeriods(text: string): ReactNode {
+  const re = /\bdia\b|\bmês\b/gi;
+  const out: ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <u key={k++} style={{ textUnderlineOffset: 2 }}>
+        {m[0].toUpperCase()}
+      </u>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (out.length === 0) return text;
+  if (last < text.length) out.push(text.slice(last));
+  return <>{out}</>;
 }
 
 export function PlanCardView({
@@ -155,16 +233,27 @@ export function PlanCardView({
   const reduce = useReducedMotion();
   const hi = !!plan.highlighted;
   const isAnnual = billing === 'anual';
+  const savings = annualSavings(plan);
+  const discountPct = annualDiscountPct(plan);
 
   // Cores: cartoes claros (off-white) + o destacado com gradiente de accent escuro.
   const c = hi
     ? { title: 'var(--fg)', muted: 'rgba(245, 245, 244, 0.72)', body: 'var(--fg)', faded: 'rgba(245, 245, 244, 0.4)' }
     : { title: '#17171b', muted: '#5b5b63', body: '#17171b', faded: '#a8a7a2' };
 
+  // Feature styling so the value gap reads at a glance: paid plans get COLORED
+  // checks (Básico green, Avançado gold) + bold numbers; Free is washed-out gray.
+  // Negatives use a red-ish "x" everywhere.
+  const okCheckColor = plan.free ? '#555' : plan.key === 'basic' ? '#4ade80' : '#b8860b';
+  const okTextColor = plan.free ? '#8a8a8a' : c.body;
+  const numberStyle: CSSProperties | undefined = plan.free ? undefined : { color: c.title, fontWeight: 800 };
+
   const cardStyle: CSSProperties = {
     borderRadius: 'var(--r-lg)',
     boxShadow: active ? 'var(--shadow-pop)' : 'var(--shadow-card)',
     transition: 'box-shadow .3s ease',
+    position: 'relative', // anchors the absolute "Economize" savings badge
+
     ...(hi
       ? {
           border: '1px solid color-mix(in srgb, var(--accent) 55%, transparent)',
@@ -187,6 +276,27 @@ export function PlanCardView({
 
   return (
     <div className={`${compact ? 'p-3.5' : 'p-6 md:p-7'} h-full flex flex-col`} style={cardStyle}>
+      {/* "Economize" nudge, top-RIGHT of the BÁSICO card, shown ONLY on MONTHLY
+          billing (encourages switching to annual). "Mais popular" stays top-LEFT. */}
+      {plan.key === 'basic' && !isAnnual && savings > 0 && (
+        <span
+          className="mono"
+          style={{
+            position: 'absolute',
+            top: compact ? 9 : 14,
+            right: compact ? 9 : 14,
+            fontSize: compact ? 9 : 11,
+            fontWeight: 700,
+            lineHeight: 1.4,
+            padding: '2px 8px',
+            borderRadius: 'var(--r-full)',
+            whiteSpace: 'nowrap',
+            ...savingsBadgeStyle(plan),
+          }}
+        >
+          Economize R${formatBRLAmount(savings)} no anual
+        </span>
+      )}
       <div className="flex items-center gap-1.5">
         <h3 className="display" style={{ fontSize: compact ? 15 : 20, fontWeight: 600, color: c.title }}>
           {PLAN_LABELS[plan.key]}
@@ -208,6 +318,46 @@ export function PlanCardView({
           Um "sizer" invisivel (o maior preco) reserva a largura, entao o "/mês"
           ao lado nao se desloca durante o fade. */}
       <div className={compact ? 'mt-2.5' : 'mt-5'}>
+        {/* Struck monthly price directly above the big annual price (annual only).
+            Its height slides 0 <-> auto as billing toggles, so the card box (and,
+            on the landing, the carousel stage driven by the hidden spacer) expands
+            and contracts smoothly instead of jumping. */}
+        <AnimatePresence initial={false}>
+          {!plan.free && isAnnual && (
+            <motion.div
+              key="struck"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: reduce ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="flex items-center gap-2" style={{ paddingBottom: compact ? 3 : 5 }}>
+                <span
+                  className={compact ? 'text-[11px]' : 'text-sm'}
+                  style={{ color: c.muted, textDecoration: 'line-through', lineHeight: 1 }}
+                >
+                  {plan.monthly}
+                </span>
+                {discountPct > 0 && (
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: compact ? 9 : 10.5,
+                      fontWeight: 700,
+                      lineHeight: 1.4,
+                      padding: '1px 6px',
+                      borderRadius: 'var(--r-full)',
+                      ...discountBadgeStyle(plan),
+                    }}
+                  >
+                    -{discountPct}%
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="flex items-baseline gap-1.5">
           {plan.free ? (
             <span className="display" style={priceStyle}>
@@ -255,12 +405,12 @@ export function PlanCardView({
         {plan.features.map((cell) => (
           <li key={cell.label} className="flex items-center gap-2">
             {cell.ok ? (
-              <Check size={compact ? 13 : 16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <Check size={compact ? 13 : 16} style={{ color: okCheckColor, flexShrink: 0 }} />
             ) : (
-              <X size={compact ? 13 : 16} style={{ color: c.faded, flexShrink: 0 }} />
+              <X size={compact ? 13 : 16} style={{ color: '#6b3a3a', flexShrink: 0 }} />
             )}
-            <span className={featText} style={{ color: cell.ok ? c.body : c.faded, lineHeight: 1.3 }}>
-              {renderFeatureLabel(cell)}
+            <span className={featText} style={{ color: cell.ok ? okTextColor : c.faded, lineHeight: 1.3 }}>
+              {renderFeatureLabel(cell, numberStyle)}
             </span>
             {cell.badge && (
               <span

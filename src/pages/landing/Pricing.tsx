@@ -94,11 +94,8 @@ export function Pricing() {
 
       {/* Toggle pequeno e discreto, fora dos blocos, com slide suave. */}
       <Reveal>
-        <div className="flex items-center justify-center gap-1.5 mt-7">
+        <div className="flex items-center justify-center mt-7">
           <BillingToggle billing={billing} onChange={setBilling} reduce={!!reduce} />
-          <span className="text-[8px]" style={{ color: 'var(--muted)' }}>
-            Economize
-          </span>
         </div>
       </Reveal>
 
