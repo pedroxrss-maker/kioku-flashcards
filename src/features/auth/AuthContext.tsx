@@ -21,7 +21,7 @@ import {
 import type { ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
-import { clearQueryCache } from '../../db/store';
+import { clearQueryCache, invalidate } from '../../db/store';
 import { DEFAULT_PLAN } from '../usage/limits';
 import type { Plan } from '../usage/limits';
 import { PRIVACY_POLICY_VERSION } from '../../config';
@@ -175,6 +175,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active && (applied === 'basic' || applied === 'advanced')) {
           setPlan(applied);
         }
+      } catch {
+        /* nothing pending or a transient error */
+      }
+
+      // Also off the critical path: link friend invites that were sent to this
+      // user's email BEFORE the account existed (stored with addressee_id NULL).
+      // Safe + idempotent on every login (new signup OR existing user): no
+      // spoofable argument — it matches on auth.uid() + the user's own email. If
+      // it linked anything, refresh the invites query so they show up in
+      // "Convites recebidos" without a manual reload.
+      try {
+        const { data: linked } = await supabase.rpc('apply_pending_friend_invites');
+        if (active && typeof linked === 'number' && linked > 0) invalidate();
       } catch {
         /* nothing pending or a transient error */
       }

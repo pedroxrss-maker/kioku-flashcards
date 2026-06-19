@@ -14,6 +14,7 @@ import { ReviewHub } from '../pages/ReviewHub';
 import { ReviewSession } from '../pages/ReviewSession';
 import { Stats } from '../pages/Stats';
 import { Awards } from '../pages/Awards';
+import { Friends } from '../pages/Friends';
 import { Settings } from '../pages/Settings';
 import { scheduleAchievementCheck } from '../features/gamification/achievements';
 import { Landing } from '../pages/landing/Landing';
@@ -92,6 +93,7 @@ function AuthedApp() {
           <Route path="/review" element={<ReviewHub />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/conquistas" element={<Awards />} />
+          <Route path="/amigos" element={<Friends />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

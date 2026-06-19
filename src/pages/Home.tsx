@@ -32,6 +32,7 @@ import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
 import { PlanUsageBadge } from '../features/usage/PlanUsageBadge';
+import { FriendsHeaderButton } from '../features/friends/FriendsHeaderButton';
 import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
@@ -300,6 +301,7 @@ export function Home() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          <FriendsHeaderButton />
           <PlanUsageBadge />
           <div className="relative shrink-0">
             <button
