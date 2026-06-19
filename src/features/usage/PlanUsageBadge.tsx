@@ -3,12 +3,12 @@
  *
  * The badge shows the user's current plan in a plan-specific color (free=neutral,
  * basic=green, advanced=premium gold). Clicking it opens a compact popover with
- * the 4 metered quotas REMAINING: decks (deckGen), ferramentas de IA (tutor),
- * áudios (audio) and imagens (image).
+ * how much of the 4 metered quotas has been USED (used/cap): decks (deckGen),
+ * ferramentas de IA (tutor), áudios (audio) and imagens (image).
  *
  * Plan comes from the auth context (already loaded — no extra fetch). Usage comes
  * from the `get_usage()` RPC (cached via the query store); the cap + period for
- * each metric come from PLAN_LIMITS, so remaining = cap - used per the period.
+ * each metric come from PLAN_LIMITS, so we show used out of the cap per the period.
  */
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -16,7 +16,7 @@ import { ChevronDown, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery } from '../../db/store';
 import { useAuth } from '../auth/AuthContext';
-import { isBlocked, isUnlimited, quotaRule, remaining } from './limits';
+import { isBlocked, isUnlimited, quotaRule } from './limits';
 import type { Plan, UsageMetric } from './limits';
 
 /** One row of the get_usage() RPC (it returns one per metric of the plan). */
@@ -123,7 +123,7 @@ export function PlanUsageBadge() {
             }}
           >
             <div className="flex items-center justify-between mb-2.5">
-              <span className="text-xs font-semibold">Uso restante</span>
+              <span className="text-xs font-semibold">Uso</span>
               <span className="text-[11px] font-bold" style={{ color: style.color }}>
                 {BADGE_LABEL[plan]}
               </span>
@@ -146,13 +146,13 @@ export function PlanUsageBadge() {
                   valueText = 'Indisponível';
                   valueColor = 'var(--muted)';
                 } else {
-                  const rem = usage.loaded
-                    ? String(remaining(rule, used))
+                  const usedText = usage.loaded
+                    ? String(used)
                     : usage.error
                       ? '—'
                       : '…';
-                  valueText = `${rem}/${rule.limit}`;
-                  if (usage.loaded && remaining(rule, used) === 0) valueColor = 'var(--accent)';
+                  valueText = `${usedText}/${rule.limit}`;
+                  if (usage.loaded && used >= rule.limit) valueColor = 'var(--accent)';
                 }
 
                 return (

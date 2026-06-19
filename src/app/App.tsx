@@ -4,6 +4,7 @@ import { seedForUserIfEmpty } from '../db';
 import { Toaster } from '../components/Toaster';
 import { CelebrationBanner } from '../features/gamification/CelebrationBanner';
 import { CheckoutIntentRedirect } from '../features/billing/CheckoutIntentRedirect';
+import { UpgradeModalProvider } from '../features/billing/UpgradeModalProvider';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
 import { Decks } from '../pages/Decks';
@@ -69,7 +70,7 @@ function AuthedApp() {
   }, []);
 
   return (
-    <>
+    <UpgradeModalProvider>
       <Routes>
         {/* Full-screen review session (no sidebar). */}
         <Route path="/review/:deckId" element={<ReviewSession />} />
@@ -99,6 +100,6 @@ function AuthedApp() {
       {/* Conclui o fluxo "assinar deslogado": ao autenticar, redireciona ao
           checkout da Kiwify do plano escolhido na landing (se houver intent). */}
       <CheckoutIntentRedirect />
-    </>
+    </UpgradeModalProvider>
   );
 }

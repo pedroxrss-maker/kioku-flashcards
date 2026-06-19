@@ -9,7 +9,7 @@ import { Toggle } from '../components/Toggle';
 import { NumberRoller } from '../components/NumberRoller';
 import { Select } from '../components/Select';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
-import { generateCards, isAiConfigured } from '../features/ai/client';
+import { generateCards, isAiConfigured, QuotaError } from '../features/ai/client';
 import { createDeckFromGenerated } from '../features/ai/cards';
 import { useAuth } from '../features/auth/AuthContext';
 import { aiDeckMaxCards } from '../features/usage/limits';
@@ -17,6 +17,7 @@ import { fileToBase64 } from '../features/ai/readFile';
 import { extractFromUrl } from '../features/ai/url';
 import { generateDeckAudio } from '../features/tts/audioGen';
 import { recordFeatureUse, scheduleAchievementCheck } from '../features/gamification/achievements';
+import { useUpgradeModal } from '../features/billing/UpgradeModalProvider';
 import {
   appendImageHtml,
   atImageCap,
@@ -71,6 +72,7 @@ const SOURCE_SLIDE = {
 
 export function GenerateDeck() {
   const nav = useNavigate();
+  const { openUpgrade } = useUpgradeModal();
   const configured = isAiConfigured();
   // O plano do usuário limita o tamanho do deck gerado por IA (gratuito = 20).
   const { plan } = useAuth();
@@ -216,6 +218,8 @@ export function GenerateDeck() {
         setDeckName(fallback || 'Deck gerado por IA');
       }
     } catch (e) {
+      // Free user hit the AI limit → upsell modal instead of a dead-end error.
+      if (e instanceof QuotaError && openUpgrade(e.info.metric)) return;
       setError(e instanceof Error ? e.message : 'Falha ao gerar os cards.');
     } finally {
       setBusy(false);
@@ -308,7 +312,9 @@ export function GenerateDeck() {
               await repo.updateCard(t.card.id, patch);
               made += 1;
             })
-            .catch(() => {
+            .catch((err) => {
+              // Free user without image quota → open the upsell (once is enough).
+              if (err instanceof QuotaError) openUpgrade(err.info.metric);
               failed += 1;
             })
             .finally(() => {

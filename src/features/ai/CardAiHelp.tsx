@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { GraduationCap, Loader2, Sparkles, X } from 'lucide-react';
-import { cardAssist, isAiConfigured, tutorTeach } from './client';
+import { cardAssist, isAiConfigured, QuotaError, tutorTeach } from './client';
 import type { CardAssistAction } from './client';
 import { recordFeatureUse } from '../gamification/achievements';
+import { useUpgradeModal } from '../billing/UpgradeModalProvider';
 
 interface CardAiHelpProps {
   /** Plain-text (HTML stripped) front + back of the card under review. */
@@ -144,6 +145,7 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
   const [active, setActive] = useState<AiAction | null>(null);
   const [cache, setCache] = useState<Partial<Record<AiAction, string>>>({});
   const [error, setError] = useState<string | null>(null);
+  const { openUpgrade } = useUpgradeModal();
 
   if (!isAiConfigured()) return null;
 
@@ -164,6 +166,8 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
       setCache((c) => ({ ...c, [action]: reply }));
       void recordFeatureUse('tutor');
     } catch (e) {
+      // Free user hit the AI limit → upsell modal instead of a dead-end error.
+      if (e instanceof QuotaError && openUpgrade(e.info.metric)) return;
       setError(e instanceof Error ? e.message : 'Não foi possível falar com a IA.');
     }
   }

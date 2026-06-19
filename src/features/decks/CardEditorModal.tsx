@@ -11,7 +11,8 @@ import type { RichTextFieldHandle } from './RichTextField';
 import { GenerateCardAudioButton } from '../tts/GenerateCardAudioButton';
 import type { AudioSide } from '../tts/audioGen';
 import { isTtsConfigured } from '../tts/googleProvider';
-import { isAiConfigured } from '../ai/client';
+import { isAiConfigured, QuotaError } from '../ai/client';
+import { useUpgradeModal } from '../billing/UpgradeModalProvider';
 import {
   IMAGE_GEN_CAP,
   atImageCap,
@@ -67,6 +68,7 @@ export function CardEditorModal({
   const reduce = useReducedMotion();
   const settings = useSettings();
   const nav = useNavigate();
+  const { openUpgrade } = useUpgradeModal();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [type, setType] = useState<CardType>('basic');
   const [front, setFront] = useState(''); // basic/cloze front, or type-in prompt (no marker)
@@ -324,6 +326,8 @@ export function CardEditorModal({
       await recordImageGeneration();
       pushToast('success', 'Imagem gerada e anexada ao card.');
     } catch (e) {
+      // Free user without image quota → upsell modal instead of an error toast.
+      if (e instanceof QuotaError && openUpgrade(e.info.metric)) return;
       pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar a imagem.');
     } finally {
       setImgBusy(false);
