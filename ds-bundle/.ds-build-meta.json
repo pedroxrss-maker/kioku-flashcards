@@ -1,0 +1,13 @@
+{
+  "namespace": "KiokuDS",
+  "source": "kioku@1.0.0",
+  "shape": "package",
+  "provider": null,
+  "componentCount": 11,
+  "skippedStoryIds": [],
+  "runtimeFontPrefixes": [
+    "Fraunces",
+    "Manrope",
+    "DM Mono"
+  ]
+}

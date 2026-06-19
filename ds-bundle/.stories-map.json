@@ -1,0 +1,100 @@
+{
+  "global": "KiokuDS",
+  "pkg": "kioku",
+  "pkgDir": "D:\\kioku flashcards",
+  "extraEntries": [],
+  "exported": [],
+  "storybookStatic": null,
+  "keyRecipe": 7,
+  "cfgSliceGlobal": "a139d95ad8ab0a8ba08b44a258c54602e36090304087f48fe923c61aa5a8ae08",
+  "components": [
+    {
+      "name": "Button",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "5a136269efcb9616",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "ConfirmDialog",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "17d57d061a6ee393",
+      "cfgSlice": "71521be0db3ab63f539f0966dc3fe316e8d18a9268b8cde12bcda4632106032d",
+      "stories": []
+    },
+    {
+      "name": "Modal",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "68ed3cc4515f86d2",
+      "cfgSlice": "74dbd8af0e17e49143bc909a499c7f47f098be0a3cc4f37efa5a2565ec45d9d3",
+      "stories": []
+    },
+    {
+      "name": "NumberRoller",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "b714d6ae8b4cc0b9",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "PageHeader",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "07f4e70534d378df",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "Panel",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "2092dd48c04b77cd",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "Pill",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "4f821c0108e50c9a",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "Select",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "a4cd488aaa0eab07",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "SmoothSlider",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "a02dc2bec52450d0",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "StatTile",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "eb9bf45fe712f897",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    },
+    {
+      "name": "Toggle",
+      "group": "general",
+      "srcSha": null,
+      "sourceKey": "7d44c80ab3379825",
+      "cfgSlice": "5ff899b099eb6923833804cda955efdd69101524bec86f67dac5537cd81802e8",
+      "stories": []
+    }
+  ]
+}
