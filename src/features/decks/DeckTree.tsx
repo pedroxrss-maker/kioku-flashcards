@@ -392,6 +392,9 @@ function DeckTreeRow({
         borderRadius: isTarget && !table ? 'var(--r-sm)' : undefined,
         cursor: dragging ? 'grabbing' : undefined,
         touchAction: node.deck ? 'pan-y' : undefined,
+        WebkitTouchCallout: node.deck ? 'none' : undefined,
+        WebkitUserSelect: node.deck ? 'none' : undefined,
+        userSelect: node.deck ? 'none' : undefined,
       }}
       title={fullPath}
     >

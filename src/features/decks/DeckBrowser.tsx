@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutGrid, Plus, Search, Sparkles } from 'lucide-react';
+import { Atom, Download, LayoutGrid, Plus, Search, Sparkles, Tag } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAllCards, useDecks } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { groupCardsByDeck } from '../../lib/deckStats';
@@ -17,6 +18,16 @@ import type { Deck } from '../../db/types';
 
 /** Violet used only for the "Gerar deck com IA" tile (the app accent is orange). */
 const AI_PURPLE = '#8b5cf6';
+
+/** Icon (and inactive tint) for each library filter pill. `null` = "Todos". */
+function categoryIcon(c: string | null): { Icon: LucideIcon; color?: string } {
+  if (c === null) return { Icon: LayoutGrid };
+  const k = c.toLowerCase();
+  if (k === 'ia' || k === 'ai') return { Icon: Sparkles, color: AI_PURPLE };
+  if (k === 'importado' || k === 'imported') return { Icon: Download };
+  if (k === 'geral' || k === 'general') return { Icon: Atom };
+  return { Icon: Tag };
+}
 
 /** Directional slide between category sections (enters from the side you moved toward). */
 const SECTION_SLIDE = {
@@ -93,7 +104,10 @@ export function DeckBrowser() {
                   className="inline-flex items-center gap-1.5"
                   style={{ position: 'relative', zIndex: 1 }}
                 >
-                  {c === null && <LayoutGrid size={14} />}
+                  {(() => {
+                    const { Icon, color } = categoryIcon(c);
+                    return <Icon size={14} style={{ color: active ? '#fff' : color }} />;
+                  })()}
                   {c ?? 'Todos'}
                 </span>
               </button>

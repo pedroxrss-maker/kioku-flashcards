@@ -11,7 +11,7 @@
    =========================================================================== */
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { PATH_SEP, ROOT_DROP_TARGET } from '../../lib/deckTree';
 
 interface DragState {
@@ -223,6 +223,12 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
   };
   const onPointerCancel = () => finish(false);
 
+  // Block the native long-press menu / text-selection callout: on touch it fires
+  // around ~500ms and cancels our pointer BEFORE the 1.5s timer can start a drag.
+  const onContextMenu = (e: ReactMouseEvent) => {
+    if (enabled) e.preventDefault();
+  };
+
   const dragging = useDragSelector((s) => s.draggingPath === path);
   const isTarget = useDragSelector((s) => s.dropTargetPath === path && s.draggingPath != null);
   // True while ANY deck is being dragged — siblings use it to jiggle in sync.
@@ -235,6 +241,7 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
       onPointerMove,
       onPointerUp,
       onPointerCancel,
+      onContextMenu,
       'data-nest-path': path,
     },
     dragging,

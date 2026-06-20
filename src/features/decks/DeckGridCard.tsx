@@ -107,6 +107,11 @@ export function DeckGridCard({
         background: `linear-gradient(145deg, color-mix(in srgb, ${deck.color} 34%, var(--surface)) 0%, color-mix(in srgb, ${deck.color} 10%, var(--surface)) 100%)`,
         opacity: dragging ? 0.5 : undefined,
         touchAction: 'pan-y',
+        // Long-press só inicia o arraste se o navegador não roubar com seu menu
+        // nativo / seleção de texto. Mantém pan-y para o scroll vertical seguir.
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
       }}
     >
       {dragging && <NestGhost />}
