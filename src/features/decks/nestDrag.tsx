@@ -83,6 +83,17 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
   const pointerId = useRef<number | null>(null);
   const el = useRef<HTMLElement | null>(null);
   const preventTouch = useRef<((e: TouchEvent) => void) | null>(null);
+  // Watches raw touchmoves DURING the long-press wait: lets real scrolls through
+  // but keeps a near-stationary finger alive so the 1.5s timer can fire.
+  const scrollGuard = useRef<((e: TouchEvent) => void) | null>(null);
+  const firstTouchMove = useRef(false);
+
+  const dropGuard = useCallback(() => {
+    if (scrollGuard.current) {
+      document.removeEventListener('touchmove', scrollGuard.current);
+      scrollGuard.current = null;
+    }
+  }, []);
 
   const cleanup = useCallback(() => {
     if (timer.current) {
@@ -93,6 +104,7 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
       document.removeEventListener('touchmove', preventTouch.current);
       preventTouch.current = null;
     }
+    dropGuard();
     if (started.current) {
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
@@ -101,12 +113,19 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
     started.current = false;
     pointerId.current = null;
     if (store.draggingPath === path) setStore({ draggingPath: null, dropTargetPath: null });
-  }, [path]);
+  }, [path, dropGuard]);
 
   useEffect(() => cleanup, [cleanup]); // tidy up if the row unmounts mid-drag
 
   const begin = useCallback(() => {
     started.current = true;
+    // Haptic confirmation that the long-press fired (where supported), so the
+    // pickup is unmistakable on touch even before the finger moves.
+    try {
+      navigator.vibrate?.(15);
+    } catch {
+      /* not supported / blocked — purely cosmetic */
+    }
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'grabbing';
     // Block page scroll for the whole drag (touch). The finger is stationary at
@@ -159,6 +178,36 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
     armed.current = true;
     if (e.pointerType === 'touch' || e.pointerType === 'pen') {
       const id = e.pointerId;
+      firstTouchMove.current = false;
+      // Guard the long-press against the browser claiming the touch for a scroll
+      // (which would cancel the pointer before 1.5s). A real swipe (past the slop)
+      // aborts the press and is left to the browser, so the list still scrolls; a
+      // near-stationary finger gets its tiny moves prevented, keeping it alive.
+      const guard = (ev: TouchEvent) => {
+        if (started.current) return; // drag running — begin()'s own prevent handles it
+        const t = ev.touches[0] ?? ev.changedTouches[0];
+        if (!t) return;
+        const moved = Math.hypot(t.clientX - start.current.x, t.clientY - start.current.y);
+        if (moved > TOUCH_SLOP) {
+          // It's a scroll/swipe: cancel the long-press, let the page scroll.
+          if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = null;
+          }
+          armed.current = false;
+          dropGuard();
+          return;
+        }
+        // Let the very first move pass (preserves the browser's scroll decision
+        // for fast swipes); block subsequent tiny jitter so the touch stays alive.
+        if (!firstTouchMove.current) {
+          firstTouchMove.current = true;
+          return;
+        }
+        if (ev.cancelable) ev.preventDefault();
+      };
+      scrollGuard.current = guard;
+      document.addEventListener('touchmove', guard, { passive: false });
       timer.current = window.setTimeout(() => {
         if (!armed.current) return;
         try {
@@ -193,6 +242,7 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
           timer.current = null;
         }
         armed.current = false;
+        dropGuard();
       }
       return;
     }
