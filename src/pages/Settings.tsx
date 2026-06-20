@@ -9,6 +9,7 @@ import { Modal } from '../components/Modal';
 import { Toggle } from '../components/Toggle';
 import { SmoothSlider } from '../components/SmoothSlider';
 import { ProfilePhotoEditor } from '../features/profile/ProfilePhotoEditor';
+import { AnswerButtonsGuide } from '../components/settings/AnswerButtonsGuide';
 import { TtsSettings } from '../features/tts/TtsSettings';
 import { DeleteAccountModal } from '../features/account/DeleteAccountModal';
 import { useSettings } from '../db/hooks';
@@ -365,6 +366,9 @@ export function Settings() {
           </div>
         )}
       </Section>
+
+      {/* Guia dos botões de resposta */}
+      <AnswerButtonsGuide />
 
       {/* TTS */}
       <TtsSettings />

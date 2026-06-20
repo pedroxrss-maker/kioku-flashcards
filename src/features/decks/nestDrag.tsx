@@ -2,7 +2,7 @@
    Drag a deck onto another to nest it (deck -> subdeck). One unified Pointer
    Events implementation for mouse AND touch:
      - mouse: pick up as soon as the pointer moves a few px (immediate drag);
-     - touch: pick up only after a 1s long-press (so a tap still opens the deck
+     - touch: pick up only after a 0.5s long-press (so a tap still opens the deck
        and a swipe still scrolls the list). Once held, scrolling is blocked.
    Drop targets are any element carrying `data-nest-path`; the one under the
    pointer is found with elementFromPoint. The visual state (which row is being
@@ -60,7 +60,7 @@ function useDragSelector<T>(sel: (s: DragState) => T): T {
   return useSyncExternalStore(subscribe, get, get);
 }
 
-const LONG_PRESS_MS = 1500; // mobile: hold this long before a deck becomes draggable
+const LONG_PRESS_MS = 500; // mobile: hold this long before a deck becomes draggable
 const MOUSE_SLOP = 6; // px of movement that starts a mouse drag
 const TOUCH_SLOP = 12; // px before the long-press is treated as a scroll instead
 
