@@ -37,14 +37,14 @@ export function HowItWorks() {
         {STEPS.map((s, i) => (
           <StaggerCard key={s.n} className="h-full">
             <FloatCard className="h-full" dur={5 + i * 0.7} delay={i * 0.5}>
-              <div className="surface p-7 md:p-8 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
-                <span className="display" style={{ fontSize: 46, fontWeight: 600, color: 'var(--accent)', lineHeight: 1 }}>
+              <div className="surface p-5 md:p-8 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
+                <span className="display" style={{ fontSize: 'clamp(34px, 9vw, 46px)', fontWeight: 600, color: 'var(--accent)', lineHeight: 1 }}>
                   {s.n}
                 </span>
                 <h3 className="display mt-3" style={{ fontSize: 20, fontWeight: 600 }}>{s.title}</h3>
                 <p className="text-muted mt-2" style={{ fontSize: 15, lineHeight: 1.6 }}>{s.desc}</p>
-                <div className="mt-auto pt-8">
-                  <img src={s.img} alt="" draggable={false} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
+                <div className="mt-auto pt-5 md:pt-8">
+                  <img src={s.img} alt="" draggable={false} className="block w-full h-auto max-h-[190px] md:max-h-none object-contain mx-auto" style={{ borderRadius: 12 }} />
                 </div>
               </div>
             </FloatCard>

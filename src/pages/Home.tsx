@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Flame,
@@ -22,8 +21,6 @@ import { useAllCards, useAllLogs, useDecks, useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Heatmap } from '../features/stats/Heatmap';
-import { ProgressChart } from '../features/stats/ProgressChart';
 import { HeroBackdrop, useDayPart } from '../features/home/HeroBackdrop';
 import { CreateDeckModal } from '../features/decks/CreateDeckModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
@@ -37,6 +34,7 @@ import { countCards, groupCardsByDeck } from '../lib/deckStats';
 import { hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
 import { DeckGrid } from '../features/decks/DeckGrid';
+import { useIsMobile } from '../lib/useIsMobile';
 import { computeStreak, greeting } from '../lib/greeting';
 import { dayKey, startOfLocalDay } from '../lib/date';
 import {
@@ -224,6 +222,9 @@ export function Home() {
   const logs = useAllLogs();
 
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false); // mobile: a lupa expande a busca
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
   const [createOpen, setCreateOpen] = useState(false);
   const [menuDeckId, setMenuDeckId] = useState<string | null>(null);
   const [settingsDeck, setSettingsDeck] = useState<Deck | null>(null);
@@ -290,8 +291,9 @@ export function Home() {
     <div className="flex flex-col gap-6 rise">
       {/* Top bar */}
       <div className="sticky top-0 z-30 -mx-5 md:-mx-8 px-5 md:px-8 py-3" style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', backdropFilter: 'blur(8px)' }}>
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 min-w-0">
+        <div className="relative flex items-center gap-3">
+          {/* Busca desktop: input completo, sempre visível. */}
+          <div className="relative min-w-0 flex-1 hidden sm:block">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
               className="field field-round"
@@ -301,8 +303,57 @@ export function Home() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <FriendsHeaderButton />
-          <PlanUsageBadge />
+          {/* Busca mobile: lupa (toca para expandir). */}
+          {!searchOpen && (
+            <button
+              type="button"
+              aria-label="Buscar"
+              onClick={() => {
+                setSearchOpen(true);
+                requestAnimationFrame(() => searchInputRef.current?.focus());
+              }}
+              className="sm:hidden shrink-0 grid place-items-center rounded-full p-2.5 text-muted transition-colors hover:bg-[color:var(--surface-2)] hover:text-fg"
+            >
+              <Search size={18} />
+            </button>
+          )}
+          {/* Busca mobile expandida: entra por side-slide cobrindo a linha inteira. */}
+          <AnimatePresence>
+            {searchOpen && (
+              <motion.div
+                key="search-mobile"
+                className="sm:hidden absolute inset-y-0 left-0 right-0 z-10 flex items-center"
+                initial={{ opacity: 0, x: -18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -18 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="relative w-full">
+                  <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  <input
+                    ref={searchInputRef}
+                    className="field field-round"
+                    style={{ paddingLeft: '2.75rem' }}
+                    placeholder="Buscar decks, cards ou temas..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onBlur={() => {
+                      if (!query.trim()) setSearchOpen(false);
+                    }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Ícones à direita: deslizam para fora (side-slide) e somem enquanto a busca mobile está aberta. */}
+          <motion.div
+            className="flex items-center gap-3"
+            animate={isMobile && searchOpen ? { opacity: 0, x: 28 } : { opacity: 1, x: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            style={{ pointerEvents: isMobile && searchOpen ? 'none' : undefined }}
+          >
+            <FriendsHeaderButton />
+            <PlanUsageBadge />
           <div className="relative shrink-0">
             <button
               type="button"
@@ -365,12 +416,14 @@ export function Home() {
               )}
             </AnimatePresence>
           </div>
+          </motion.div>
+          {/* Sair sempre na extremidade direita (ml-auto), em qualquer tela. */}
           <button
             type="button"
             onClick={() => void signOut()}
             aria-label="Sair"
             title="Sair"
-            className="inline-flex shrink-0 items-center justify-center rounded-[var(--r-sm)] p-2.5 text-white transition-opacity hover:opacity-90"
+            className="ml-auto inline-flex shrink-0 items-center justify-center rounded-[var(--r-sm)] p-2.5 text-white transition-opacity hover:opacity-90"
             style={{ background: 'var(--accent)' }}
           >
             <LogOut size={18} />
@@ -486,25 +539,6 @@ export function Home() {
               </div>
             </>
           )}
-      </Panel>
-
-      {/* Review heatmap */}
-      <Panel className="p-4 md:p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <CalendarDays size={16} className="text-muted" />
-          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
-        </div>
-        <div className="flex flex-col lg:flex-row lg:items-start gap-5">
-          <div className="min-w-0 lg:flex-1">
-            <Heatmap logs={logs} />
-          </div>
-          <div
-            className="border-t pt-5 lg:border-t-0 lg:pt-0 lg:border-l lg:pl-5 lg:flex-1 min-w-0"
-            style={{ borderColor: 'var(--line)' }}
-          >
-            <ProgressChart logs={logs} />
-          </div>
-        </div>
       </Panel>
 
       <CreateDeckModal open={createOpen} onClose={() => setCreateOpen(false)} />

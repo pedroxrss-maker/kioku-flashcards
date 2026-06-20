@@ -403,8 +403,8 @@ function FeatureCard({ icon: Icon, title, desc, Demo }: Feature) {
   return (
     <div
       ref={ref}
-      className="relative overflow-hidden h-full"
-      style={{ borderRadius: 'var(--r-lg)', minHeight: 210 }}
+      className="relative overflow-hidden h-full min-h-[170px] sm:min-h-[210px]"
+      style={{ borderRadius: 'var(--r-lg)' }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -415,8 +415,8 @@ function FeatureCard({ icon: Icon, title, desc, Demo }: Feature) {
 
       {/* a capa off-white por cima: sobe de baixo para cima revelando a tela */}
       <motion.div
-        className="absolute inset-0 p-5 md:p-6"
-        style={{ background: '#f5f4f1', border: '1px solid #e6e5e0', borderRadius: 'var(--r-lg)', color: '#17171b' }}
+        className="absolute inset-0 p-4 md:p-6"
+        style={{ background: '#e8e6e1', border: '1px solid #d6d4ce', borderRadius: 'var(--r-lg)', color: '#17171b' }}
         initial={false}
         animate={reduce ? { opacity: hover ? 0 : 1 } : { y: hover ? '-100%' : '0%' }}
         transition={{ duration: reduce ? 0.15 : 0.55, ease: [0.22, 1, 0.36, 1] }}

@@ -71,6 +71,16 @@ export function Stats() {
     <div className="rise flex flex-col gap-7 [&>*]:min-w-0">
       <PageHeader title="Estatísticas" subtitle="Seu progresso ao longo do tempo." />
 
+      {/* Mapa de revisões no TOPO, antes de qualquer dado (mobile e desktop). No
+          mobile mostra só o mês atual; toque abre o ano num popup. */}
+      <Panel className="p-5 md:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarDays size={16} className="text-muted" />
+          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
+        </div>
+        <Heatmap logs={logs} monthOnMobile />
+      </Panel>
+
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <StatTile label="Revisões totais" value={summary.totalReviews} caption="desde o início" />
         <StatTile
@@ -98,14 +108,6 @@ export function Stats() {
           <h2 className="mono text-sm text-muted">Cards por estado</h2>
         </div>
         <CardCountsPie counts={cardStates} />
-      </Panel>
-
-      <Panel className="p-5 md:p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <CalendarDays size={16} className="text-muted" />
-          <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
-        </div>
-        <Heatmap logs={logs} />
       </Panel>
 
       <Panel className="p-5 md:p-6">

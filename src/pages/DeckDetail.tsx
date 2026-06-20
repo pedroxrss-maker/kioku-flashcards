@@ -211,11 +211,11 @@ export function DeckDetail() {
               to={`/review/${deck.id}`}
               className="deck-action-tile deck-action-tile-accent"
             >
-              <Zap size={22} />
+              <Zap size={18} />
               <span>Revisar agora</span>
             </Link>
             <button type="button" onClick={addCard} className="deck-action-tile">
-              <Plus size={22} />
+              <Plus size={18} />
               <span>Adicionar card</span>
             </button>
             <ExportButton deckId={deck.id} tile />
@@ -225,7 +225,7 @@ export function DeckDetail() {
                 onClick={() => setAudioDialogOpen(true)}
                 className="deck-action-tile"
               >
-                <Volume2 size={22} />
+                <Volume2 size={18} />
                 <span>Gerar áudio</span>
               </button>
             )}

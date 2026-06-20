@@ -24,7 +24,10 @@ export function Pricing() {
   const [billing, setBilling] = useState<Billing>('anual');
   const [active, setActive] = useState(1); // Basico no centro por padrao
   const stageRef = useRef<HTMLDivElement>(null);
+  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
   const [stageW, setStageW] = useState(0);
+  const [spacerH, setSpacerH] = useState(0);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -58,11 +61,23 @@ export function Pricing() {
     return () => ro.disconnect();
   }, []);
 
+  // Mede a altura NATURAL do cartao (o espaçador oculto) para deixar o bloco de
+  // preços 15% mais alto, sem mexer na largura.
+  useLayoutEffect(() => {
+    const el = spacerRef.current;
+    if (!el) return;
+    const update = () => setSpacerH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // No mobile (tela estreita) os cartoes ficam menores e mais sobrepostos, para
   // os tres aparecerem juntos com o carrossel funcional. No desktop ficam
   // maiores e mais espacados (sem um cobrir o preco do outro).
   const compact = stageW > 0 && stageW < 768;
-  const cardW = stageW ? Math.min(compact ? 258 : 360, stageW * (compact ? 0.56 : 0.86)) : 340;
+  const cardW = stageW ? Math.min(compact ? 310 : 360, stageW * (compact ? 0.67 : 0.86)) : 340;
   const spread = cardW * (compact ? 0.56 : 0.95);
   const n = PLANS_DATA.length;
 
@@ -77,7 +92,7 @@ export function Pricing() {
   return (
     <section
       id="precos"
-      className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28"
+      className="mx-auto max-w-[1180px] px-5 md:px-8 pt-20 md:pt-28 pb-6 md:pb-8"
       style={{ scrollMarginTop: 76 }}
     >
       <Reveal>
@@ -102,11 +117,30 @@ export function Pricing() {
       {/* Palco do carrossel 3D. O cartao oculto define a altura; os reais sao
           absolutos e animados em torno do centro. */}
       <Reveal>
-        <div ref={stageRef} className="relative mt-8">
+        <div
+          ref={stageRef}
+          className="relative mt-8"
+          style={{ minHeight: spacerH ? Math.round(spacerH * 1.15) : undefined }}
+          onTouchStart={(e) => {
+            const t = e.touches[0];
+            touchRef.current = { x: t.clientX, y: t.clientY };
+          }}
+          onTouchEnd={(e) => {
+            const s = touchRef.current;
+            touchRef.current = null;
+            if (!s) return;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - s.x;
+            const dy = t.clientY - s.y;
+            // Só um arrasto horizontal deliberado troca de plano (deixa o scroll passar).
+            if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            setActive((a) => (dx < 0 ? (a + 1) % n : (a - 1 + n) % n));
+          }}
+        >
           {/* Espacador invisivel: as 3 cartas empilhadas na MESMA celula do grid,
               entao a altura do palco = a da carta mais alta. As cartas reais
               preenchem essa altura (inset-y-0 + h-full), ficando todas iguais. */}
-          <div aria-hidden className="mx-auto grid" style={{ width: cardW, visibility: 'hidden' }}>
+          <div ref={spacerRef} aria-hidden className="mx-auto grid" style={{ width: cardW, visibility: 'hidden' }}>
             {PLANS_DATA.map((p) => (
               <div key={p.key} style={{ gridArea: '1 / 1' }}>
                 <PlanCardView plan={p} billing={billing} active compact={compact} onCta={handleCta} />

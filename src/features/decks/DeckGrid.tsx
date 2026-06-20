@@ -212,7 +212,7 @@ function FolderCard({
   onNest: (dragPath: string, targetPath: string) => void;
 }) {
   // Folders are drop targets only (you nest decks INTO them); never dragged.
-  const { nestProps, isTarget } = useNestDrag({
+  const { nestProps, isTarget, anyDragging } = useNestDrag({
     path: node.path,
     label: node.name,
     enabled: false,
@@ -227,7 +227,7 @@ function FolderCard({
       onKeyDown={(e) => {
         if (e.key === 'Enter') onToggle();
       }}
-      className="relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden min-w-0 cursor-pointer"
+      className={`relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden min-w-0 cursor-pointer${anyDragging ? ' deck-jiggle' : ''}`}
       style={{
         minHeight: 104,
         background: isTarget ? 'var(--surface)' : 'var(--surface-2)',

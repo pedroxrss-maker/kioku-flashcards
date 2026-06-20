@@ -33,7 +33,7 @@ export function ExportButton({ deckId, size = 'sm', tile = false }: ExportButton
   if (tile) {
     return (
       <button type="button" onClick={run} disabled={busy} className="deck-action-tile">
-        <Download size={22} />
+        <Download size={18} />
         <span>{busy ? 'Exportando…' : 'Exportar .apkg'}</span>
       </button>
     );

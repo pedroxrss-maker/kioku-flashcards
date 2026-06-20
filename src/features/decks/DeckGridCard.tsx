@@ -81,7 +81,7 @@ export function DeckGridCard({
 }) {
   const nav = useNavigate();
   const open = () => nav(`/decks/${deck.id}`);
-  const { nestProps, dragging, isTarget } = useNestDrag({
+  const { nestProps, dragging, isTarget, anyDragging } = useNestDrag({
     path: nestPath ?? deck.name,
     label: deck.name,
     enabled: !!nestPath && !!onNest,
@@ -98,7 +98,7 @@ export function DeckGridCard({
         if (e.key === 'Enter') open();
       }}
       title={`Abrir ${deck.name}`}
-      className="relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden transition-transform active:scale-[0.98] min-w-0 cursor-pointer"
+      className={`relative flex flex-col text-left p-3 rounded-[var(--r-lg)] overflow-hidden transition-transform active:scale-[0.98] min-w-0 cursor-pointer${anyDragging && !dragging ? ' deck-jiggle' : ''}`}
       style={{
         minHeight: 116,
         border: isTarget

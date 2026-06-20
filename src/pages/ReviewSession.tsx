@@ -226,11 +226,12 @@ export function ReviewSession() {
   const hasFrontAudio = !!settings?.tts.enabled && !!current && faceHasAudio(current, 'front', settings);
   const hasBackAudio = !!settings?.tts.enabled && !!current && faceHasAudio(current, 'back', settings);
 
-  // Type-in cards: auto-play the answer (back) audio once it is revealed.
+  // Ao virar/revelar QUALQUER card, toca automaticamente o áudio do verso. Se o
+  // áudio da frente ainda estiver tocando, ele é interrompido (playStored pausa o
+  // áudio atual antes de iniciar o novo). Toca uma vez por card.
   const autoPlayedBackId = useRef<string | null>(null);
   useEffect(() => {
     if (!current || !flipped || !backAudioUrl) return;
-    if (cardTypeOf(current.front) !== 'typein') return;
     if (!settings?.tts.enabled || settings.mutedCards?.[current.id] === true) return;
     if (autoPlayedBackId.current === current.id) return;
     autoPlayedBackId.current = current.id;

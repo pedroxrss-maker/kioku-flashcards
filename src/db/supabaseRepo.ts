@@ -293,9 +293,23 @@ export class SupabaseRepository implements KiokuRepository {
 
   // ---------------------------------------------------------------- cards --
   async listCards(deckId: string): Promise<Card[]> {
-    const { data, error } = await supabase.from('cards').select('*').eq('deck_id', deckId);
-    if (error) readFail(error);
-    return ((data ?? []) as CardRow[]).map(rowToCard);
+    // Page through so decks with more than the API's ~1000-row cap still return
+    // every card (otherwise counts/lists silently truncate on big decks).
+    const PAGE = 1000;
+    const rows: CardRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('deck_id', deckId)
+        .order('created_at', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) readFail(error);
+      const batch = (data ?? []) as CardRow[];
+      rows.push(...batch);
+      if (batch.length < PAGE) break;
+    }
+    return rows.map(rowToCard);
   }
   async getCard(id: string): Promise<Card | undefined> {
     const { data, error } = await supabase.from('cards').select('*').eq('id', id).maybeSingle();
@@ -303,9 +317,23 @@ export class SupabaseRepository implements KiokuRepository {
     return data ? rowToCard(data as CardRow) : undefined;
   }
   async allCards(): Promise<Card[]> {
-    const { data, error } = await supabase.from('cards').select('*');
-    if (error) readFail(error);
-    return ((data ?? []) as CardRow[]).map(rowToCard);
+    // Page through so we never silently drop cards past the API's ~1000-row cap —
+    // the deck panel/counts (incl. new-card counts) must see EVERY card, not just
+    // the first page. Without this, big decks show 0 novos in the tree.
+    const PAGE = 1000;
+    const rows: CardRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .order('created_at', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) readFail(error);
+      const batch = (data ?? []) as CardRow[];
+      rows.push(...batch);
+      if (batch.length < PAGE) break;
+    }
+    return rows.map(rowToCard);
   }
   async createCard(input: CardInput): Promise<Card> {
     const card = makeCard(input);

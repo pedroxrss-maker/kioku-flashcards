@@ -1,6 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Flame } from 'lucide-react';
 import { buildYearMonths } from './compute';
+import { useIsMobile } from '../../lib/useIsMobile';
+import { computeStreak } from '../../lib/greeting';
+import { dayKey } from '../../lib/date';
+import { Modal } from '../../components/Modal';
 import type { ReviewLog } from '../../db/types';
 
 const TIER_PCT = [0, 25, 45, 70, 100];
@@ -27,11 +32,17 @@ interface HeatmapProps {
   logs: ReviewLog[];
   /** Grow the cells to fill the container's full width (used on a deck page). */
   fill?: boolean;
+  /** On mobile, show ONLY the current month; tapping it opens a popup with the
+   *  full year. Desktop is unaffected (always the full year). */
+  monthOnMobile?: boolean;
 }
 
 /** Review calendar: the full year split into month blocks (Jan->Dec), with an
  *  Anki-style hover tooltip (per-day counts) and the daily average. */
-export function Heatmap({ logs, fill = false }: HeatmapProps) {
+export function Heatmap({ logs, fill = false, monthOnMobile = false }: HeatmapProps) {
+  const isMobile = useIsMobile();
+  const [yearOpen, setYearOpen] = useState(false);
+
   // Anki-style hover tooltip: which day + how many cards were reviewed.
   const [tip, setTip] = useState<{ x: number; y: number; date: number; count: number } | null>(null);
   const showTip = (e: React.MouseEvent, date: number, count: number) => {
@@ -55,13 +66,27 @@ export function Heatmap({ logs, fill = false }: HeatmapProps) {
     return days ? sum / days : 0;
   }, [months]);
 
-  // When `fill`, measure the container and grow the cells so the 12 month blocks
-  // span its full width (square cells, fixed gaps, clamped to a sane range).
+  // Mobile (only when asked): show just the current month; tap to open the year.
+  const monthMode = monthOnMobile && isMobile;
+  // Sequência atual (foguinho) — exibida à direita do bloco do mês no monthMode.
+  const streak = useMemo(
+    () => computeStreak(new Set(logs.map((l) => dayKey(l.reviewedAt)))),
+    [logs],
+  );
+  const currentMonthIdx = new Date().getMonth();
+  const displayMonths = monthMode ? [months[currentMonthIdx]] : months;
+
+  // When filling (deck page) OR in single-month mode, measure the container and
+  // grow the cells so the visible month block(s) span its width (square cells).
+  const doFill = fill || monthMode;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const totalCols = useMemo(() => months.reduce((s, m) => s + m.weeks.length, 0), [months]);
+  const totalCols = useMemo(
+    () => displayMonths.reduce((s, m) => s + m.weeks.length, 0),
+    [displayMonths],
+  );
   useLayoutEffect(() => {
-    if (!fill) return;
+    if (!doFill) return;
     const el = wrapRef.current;
     if (!el) return;
     const update = () => setWidth(el.clientWidth);
@@ -70,77 +95,119 @@ export function Heatmap({ logs, fill = false }: HeatmapProps) {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fill]);
+  }, [doFill]);
 
   let cell = CELL;
   let gap = GAP;
   let monthGap = MONTH_GAP;
-  if (fill && width > 0 && totalCols > 0) {
+  if (doFill && width > 0 && totalCols > 0) {
     gap = 3;
     monthGap = 8;
     const LABEL_W = 18; // weekday labels column + its right margin
-    const c = Math.floor((width - LABEL_W - (totalCols - 12) * gap - 11 * monthGap) / totalCols);
-    cell = Math.max(CELL, Math.min(18, c));
+    const nMonths = displayMonths.length;
+    const c = Math.floor((width - LABEL_W - (totalCols - nMonths) * gap - (nMonths - 1) * monthGap) / totalCols);
+    cell = Math.max(CELL, Math.min(monthMode ? 15 : 18, c));
   }
+
+  const calendar = (
+    <div className="overflow-x-auto pb-1">
+      <div
+        className={`flex items-start ${monthMode ? 'justify-center px-2' : ''}`}
+        style={{ minWidth: monthMode ? undefined : 'min-content' }}
+      >
+        {/* Weekday labels (Monday-first), once on the left. */}
+        <div className="flex flex-col mr-1.5" style={{ gap }}>
+          {DOW_MON.map((d, i) => (
+            <span
+              key={i}
+              className="mono text-[8px] text-muted"
+              style={{ height: cell, lineHeight: `${cell}px`, width: 10 }}
+            >
+              {d}
+            </span>
+          ))}
+        </div>
+        {/* One block per month, separated by a gap. */}
+        <div className="flex" style={{ gap: monthGap }}>
+          {displayMonths.map((blk) => (
+            <div key={blk.month} className="flex flex-col">
+              <div className="flex" style={{ gap }}>
+                {blk.weeks.map((week, wi) => (
+                  <div key={wi} className="flex flex-col" style={{ gap }}>
+                    {week.map((c, ci) =>
+                      c ? (
+                        <div
+                          key={c.key}
+                          onMouseEnter={c.future ? undefined : (e) => showTip(e, c.date, c.count)}
+                          onMouseLeave={hideTip}
+                          style={{
+                            width: cell,
+                            height: cell,
+                            borderRadius: 2,
+                            background: c.future ? 'transparent' : tierBg(c.tier),
+                            border: '1px solid var(--bg)',
+                            opacity: c.future ? 0.3 : 1,
+                          }}
+                        />
+                      ) : (
+                        <div key={`e${wi}-${ci}`} style={{ width: cell, height: cell }} />
+                      ),
+                    )}
+                  </div>
+                ))}
+              </div>
+              <span className="mono text-[9px] text-muted capitalize text-center mt-1">
+                {blk.label}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* Foguinho de revisões: sequência atual, à direita do bloco do mês. */}
+        {monthMode && (
+          <div className="self-center flex flex-col items-center justify-center ml-8">
+            <Flame
+              size={36}
+              className={streak > 0 ? 'text-accent flame-anim' : 'text-muted'}
+            />
+            <span
+              className="mono text-xl font-bold leading-none mt-1"
+              style={{ color: streak > 0 ? 'var(--fg)' : 'var(--muted)' }}
+            >
+              {streak}
+            </span>
+            <span className="mono text-[9px] text-muted mt-0.5">
+              {streak === 1 ? 'dia' : 'dias'}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div ref={wrapRef} className="min-w-0">
       <div className="min-w-0">
-        <div className="mb-3">
-          <span className="mono text-sm font-semibold">{year}</span>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="mono text-sm font-semibold">
+            {monthMode ? `${cap(months[currentMonthIdx].label)} ${year}` : year}
+          </span>
+          {monthMode && (
+            <span className="mono text-[10px] text-muted">toque para ver o ano</span>
+          )}
         </div>
 
-        <div className="overflow-x-auto pb-1">
-          <div className="flex items-start" style={{ minWidth: 'min-content' }}>
-            {/* Weekday labels (Monday-first), once on the left. */}
-            <div className="flex flex-col mr-1.5" style={{ gap }}>
-              {DOW_MON.map((d, i) => (
-                <span
-                  key={i}
-                  className="mono text-[8px] text-muted"
-                  style={{ height: cell, lineHeight: `${cell}px`, width: 10 }}
-                >
-                  {d}
-                </span>
-              ))}
-            </div>
-            {/* One block per month, Jan -> Dec, separated by a gap. */}
-            <div className="flex" style={{ gap: monthGap }}>
-              {months.map((blk) => (
-                <div key={blk.month} className="flex flex-col">
-                  <div className="flex" style={{ gap }}>
-                    {blk.weeks.map((week, wi) => (
-                      <div key={wi} className="flex flex-col" style={{ gap }}>
-                        {week.map((c, ci) =>
-                          c ? (
-                            <div
-                              key={c.key}
-                              onMouseEnter={c.future ? undefined : (e) => showTip(e, c.date, c.count)}
-                              onMouseLeave={hideTip}
-                              style={{
-                                width: cell,
-                                height: cell,
-                                borderRadius: 2,
-                                background: c.future ? 'transparent' : tierBg(c.tier),
-                                border: '1px solid var(--bg)',
-                                opacity: c.future ? 0.3 : 1,
-                              }}
-                            />
-                          ) : (
-                            <div key={`e${wi}-${ci}`} style={{ width: cell, height: cell }} />
-                          ),
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <span className="mono text-[9px] text-muted capitalize text-center mt-1">
-                    {blk.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        {monthMode ? (
+          <button
+            type="button"
+            onClick={() => setYearOpen(true)}
+            aria-label="Ver o ano inteiro"
+            className="w-full text-left rounded-[var(--r-sm)] transition-colors hover:bg-[color:var(--surface-2)]"
+          >
+            {calendar}
+          </button>
+        ) : (
+          calendar
+        )}
 
         <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
           <div className="flex items-center gap-1.5 mono text-[10px] text-muted">
@@ -194,6 +261,14 @@ export function Heatmap({ logs, fill = false }: HeatmapProps) {
           )}
         </div>,
         document.body,
+      )}
+
+      {/* Mobile month -> full-year popup. The inner Heatmap renders the whole year
+          (monthOnMobile defaults to false), fitting the modal width via `fill`. */}
+      {monthOnMobile && (
+        <Modal open={yearOpen} onClose={() => setYearOpen(false)} title="Mapa de revisões" width={560}>
+          <Heatmap logs={logs} fill />
+        </Modal>
       )}
     </div>
   );

@@ -101,8 +101,8 @@ export function DeckBrowser() {
           })}
       </div>
 
-      {/* Create / generate — two prominent cards */}
-      <div className="grid gap-4 sm:grid-cols-2 mb-5">
+      {/* Create / generate — two prominent cards (lado a lado também no mobile). */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-5">
         <HeroCard
           color="var(--accent)"
           onClick={() => setCreateOpen(true)}
@@ -129,22 +129,11 @@ export function DeckBrowser() {
         />
         <input
           className="field w-full"
-          style={{ paddingLeft: '2.25rem', paddingRight: '3rem' }}
+          style={{ paddingLeft: '2.25rem' }}
           placeholder="Buscar deck..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <kbd
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] mono pointer-events-none"
-          style={{
-            color: 'var(--muted)',
-            border: '1px solid var(--line-strong)',
-            borderRadius: 6,
-            padding: '1px 6px',
-          }}
-        >
-          ⌘K
-        </kbd>
       </div>
 
       {/* Mobile: a 2-column grid of color deck cards. Tapping a card opens the
@@ -155,7 +144,21 @@ export function DeckBrowser() {
             Você ainda não tem decks. Crie o primeiro acima.
           </p>
         ) : (
-          <DeckGrid decks={byCategory} cardsByDeck={byDeck} query={query} />
+          <div style={{ position: 'relative', overflowX: 'clip' }}>
+            <AnimatePresence mode="popLayout" custom={catDir} initial={false}>
+              <motion.div
+                key={category ?? '__all'}
+                custom={catDir}
+                variants={SECTION_SLIDE}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <DeckGrid decks={byCategory} cardsByDeck={byDeck} query={query} />
+              </motion.div>
+            </AnimatePresence>
+          </div>
         )}
       </div>
 
@@ -215,7 +218,7 @@ export function DeckBrowser() {
                   initial="enter"
                   animate="center"
                   exit="exit"
-                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                   className="pt-1"
                 >
                   <DeckTree
@@ -288,8 +291,8 @@ function HeroCard({
       />
       {/* Ink-drop fill that floods the surface on hover (see .hero-ink in globals.css). */}
       <span aria-hidden className="hero-ink" style={{ '--ink': color } as CSSProperties} />
-      {/* Mobile: compact horizontal row (about half height); sm+: centered stack. */}
-      <span className="relative flex flex-row sm:flex-col items-center text-left sm:text-center gap-3">
+      {/* Empilhado e centrado (ícone em cima): cabe nas duas colunas estreitas do mobile. */}
+      <span className="relative flex flex-col items-center text-center gap-2 sm:gap-3">
         <span
           className="flex items-center justify-center"
           style={{
@@ -329,7 +332,7 @@ function HeroCard({
   };
   // Half-height on mobile (compact padding, no min-height); full card on sm+.
   const className =
-    'hero-card hover-lift flex items-center justify-start sm:justify-center px-5 py-3 sm:px-6 sm:py-[24px] sm:min-h-[128px]';
+    'hero-card hover-lift flex items-center justify-center px-4 py-4 sm:px-6 sm:py-[24px] min-h-[112px] sm:min-h-[128px]';
 
   return to ? (
     <Link to={to} className={className} style={style}>

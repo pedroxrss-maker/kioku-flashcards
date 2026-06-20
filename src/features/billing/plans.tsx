@@ -43,7 +43,7 @@ export const PLANS_DATA: PlanCard[] = [
       { ok: true, label: '2 decks de IA por mês' },
       { ok: true, label: '15 usos de IA por dia' },
       { ok: true, label: '50 áudios por mês' },
-      { ok: false, label: 'Sem imagens nos cards' },
+      { ok: false, label: 'Sem geração de imagens' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],
   },
@@ -59,7 +59,7 @@ export const PLANS_DATA: PlanCard[] = [
       { ok: true, label: '5 decks de IA por dia' },
       { ok: true, label: '100 usos de IA por dia' },
       { ok: true, label: '500 áudios por mês' },
-      { ok: true, label: '100 imagens por mês' },
+      { ok: true, label: 'Geração de 100 imagens por mês' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],
   },
@@ -73,7 +73,7 @@ export const PLANS_DATA: PlanCard[] = [
       { ok: true, label: 'Decks de IA ilimitados' },
       { ok: true, label: 'Usos de IA ilimitados' },
       { ok: true, label: 'Áudios ilimitados' },
-      { ok: true, label: '300 imagens por mês' },
+      { ok: true, label: 'Geração de 300 imagens por mês' },
       { ok: true, label: 'Funções exclusivas de IA', badge: 'Em breve' },
     ],
   },
@@ -138,12 +138,11 @@ export function BillingToggle({
 }) {
   return (
     <div
-      className="relative inline-flex p-[2px]"
+      className="billing-toggle-scale relative inline-flex p-[2px]"
       style={{
         background: 'var(--surface-2)',
         border: '1px solid var(--line)',
         borderRadius: 'var(--r-full)',
-        transform: 'scale(0.8)', // 20% menor
       }}
     >
       {(['mensal', 'anual'] as Billing[]).map((b) => {
@@ -178,37 +177,40 @@ export function BillingToggle({
  *  period words ("dia"/"mês") are always underlined + UPPERCASED. Free passes no
  *  numberStyle, so its numbers stay flat/gray with the rest of the (dim) label. */
 function renderFeatureLabel(cell: Cell, numberStyle?: CSSProperties): ReactNode {
-  // Free plan (no numberStyle): plain label — numbers stay dim and "dia"/"mês"
-  // are lowercase with NO underline. Only paid plans get the period highlight.
+  // Free plan (no numberStyle): plain label — no number/keyword emphasis.
   if (!numberStyle) return cell.label;
-  const m = cell.label.match(/^(\d[\d.,]*)(\s*)([\s\S]*)$/);
+  // Paid: bold the FIRST number anywhere (so "Geração de 100 imagens" still pops);
+  // keywords around it get their own emphasis (see emphasizeKeywords).
+  const m = cell.label.match(/^([\s\S]*?)(\d[\d.,]*)([\s\S]*)$/);
   if (m) {
     return (
       <>
-        <strong style={numberStyle}>{m[1]}</strong>
-        {m[2]}
-        {withPeriods(m[3])}
+        {emphasizeKeywords(m[1], numberStyle)}
+        <strong style={numberStyle}>{m[2]}</strong>
+        {emphasizeKeywords(m[3], numberStyle)}
       </>
     );
   }
-  return withPeriods(cell.label);
+  return emphasizeKeywords(cell.label, numberStyle);
 }
 
-/** Underline + UPPERCASE the billing-period words ("dia"/"mês") in a text run. */
-function withPeriods(text: string): ReactNode {
-  const re = /\bdia\b|\bmês\b/gi;
+/** In a text run, every emphasis keyword gets a strong BOLD (boldStyle): "dia"/
+ *  "mês" stay lowercase; "ilimitado(s)/ilimitada(s)" is also UPPERCASED. */
+function emphasizeKeywords(text: string, boldStyle: CSSProperties): ReactNode {
+  const re = /\bdia\b|\bmês\b|ilimitad\w*/gi;
   const out: ReactNode[] = [];
   let last = 0;
   let k = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
+    const w = m[0];
     out.push(
-      <u key={k++} style={{ textUnderlineOffset: 2 }}>
-        {m[0].toUpperCase()}
-      </u>,
+      <strong key={k++} style={boldStyle}>
+        {/^ilimitad/i.test(w) ? w.toUpperCase() : w}
+      </strong>,
     );
-    last = m.index + m[0].length;
+    last = m.index + w.length;
   }
   if (out.length === 0) return text;
   if (last < text.length) out.push(text.slice(last));
@@ -276,27 +278,6 @@ export function PlanCardView({
 
   return (
     <div className={`${compact ? 'p-3.5' : 'p-6 md:p-7'} h-full flex flex-col`} style={cardStyle}>
-      {/* "Economize" nudge, top-RIGHT of the BÁSICO card, shown ONLY on MONTHLY
-          billing (encourages switching to annual). "Mais popular" stays top-LEFT. */}
-      {plan.key === 'basic' && !isAnnual && savings > 0 && (
-        <span
-          className="mono"
-          style={{
-            position: 'absolute',
-            top: compact ? 9 : 14,
-            right: compact ? 9 : 14,
-            fontSize: compact ? 9 : 11,
-            fontWeight: 700,
-            lineHeight: 1.4,
-            padding: '2px 8px',
-            borderRadius: 'var(--r-full)',
-            whiteSpace: 'nowrap',
-            ...savingsBadgeStyle(plan),
-          }}
-        >
-          Economize R${formatBRLAmount(savings)} no anual
-        </span>
-      )}
       <div className="flex items-center gap-1.5">
         <h3 className="display" style={{ fontSize: compact ? 15 : 20, fontWeight: 600, color: c.title }}>
           {PLAN_LABELS[plan.key]}
@@ -396,6 +377,39 @@ export function PlanCardView({
           {sub}
         </p>
       </div>
+
+      {/* "Economize ... no anual" — só no Básico e só no MENSAL. Fica NO FLUXO
+          (abaixo do preço) para nunca colidir com o selo "Mais popular" em cards
+          estreitos no mobile. Entra/sai com fade + slide de altura. */}
+      <AnimatePresence initial={false}>
+        {plan.key === 'basic' && !isAnnual && savings > 0 && (
+          <motion.div
+            key="save-annual"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: reduce ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <span
+              className="mono"
+              style={{
+                display: 'inline-block',
+                marginTop: compact ? 8 : 12,
+                fontSize: compact ? 10 : 11,
+                fontWeight: 700,
+                lineHeight: 1.4,
+                padding: '2px 8px',
+                borderRadius: 'var(--r-full)',
+                whiteSpace: 'nowrap',
+                ...savingsBadgeStyle(plan),
+              }}
+            >
+              Economize R${formatBRLAmount(savings)} no anual
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Comparativo de recursos: tudo aparece, com check (incluso) ou X (ausente). */}
       <ul

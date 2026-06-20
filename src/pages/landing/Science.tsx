@@ -42,12 +42,12 @@ export function Science() {
         {ITEMS.map((s, i) => (
           <StaggerCard key={s.n} className="h-full">
             <FloatCard className="h-full" dur={5 + i * 0.7} delay={i * 0.5}>
-              <div className="surface p-6 md:p-7 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
+              <div className="surface p-4 md:p-7 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
                 <NumberBadge n={s.n} />
-                <h3 className="display mt-4" style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.25 }}>{s.title}</h3>
+                <h3 className="display mt-3 md:mt-4" style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.25 }}>{s.title}</h3>
                 <p className="text-sm text-muted mt-2" style={{ lineHeight: 1.55 }}>{s.desc}</p>
-                <div className="mt-auto pt-8">
-                  <img src={s.img} alt="" draggable={false} style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
+                <div className="mt-auto pt-5 md:pt-8">
+                  <img src={s.img} alt="" draggable={false} className="block w-full h-auto max-h-[180px] md:max-h-none object-contain mx-auto" style={{ borderRadius: 12 }} />
                 </div>
               </div>
             </FloatCard>

@@ -20,9 +20,25 @@ interface DragState {
   label: string;
   x: number;
   y: number;
+  /** HTML snapshot of the whole dragged block, shown as the floating ghost. */
+  ghostHTML: string;
+  ghostW: number;
+  /** Pointer offset inside the block at pickup, so the ghost tracks 1:1. */
+  offsetX: number;
+  offsetY: number;
 }
 
-let store: DragState = { draggingPath: null, dropTargetPath: null, label: '', x: 0, y: 0 };
+let store: DragState = {
+  draggingPath: null,
+  dropTargetPath: null,
+  label: '',
+  x: 0,
+  y: 0,
+  ghostHTML: '',
+  ghostW: 0,
+  offsetX: 0,
+  offsetY: 0,
+};
 const listeners = new Set<() => void>();
 function emit() {
   for (const l of listeners) l();
@@ -44,7 +60,7 @@ function useDragSelector<T>(sel: (s: DragState) => T): T {
   return useSyncExternalStore(subscribe, get, get);
 }
 
-const LONG_PRESS_MS = 1000; // mobile: hold this long before a deck becomes draggable
+const LONG_PRESS_MS = 1500; // mobile: hold this long before a deck becomes draggable
 const MOUSE_SLOP = 6; // px of movement that starts a mouse drag
 const TOUCH_SLOP = 12; // px before the long-press is treated as a scroll instead
 
@@ -98,7 +114,27 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
     const prevent = (e: TouchEvent) => e.preventDefault();
     document.addEventListener('touchmove', prevent, { passive: false });
     preventTouch.current = prevent;
-    setStore({ draggingPath: path, dropTargetPath: null, label });
+    // Snapshot the WHOLE block so the drag ghost mirrors the entire deck card,
+    // not just its title. Cloned now — before the re-render dims the source and
+    // mounts the ghost portal — so the copy is clean.
+    const node = el.current;
+    let ghostHTML = '';
+    let ghostW = 0;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (node) {
+      const rect = node.getBoundingClientRect();
+      ghostW = rect.width;
+      offsetX = start.current.x - rect.left;
+      offsetY = start.current.y - rect.top;
+      const clone = node.cloneNode(true) as HTMLElement;
+      clone.style.margin = '0';
+      clone.style.width = `${rect.width}px`;
+      clone.style.maxWidth = 'none';
+      clone.style.opacity = '1';
+      ghostHTML = clone.outerHTML;
+    }
+    setStore({ draggingPath: path, dropTargetPath: null, label, ghostHTML, ghostW, offsetX, offsetY });
   }, [path, label]);
 
   /** Drop target under (x, y): a deck/folder path to nest into, ROOT_DROP_TARGET
@@ -189,6 +225,8 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
 
   const dragging = useDragSelector((s) => s.draggingPath === path);
   const isTarget = useDragSelector((s) => s.dropTargetPath === path && s.draggingPath != null);
+  // True while ANY deck is being dragged — siblings use it to jiggle in sync.
+  const anyDragging = useDragSelector((s) => s.draggingPath != null);
 
   return {
     /** Spread onto the draggable / droppable element. */
@@ -201,11 +239,13 @@ export function useNestDrag({ path, label, enabled, onDrop }: NestDragOptions) {
     },
     dragging,
     isTarget,
+    anyDragging,
   };
 }
 
-/** Floating label that follows the pointer while a deck is being dragged. Only
- *  the row currently being dragged renders this, so there is ever just one. */
+/** Floating ghost that follows the pointer while a deck is being dragged: a live
+ *  HTML snapshot of the WHOLE block, so the entire card moves — not just a label.
+ *  Only the row currently being dragged renders this, so there is ever just one. */
 export function NestGhost() {
   const s = useSyncExternalStore(subscribe, () => store, () => store);
   if (!s.draggingPath) return null;
@@ -214,34 +254,33 @@ export function NestGhost() {
     <div
       style={{
         position: 'fixed',
-        left: s.x + 14,
-        top: s.y + 14,
+        left: s.x - s.offsetX,
+        top: s.y - s.offsetY,
+        width: s.ghostW || undefined,
         zIndex: 1000,
         pointerEvents: 'none',
-        padding: '6px 10px',
-        borderRadius: 'var(--r-sm)',
-        background: toRoot ? 'var(--accent-blue)' : 'var(--accent)',
-        color: '#fff',
-        boxShadow: 'var(--shadow-pop)',
+        opacity: 0.95,
+        filter: 'drop-shadow(0 10px 26px rgba(0,0,0,0.45))',
+        borderRadius: 'var(--r-lg)',
       }}
     >
-      <span
-        style={{
-          display: 'block',
-          maxWidth: 220,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          fontSize: 13,
-          fontWeight: 700,
-        }}
-      >
-        {s.label}
-      </span>
+      <div dangerouslySetInnerHTML={{ __html: s.ghostHTML }} />
       {toRoot && (
-        <span style={{ display: 'block', marginTop: 2, fontSize: 11, fontWeight: 600 }}>
+        <div
+          style={{
+            marginTop: 6,
+            padding: '4px 9px',
+            borderRadius: 'var(--r-sm)',
+            background: 'var(--accent-blue)',
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 600,
+            textAlign: 'center',
+            boxShadow: 'var(--shadow-pop)',
+          }}
+        >
           Soltar para tirar do deck pai
-        </span>
+        </div>
       )}
     </div>,
     document.body,

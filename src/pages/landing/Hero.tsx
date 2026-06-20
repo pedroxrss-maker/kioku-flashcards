@@ -18,7 +18,7 @@ export function Hero() {
 
   return (
     <section id="topo" className="relative">
-      <div className="mx-auto max-w-[1180px] px-5 md:px-8 pt-12 md:pt-16 pb-16 hero-grid">
+      <div className="mx-auto max-w-[1180px] px-5 md:px-8 pt-4 md:pt-6 pb-16 hero-grid">
         {/* HEAD: pill + title (mobile: above the mockup) */}
         <div className="hero-head">
           <Reveal>
@@ -72,7 +72,7 @@ export function Hero() {
           </Reveal>
 
           <Reveal delay={0.24}>
-            <div className="grid sm:grid-cols-3 gap-4 mt-9">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-9">
               {VALUES.map(({ icon: Icon, title, line }) => (
                 <div key={title} className="flex flex-col gap-1.5">
                   <span className="inline-flex items-center justify-center rounded-[var(--r-sm)]" style={{ width: 34, height: 34, background: 'var(--surface-2)', color: 'var(--accent)' }}>

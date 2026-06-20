@@ -53,8 +53,9 @@ export function FriendsHeaderButton() {
   }
 
   function handleClick() {
-    // Mobile: 1o toque sempre abre o preview (mesmo vazio); 2o toque navega.
-    if (isMobile && !open) {
+    // Mobile: com solicitações pendentes, o 1o toque abre o preview e o 2o navega.
+    // Sem nada pendente, o 1o toque já leva direto para a aba de amigos.
+    if (isMobile && !open && count > 0) {
       setOpen(true);
       return;
     }
@@ -115,7 +116,7 @@ export function FriendsHeaderButton() {
         {open && (
           <motion.div
             key="friends-preview"
-            className="absolute right-0 z-50 mt-1.5 w-64 p-2"
+            className="absolute left-0 sm:left-auto sm:right-0 z-50 mt-1.5 w-64 max-w-[calc(100vw-24px)] p-2"
             initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.97 }}
