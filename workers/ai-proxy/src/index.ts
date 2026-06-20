@@ -342,6 +342,100 @@ export function capDeckCardsResponse(data: unknown, maxCards: number): unknown {
   return d;
 }
 
+// ── Retry com backoff para falhas transitórias do Gemini ─────────────────────
+// O Gemini pode responder 503 (UNAVAILABLE / sobrecarga) ou 429 (rate limit por
+// minuto na NOSSA chave compartilhada). Ambos são transitórios e de
+// INFRAESTRUTURA — nada a ver com a cota do plano do usuário. Tentamos de novo
+// algumas vezes com backoff exponencial + jitter; ao esgotar, devolvemos um
+// error_code estruturado NOSSO (nunca o texto cru do Google).
+const MAX_GEMINI_ATTEMPTS = 3;
+const GEMINI_BACKOFFS_MS = [400, 1000, 2000]; // espera após a 1ª, 2ª (3ª) falha
+// Teto para o retryDelay sugerido pelo Google: respeitamos a dica, mas limitada,
+// para nunca pendurar a requisição do usuário por dezenas de segundos.
+const MAX_RETRY_DELAY_MS = 8000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Jitter aleatório (0–250ms) para não sincronizar as retentativas. */
+const withJitter = (ms: number): number => ms + Math.floor(Math.random() * 250);
+
+/** Lê o RetryInfo.retryDelay ("57s", "1.5s") do corpo de um 429 do Google, em ms. */
+async function googleRetryDelayMs(res: Response): Promise<number | null> {
+  let body: { error?: { details?: Array<{ retryDelay?: unknown }> } };
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    return null;
+  }
+  const details = body?.error?.details;
+  if (!Array.isArray(details)) return null;
+  for (const d of details) {
+    const raw = typeof d?.retryDelay === 'string' ? d.retryDelay.trim() : '';
+    const m = /^([\d.]+)s$/.exec(raw);
+    if (m) {
+      const secs = Number.parseFloat(m[1]);
+      if (Number.isFinite(secs) && secs >= 0) return Math.round(secs * 1000);
+    }
+  }
+  return null;
+}
+
+type GeminiOutcome =
+  | { kind: 'ok'; data: unknown }
+  | { kind: 'overloaded' } // 503 / 429 do Google após esgotar as retentativas
+  | { kind: 'error' } // erro real do Google (400/401/403/...): falha rápida
+  | { kind: 'network' }; // o fetch lançou (rede/timeout)
+
+/**
+ * Chama o Gemini generateContent com retry-com-backoff. Repete SOMENTE em 503 e
+ * 429 (sobrecarga / rate limit do Google na chave compartilhada), até
+ * MAX_GEMINI_ATTEMPTS. NUNCA repete 400/401/403/404 — são erros reais, falha
+ * rápida. Em 429 respeita o retryDelay sugerido pelo Google quando presente.
+ */
+async function callGeminiWithRetry(
+  model: string,
+  geminiBody: unknown,
+  apiKey: string,
+): Promise<GeminiOutcome> {
+  const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`;
+  for (let attempt = 0; attempt < MAX_GEMINI_ATTEMPTS; attempt += 1) {
+    const last = attempt === MAX_GEMINI_ATTEMPTS - 1;
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(geminiBody),
+      });
+    } catch {
+      if (last) return { kind: 'network' };
+      await sleep(withJitter(GEMINI_BACKOFFS_MS[attempt]));
+      continue;
+    }
+
+    if (res.ok) {
+      try {
+        return { kind: 'ok', data: await res.json() };
+      } catch {
+        return { kind: 'error' };
+      }
+    }
+
+    // Só 503 e 429 são transitórios (sobrecarga). Os demais são erros reais.
+    if (res.status !== 503 && res.status !== 429) {
+      return { kind: 'error' };
+    }
+    if (last) return { kind: 'overloaded' };
+
+    let delay = GEMINI_BACKOFFS_MS[attempt];
+    if (res.status === 429) {
+      const hinted = await googleRetryDelayMs(res);
+      if (hinted != null) delay = Math.min(hinted, MAX_RETRY_DELAY_MS);
+    }
+    await sleep(withJitter(delay));
+  }
+  return { kind: 'overloaded' };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -407,16 +501,25 @@ export default {
         const quota = await consumeQuota(env, token, metric);
         if (!quota) {
           return json(
-            { error: 'Não foi possível verificar seu limite de uso. Tente novamente.', code: 'quota_unavailable' },
+            {
+              error: 'Não foi possível verificar seu limite de uso. Tente novamente.',
+              code: 'quota_unavailable',
+              error_code: 'quota_unavailable',
+            },
             503,
             cors,
           );
         }
         if (!quota.allowed) {
+          // 429 da NOSSA checagem de cota (limite do plano). É um erro de COTA
+          // real — o cliente DEVE manter o paywall/UpgradeModal aqui. Não confunda
+          // com o 429/503 de sobrecarga do Google (ai_overloaded), que nunca abre
+          // o paywall.
           return json(
             {
               error: 'Limite de uso atingido.',
               code: 'quota_exceeded',
+              error_code: 'quota_exceeded',
               metric,
               period: quota.period_out,
               used: quota.used,
@@ -448,35 +551,43 @@ export default {
         geminiBody.systemInstruction = withCardCapInstruction(geminiBody.systemInstruction, deckMaxCards);
       }
 
-      let googleRes: Response;
-      try {
-        googleRes = await fetch(`${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': env.GOOGLE_GEMINI_API_KEY,
-          },
-          body: JSON.stringify(geminiBody),
-        });
-      } catch {
-        return json({ error: 'Falha ao falar com o Google. Tente novamente.' }, 502, cors);
-      }
+      // Chama o Gemini com retry-com-backoff em falhas transitórias (503/429 do
+      // Google). NUNCA repassa o texto cru do Google: ao falhar, devolve só o
+      // nosso error_code estruturado.
+      const outcome = await callGeminiWithRetry(model, geminiBody, env.GOOGLE_GEMINI_API_KEY);
 
-      if (!googleRes.ok) {
-        let detail = `Erro do Google (HTTP ${googleRes.status}).`;
-        try {
-          const err = (await googleRes.json()) as { error?: { message?: string } };
-          if (err.error?.message) detail = err.error.message;
-        } catch {
-          /* resposta nao-JSON: mantem o status acima */
-        }
-        return json({ error: detail }, googleRes.status, cors);
+      if (outcome.kind === 'network') {
+        // Nem chegamos a falar com o Google (rede/timeout).
+        return json(
+          { error: 'Falha ao falar com a IA. Tente novamente.', error_code: 'ai_unreachable' },
+          502,
+          cors,
+        );
+      }
+      if (outcome.kind === 'overloaded') {
+        // 503 / 429 do Google após as retentativas: SOBRECARGA de infraestrutura
+        // (a chave compartilhada/o modelo está congestionado). NÃO é o limite do
+        // plano do usuário — o cliente mostra um aviso amigável e JAMAIS abre o
+        // paywall por isso. Nunca vaza o texto cru do Google.
+        return json(
+          { error: 'A IA está sobrecarregada. Tente novamente em instantes.', error_code: 'ai_overloaded' },
+          503,
+          cors,
+        );
+      }
+      if (outcome.kind === 'error') {
+        // Erro real do Google (400/401/403/404...): falha rápida, com mensagem
+        // genérica NOSSA — sem repassar o texto do Google.
+        return json(
+          { error: 'A IA não conseguiu processar a solicitação.', error_code: 'ai_error' },
+          502,
+          cors,
+        );
       }
 
       // Repassa o JSON do Gemini. Em deckGen, CORTA o array de cartas ao teto do
       // plano (garantia real, mesmo que o cliente peca 50 ou o Gemini exagere).
-      const data = await googleRes.json();
-      const out = metric === 'deckGen' ? capDeckCardsResponse(data, deckMaxCards) : data;
+      const out = metric === 'deckGen' ? capDeckCardsResponse(outcome.data, deckMaxCards) : outcome.data;
       return json(out, 200, cors);
     }
 

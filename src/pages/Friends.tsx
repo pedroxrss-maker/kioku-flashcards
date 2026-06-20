@@ -220,21 +220,23 @@ function InviteRow({ invite }: { invite: FriendInvite }) {
   }
 
   return (
-    <li className="surface flex items-center gap-3 px-4 py-3">
-      <InviteAvatar invite={invite} />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium truncate">{label}</p>
-        <p className="text-xs text-muted truncate">
-          {incoming
-            ? 'Quer ser seu amigo'
-            : invite.display_name
-              ? 'Convite enviado'
-              : 'Aguardando a pessoa criar uma conta'}
-        </p>
+    <li className="surface flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3">
+      <div className="flex items-center gap-3 min-w-0 w-full sm:flex-1">
+        <InviteAvatar invite={invite} />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium truncate">{label}</p>
+          <p className="text-xs text-muted truncate">
+            {incoming
+              ? 'Quer ser seu amigo'
+              : invite.display_name
+                ? 'Convite enviado'
+                : 'Aguardando a pessoa criar uma conta'}
+          </p>
+        </div>
       </div>
 
       {incoming ? (
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
           <button
             type="button"
             disabled={busy}
@@ -263,7 +265,7 @@ function InviteRow({ invite }: { invite: FriendInvite }) {
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
           <span
             className="mono text-[10px] px-2 py-0.5 rounded-full"
             style={{

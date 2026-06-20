@@ -29,6 +29,12 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 /** Carries a user-facing (pt-BR) message; safe to show in dialogs/toasts. */
 export class AiError extends Error {}
 
+/** Friendly pt-BR message for AI INFRASTRUCTURE overload (proxy error_code
+ *  "ai_overloaded" / any 503): the Gemini model/shared key is congested. This is
+ *  NOT a plan limit, so it must never open the UpgradeModal. */
+const AI_OVERLOADED_MSG =
+  'A IA está sobrecarregada neste momento. Isso costuma passar em segundos, tente de novo.';
+
 /** Which metered action an AI call counts as. The server enforces the limit
  *  (consume_quota) and the period; the client only declares the metric. */
 export type AiMetric = 'deckGen' | 'tutor' | 'image';
@@ -169,7 +175,16 @@ async function createMessage({ system, messages, maxTokens = 4096, model = AI_MO
 
   if (!res.ok) {
     let payload:
-      | { error?: unknown; code?: string; metric?: string; period?: string; used?: number; max_count?: number }
+      | {
+          error?: unknown;
+          /** New canonical field; `code` kept for backward compatibility. */
+          error_code?: string;
+          code?: string;
+          metric?: string;
+          period?: string;
+          used?: number;
+          max_count?: number;
+        }
       | null = null;
     try {
       payload = await res.json();
@@ -180,15 +195,23 @@ async function createMessage({ system, messages, maxTokens = 4096, model = AI_MO
       typeof payload?.error === 'string'
         ? payload.error
         : (payload?.error as { message?: string } | undefined)?.message ?? '';
+    const code = payload?.error_code ?? payload?.code;
 
-    // Plan usage limit hit (the proxy enforces it server-side).
-    if (res.status === 429 && payload?.code === 'quota_exceeded') {
-      throw new QuotaError(quotaMessage(payload), {
-        metric: payload.metric ?? metric,
-        used: payload.used ?? 0,
-        limit: payload.max_count ?? 0,
-        period: payload.period ?? 'day',
+    // Plan usage limit hit (429 from OUR OWN quota check). This is a real quota
+    // error → keep the UpgradeModal behavior (callers open it on QuotaError).
+    if (res.status === 429 && code === 'quota_exceeded') {
+      throw new QuotaError(quotaMessage(payload ?? {}), {
+        metric: payload?.metric ?? metric,
+        used: payload?.used ?? 0,
+        limit: payload?.max_count ?? 0,
+        period: payload?.period ?? 'day',
       });
+    }
+    // AI INFRASTRUCTURE overload (proxy retried 503/429-from-Google and gave up).
+    // NOT a plan limit: plain AiError with a friendly message, so it shows the
+    // notice and NEVER opens the UpgradeModal.
+    if (code === 'ai_overloaded') {
+      throw new AiError(AI_OVERLOADED_MSG);
     }
     if (res.status === 401) {
       throw new AiError('Sua sessão expirou. Entre novamente para usar a IA.');
@@ -196,8 +219,12 @@ async function createMessage({ system, messages, maxTokens = 4096, model = AI_MO
     if (res.status === 403) {
       throw new AiError(`Acesso à IA não autorizado${detail ? `: ${detail}` : ''}.`);
     }
-    if (res.status === 503 && payload?.code === 'quota_unavailable') {
+    if (res.status === 503 && code === 'quota_unavailable') {
       throw new AiError('Não foi possível verificar seu limite agora. Tente novamente em instantes.');
+    }
+    // Any other 503 from the proxy = AI overloaded (same friendly notice).
+    if (res.status === 503) {
+      throw new AiError(AI_OVERLOADED_MSG);
     }
     if (res.status === 429) {
       throw new AiError('Limite de uso da IA atingido. Tente novamente em instantes.');
