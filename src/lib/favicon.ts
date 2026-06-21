@@ -33,12 +33,32 @@ export function applyRoundedFavicon(): void {
 
   const img = new Image();
   img.onload = () => {
+    // Sample the image's own background (a corner pixel) so the inset around the
+    // smaller brain is filled seamlessly — no transparent gap, no visible seam.
+    let bg = '#0e0e11';
+    const probe = document.createElement('canvas');
+    probe.width = img.width;
+    probe.height = img.height;
+    const pctx = probe.getContext('2d');
+    if (pctx) {
+      pctx.drawImage(img, 0, 0);
+      try {
+        const [r, g, b] = pctx.getImageData(0, 0, 1, 1).data;
+        bg = `rgb(${r}, ${g}, ${b})`;
+      } catch {
+        /* tainted canvas (não ocorre com asset local): mantém o fallback */
+      }
+    }
+
     ctx.clearRect(0, 0, size, size);
     roundRect(0, 0, size, size, radius);
     ctx.save();
     ctx.clip();
-    // Cover the whole rounded tile with the image — no white background, no padding.
-    const scale = Math.max(size / img.width, size / img.height);
+    // Fill the rounded tile with the image's own background, then draw the brain
+    // 15% smaller than "cover" (× 0.85), centered — leaving an even inset around it.
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, size, size);
+    const scale = Math.max(size / img.width, size / img.height) * 0.85;
     const w = img.width * scale;
     const h = img.height * scale;
     ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
