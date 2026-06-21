@@ -237,6 +237,7 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
         {flipped && (
           <motion.div
             key="ai-buttons"
+            data-ai-below
             className="xl:hidden absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
             style={{ top: '100%', zIndex: 0 }}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: -24 }}

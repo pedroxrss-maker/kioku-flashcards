@@ -7,6 +7,7 @@ import { pushToast } from '../../lib/toast';
 import { scheduleAchievementCheck } from '../gamification/achievements';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
+import { useIsMobile } from '../../lib/useIsMobile';
 import { DECK_COLORS } from '../../db/factories';
 import { DeckIconPicker } from './deckIcons';
 import type { Algorithm } from '../../db/types';
@@ -19,6 +20,9 @@ interface CreateDeckModalProps {
 export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
   const settings = useSettings();
   const nav = useNavigate();
+  // On phones, don't auto-focus the name field — that pops the keyboard up the
+  // moment the modal opens, covering the form. Desktop keeps the focus for speed.
+  const isMobile = useIsMobile();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [color, setColor] = useState<string>(DECK_COLORS[0]);
@@ -102,7 +106,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
             id="deck-name"
             className="field"
             value={name}
-            autoFocus
+            autoFocus={!isMobile}
             placeholder="Ex.: Inglês — Phrasal Verbs"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {

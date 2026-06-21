@@ -51,6 +51,11 @@ export function ReviewSession() {
   const lastAutoPlayedId = useRef<string | null>(null);
   const [frontAudioUrl, setFrontAudioUrl] = useState<string | null>(null);
   const [backAudioUrl, setBackAudioUrl] = useState<string | null>(null);
+  // Max card height on narrow layouts (< xl, where the AI buttons sit BELOW the
+  // card). Capping it — and zooming the card's content to fit — keeps the AI row
+  // from colliding with the grade buttons. Undefined on xl+ (AI buttons are in a
+  // side column there, so the card may grow freely).
+  const [cardMaxH, setCardMaxH] = useState<number | undefined>(undefined);
   const reduce = useReducedMotion();
 
   // The current card's own deck drives audio + TTS language (in a parent session
@@ -247,6 +252,33 @@ export function ReviewSession() {
     void prefetchMediaHtml(next.front);
     void prefetchMediaHtml(next.back);
   }, [next]);
+
+  // Compute the card-height cap (see `cardMaxH`). The card is vertically centered
+  // in its area, so the AI button row's height has to be cleared on BOTH sides
+  // (×2) for it to stay above the grade buttons. Recomputed on flip (so the AI
+  // row can be measured once it mounts) and on resize. Constants mirror the fixed
+  // chrome around the card so the cap stays stable across the flip.
+  useEffect(() => {
+    const compute = () => {
+      if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+      if (!window.matchMedia('(max-width: 1279px)').matches) {
+        setCardMaxH(undefined); // xl+: AI buttons are in a side column — no cap
+        return;
+      }
+      const HEADER_H = 56; // top bar (h-14)
+      const BOTTOM_H = 150; // grade / "mostrar resposta" action area + its padding
+      const AREA_PAD_Y = 48; // the card area's py-6
+      const AI_GAP = 12; // the AI button row's offset below the card
+      const aiBelow = document.querySelector('[data-ai-below]') as HTMLElement | null;
+      const aiRowH = aiBelow?.offsetHeight ?? 64;
+      const contentBoxH = window.innerHeight - HEADER_H - BOTTOM_H - AREA_PAD_Y;
+      const cap = contentBoxH - 2 * (AI_GAP + aiRowH);
+      setCardMaxH(Math.max(240, Math.round(cap)));
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, [flipped, current?.id]);
 
   // Award XP once the session finishes (XP_REWARDS.reviewCard per card rated),
   // then celebrate a level-up. Level-up is decided from the warm cached XP/level
@@ -490,6 +522,7 @@ export function ReviewSession() {
                     back={current.back}
                     flipped={flipped}
                     onFlip={flip}
+                    maxHeight={cardMaxH}
                     audioEnabled={audioOn}
                     hasFrontAudio={hasFrontAudio}
                     onReplayFrontAudio={replayFrontAudio}

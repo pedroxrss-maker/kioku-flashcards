@@ -416,7 +416,7 @@ export function GenerateDeck() {
                       role="tab"
                       aria-selected={active}
                       onClick={() => selectMode(m.id)}
-                      className="relative py-1.5 px-2 rounded-[var(--r-sm)] text-center transition-colors inline-flex items-center justify-center gap-1.5"
+                      className="relative py-1.5 px-1 sm:px-2 rounded-[var(--r-sm)] text-center transition-colors inline-flex items-center justify-center min-w-0"
                       style={{ color: active ? '#fff' : 'var(--muted)' }}
                     >
                       {active && (
@@ -432,9 +432,12 @@ export function GenerateDeck() {
                           }}
                         />
                       )}
-                      <span className="relative z-[1] inline-flex items-center gap-1.5">
-                        <Icon size={14} />
-                        <span className="text-sm font-semibold">{m.label}</span>
+                      {/* Em telas estreitas o ícone fica ACIMA do rótulo (e o texto
+                          menor), senão "Anotações" estoura a célula de 1/4 e os
+                          rótulos se sobrepõem. A partir de sm volta lado a lado. */}
+                      <span className="relative z-[1] inline-flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 min-w-0">
+                        <Icon size={14} className="shrink-0" />
+                        <span className="text-[11px] sm:text-sm font-semibold leading-tight">{m.label}</span>
                       </span>
                     </button>
                   );

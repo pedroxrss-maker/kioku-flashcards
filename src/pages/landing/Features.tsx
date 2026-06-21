@@ -390,7 +390,7 @@ function DemoScreen({ children }: { children: ReactNode }) {
   );
 }
 
-function FeatureCard({ icon: Icon, title, desc, Demo }: Feature) {
+function FeatureCard({ icon: Icon, title, desc, Demo, autoOpen = false }: Feature & { autoOpen?: boolean }) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState(false);
@@ -398,7 +398,16 @@ function FeatureCard({ icon: Icon, title, desc, Demo }: Feature) {
   // tela escondida atrás, que demonstra o recurso. A demo só roda enquanto o
   // bloco está visível (ou em hover). Sem dobra de página.
   const visible = useInView(ref, { amount: 0.05 });
-  const demoOn = hover || (visible && !reduce);
+  // O primeiro card (`autoOpen`) abre sozinho ao chegar na seção — mobile E
+  // desktop —, levantando a capa devagar para revelar a demo por trás. Dispara
+  // uma vez, quando metade do card fica visível.
+  const reached = useInView(ref, { amount: 0.5, once: true });
+  const autoLifted = autoOpen && reached;
+  const open = hover || autoLifted;
+  const demoOn = open || (visible && !reduce);
+  // A abertura automática (sem hover) é mais lenta e com um respiro antes, para
+  // ler como "abrindo"; o hover continua rápido.
+  const autoReveal = autoLifted && !hover;
 
   return (
     <div
@@ -418,8 +427,12 @@ function FeatureCard({ icon: Icon, title, desc, Demo }: Feature) {
         className="absolute inset-0 p-4 md:p-6"
         style={{ background: '#e8e6e1', border: '1px solid #d6d4ce', borderRadius: 'var(--r-lg)', color: '#17171b' }}
         initial={false}
-        animate={reduce ? { opacity: hover ? 0 : 1 } : { y: hover ? '-100%' : '0%' }}
-        transition={{ duration: reduce ? 0.15 : 0.55, ease: [0.22, 1, 0.36, 1] }}
+        animate={reduce ? { opacity: open ? 0 : 1 } : { y: open ? '-100%' : '0%' }}
+        transition={{
+          duration: reduce ? 0.15 : autoReveal ? 1.1 : 0.55,
+          ease: [0.22, 1, 0.36, 1],
+          delay: !reduce && autoReveal ? 0.45 : 0,
+        }}
       >
         <span
           className="icon-tile mb-4"
@@ -454,9 +467,9 @@ export function Features() {
       </Reveal>
 
       <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-7 md:gap-x-11 gap-y-5 md:gap-y-6 mt-10">
-        {FEATURES.map((f) => (
+        {FEATURES.map((f, i) => (
           <StaggerCard key={f.title} className="h-full">
-            <FeatureCard {...f} />
+            <FeatureCard {...f} autoOpen={i === 0} />
           </StaggerCard>
         ))}
       </StaggerGroup>
