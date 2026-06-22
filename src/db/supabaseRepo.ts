@@ -31,6 +31,7 @@ import type {
   CardState,
   DailyProgress,
   Deck,
+  DeckCountSet,
   DeckInput,
   FsrsFields,
   GamificationState,
@@ -228,6 +229,17 @@ function rowToLog(r: LogRow): ReviewLog {
 }
 
 /* ============================================================ repository == */
+// Explicit column lists (never `select=*`): a card carries heavy HTML + inline
+// audio in front/back, so we only ever pull those columns when we actually render
+// a card (review / card list), and name the light columns elsewhere.
+const CARD_COLS = 'id, deck_id, front, back, state, due, sm2, fsrs, created_at, updated_at, audio_path';
+const LOG_COLS = 'id, card_id, deck_id, rating, reviewed_at, duration_ms, prev_state, scheduled_days';
+
+// Cap for a single review session pulled from the server, so an unlimited deck
+// with a huge backlog can't drag the whole deck into memory. Normal (capped)
+// decks never hit this — their daily limit is smaller.
+const REVIEW_SESSION_CAP = 5000;
+
 export class SupabaseRepository implements KiokuRepository {
   // ---------------------------------------------------------------- decks --
   async listDecks(): Promise<Deck[]> {
@@ -300,39 +312,102 @@ export class SupabaseRepository implements KiokuRepository {
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from('cards')
-        .select('*')
+        .select(CARD_COLS)
         .eq('deck_id', deckId)
         .order('created_at', { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) readFail(error);
-      const batch = (data ?? []) as CardRow[];
+      const batch = (data ?? []) as unknown as CardRow[];
       rows.push(...batch);
       if (batch.length < PAGE) break;
     }
     return rows.map(rowToCard);
   }
   async getCard(id: string): Promise<Card | undefined> {
-    const { data, error } = await supabase.from('cards').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('id', id).maybeSingle();
     if (error) readFail(error);
     return data ? rowToCard(data as CardRow) : undefined;
   }
   async allCards(): Promise<Card[]> {
-    // Page through so we never silently drop cards past the API's ~1000-row cap —
-    // the deck panel/counts (incl. new-card counts) must see EVERY card, not just
-    // the first page. Without this, big decks show 0 novos in the tree.
+    // Page through so we never silently drop cards past the API's ~1000-row cap.
+    // NOTE: prefer deckListCounts() / dueQueueCards() — this whole-table pull is
+    // only for the few screens that still need card-level data (kept off startup).
     const PAGE = 1000;
     const rows: CardRow[] = [];
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from('cards')
-        .select('*')
+        .select(CARD_COLS)
         .order('created_at', { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) readFail(error);
-      const batch = (data ?? []) as CardRow[];
+      const batch = (data ?? []) as unknown as CardRow[];
       rows.push(...batch);
       if (batch.length < PAGE) break;
     }
+    return rows.map(rowToCard);
+  }
+  /**
+   * Per-deck counts via Postgres HEAD counts — zero card rows transferred, just
+   * the numbers. Five small counts per deck (new / learning / review-due / any-due
+   * / total), all in parallel, so the deck list & dashboard render without ever
+   * downloading cards. `nowMs` is the "due" cutoff (caller passes local now).
+   */
+  async deckListCounts(deckIds: string[], nowMs: number): Promise<Record<string, DeckCountSet>> {
+    const nowIso = toIso(nowMs);
+    // Resolve a HEAD count query (head:true → no rows, just the number).
+    const countOf = async (
+      builder: PromiseLike<{ count: number | null; error: unknown }>,
+    ): Promise<number> => {
+      const { count, error } = await builder;
+      if (error) readFail(error);
+      return count ?? 0;
+    };
+    const head = () => supabase.from('cards').select('id', { count: 'exact', head: true });
+    const out: Record<string, DeckCountSet> = {};
+    await Promise.all(
+      deckIds.map(async (id) => {
+        const [newCount, learning, reviewDue, due, total] = await Promise.all([
+          countOf(head().eq('deck_id', id).eq('state', 'new')),
+          countOf(head().eq('deck_id', id).in('state', ['learning', 'relearning'])),
+          countOf(head().eq('deck_id', id).eq('state', 'review').lte('due', nowIso)),
+          countOf(head().eq('deck_id', id).lte('due', nowIso)),
+          countOf(head().eq('deck_id', id)),
+        ]);
+        out[id] = { newCount, learning, reviewDue, due, total };
+      }),
+    );
+    return out;
+  }
+  /**
+   * The cards a review session actually needs from ONE deck: due learning/
+   * relearning (ungated), due reviews (earliest-first, capped), and new cards
+   * (insertion order, capped). Never pulls the whole deck. Caps are finite (the
+   * caller resolves "unlimited" to REVIEW_SESSION_CAP).
+   */
+  async dueQueueCards(
+    deckId: string,
+    opts: { reviewLimit: number; newLimit: number; nowMs: number },
+  ): Promise<Card[]> {
+    const nowIso = toIso(opts.nowMs);
+    const reviewLimit = Math.max(0, Math.min(opts.reviewLimit, REVIEW_SESSION_CAP));
+    const newLimit = Math.max(0, Math.min(opts.newLimit, REVIEW_SESSION_CAP));
+    const base = () => supabase.from('cards').select(CARD_COLS).eq('deck_id', deckId);
+    const [learnRes, reviewRes, newRes] = await Promise.all([
+      base().in('state', ['learning', 'relearning']).lte('due', nowIso),
+      reviewLimit > 0
+        ? base().eq('state', 'review').lte('due', nowIso).order('due', { ascending: true }).limit(reviewLimit)
+        : Promise.resolve({ data: [], error: null }),
+      newLimit > 0
+        ? base().eq('state', 'new').order('created_at', { ascending: true }).limit(newLimit)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    for (const r of [learnRes, reviewRes, newRes]) if (r.error) readFail(r.error);
+    const rows = [
+      ...((learnRes.data ?? []) as unknown as CardRow[]),
+      ...((reviewRes.data ?? []) as unknown as CardRow[]),
+      ...((newRes.data ?? []) as unknown as CardRow[]),
+    ];
     return rows.map(rowToCard);
   }
   async createCard(input: CardInput): Promise<Card> {
@@ -408,6 +483,20 @@ export class SupabaseRepository implements KiokuRepository {
     if (error) readFail(error);
     return count ?? 0;
   }
+  async countReviews(): Promise<number> {
+    // All-time review total via a HEAD count (no log rows transferred).
+    const { count, error } = await supabase
+      .from('review_logs')
+      .select('id', { count: 'exact', head: true });
+    if (error) readFail(error);
+    return count ?? 0;
+  }
+  async myStreak(): Promise<number> {
+    // Server-side current streak (America/Sao_Paulo), no time-window ceiling.
+    const { data, error } = await supabase.rpc('my_streak');
+    if (error) readFail(error);
+    return typeof data === 'number' ? data : 0;
+  }
 
   // --------------------------------------------------------------- review --
   async saveReview(card: Card, log: ReviewLog): Promise<void> {
@@ -472,11 +561,11 @@ export class SupabaseRepository implements KiokuRepository {
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from('review_logs')
-        .select('*')
+        .select(LOG_COLS)
         .order('reviewed_at', { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) readFail(error);
-      const batch = (data ?? []) as LogRow[];
+      const batch = (data ?? []) as unknown as LogRow[];
       rows.push(...batch);
       if (batch.length < PAGE) break;
     }
@@ -485,19 +574,19 @@ export class SupabaseRepository implements KiokuRepository {
   async logsSince(ts: number): Promise<ReviewLog[]> {
     const { data, error } = await supabase
       .from('review_logs')
-      .select('*')
+      .select(LOG_COLS)
       .gte('reviewed_at', toIso(ts));
     if (error) readFail(error);
-    return ((data ?? []) as LogRow[]).map(rowToLog);
+    return ((data ?? []) as unknown as LogRow[]).map(rowToLog);
   }
   async deckLogsSince(deckId: string, ts: number): Promise<ReviewLog[]> {
     const { data, error } = await supabase
       .from('review_logs')
-      .select('*')
+      .select(LOG_COLS)
       .eq('deck_id', deckId)
       .gte('reviewed_at', toIso(ts));
     if (error) readFail(error);
-    return ((data ?? []) as LogRow[]).map(rowToLog);
+    return ((data ?? []) as unknown as LogRow[]).map(rowToLog);
   }
 
   // ---------------------------------------------------------------- media --

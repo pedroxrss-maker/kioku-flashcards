@@ -12,6 +12,7 @@ import {
   pathFromGroupToken,
 } from '../../lib/deckTree';
 import { buildInitialQueue, reinsertLearning } from './queue';
+import { UNLIMITED_PER_DAY } from '../../db/types';
 import type { Card, Deck, Rating } from '../../db/types';
 
 export interface SessionCounters {
@@ -161,8 +162,15 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
       for (const m of members) {
         decksMap.set(m.id, m);
         schedulers.set(m.id, schedulerForDeck(m));
-        const cards = await repo.listCards(m.id);
         const dp = await repo.dailyProgress(m.id, dayStart);
+        // Pull ONLY this deck's due/new cards (capped to today's remaining limits),
+        // never the whole deck. buildInitialQueue then orders/shuffles them exactly
+        // as before. Unlimited decks pass Infinity; the repo clamps to a sane cap.
+        const reviewLimit =
+          m.reviewsPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, m.reviewsPerDay - dp.reviewsDone);
+        const newLimit =
+          m.newPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, m.newPerDay - dp.newDone);
+        const cards = await repo.dueQueueCards(m.id, { reviewLimit, newLimit, nowMs: now });
         perDeckQueues.push(
           buildInitialQueue({ deck: m, cards, newDone: dp.newDone, reviewsDone: dp.reviewsDone, now }),
         );

@@ -4,9 +4,8 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Atom, Download, LayoutGrid, Plus, Search, Sparkles, Tag } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useAllCards, useDecks } from '../../db/hooks';
+import { useDeckCounts, useDecks } from '../../db/hooks';
 import { repo } from '../../db/repositories';
-import { groupCardsByDeck } from '../../lib/deckStats';
 import { Panel } from '../../components/Panel';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { DeckTree, DECK_TABLE } from './DeckTree';
@@ -38,7 +37,8 @@ const SECTION_SLIDE = {
 
 export function DeckBrowser() {
   const decks = useDecks();
-  const allCards = useAllCards();
+  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
+  const counts = useDeckCounts(deckIds);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [catDir, setCatDir] = useState(0);
@@ -46,7 +46,6 @@ export function DeckBrowser() {
   const [settingsDeck, setSettingsDeck] = useState<Deck | null>(null);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
-  const byDeck = useMemo(() => groupCardsByDeck(allCards), [allCards]);
   const categories = useMemo(() => {
     const set = new Set<string>();
     decks.forEach((d) => d.category && set.add(d.category));
@@ -169,7 +168,7 @@ export function DeckBrowser() {
                 exit="exit"
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
-                <DeckGrid decks={byCategory} cardsByDeck={byDeck} query={query} />
+                <DeckGrid decks={byCategory} counts={counts} query={query} />
               </motion.div>
             </AnimatePresence>
           </div>
@@ -238,7 +237,7 @@ export function DeckBrowser() {
                   <DeckTree
                     variant="table"
                     decks={byCategory}
-                    cardsByDeck={byDeck}
+                    counts={counts}
                     query={query}
                     onConfig={(d) => setSettingsDeck(d)}
                     onDelete={(d) => setDeckToDelete(d)}

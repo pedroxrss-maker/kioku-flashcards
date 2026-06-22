@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Bell } from 'lucide-react';
-import { useAllLogs, useDecks, useSettings } from '../db/hooks';
+import { useRecentLogs, useDecks, useSettings } from '../db/hooks';
 import { studiedToday } from '../features/stats/compute';
 import { cn } from '../lib/cn';
 import { APP_VERSION, NAV_ITEMS } from './nav';
@@ -36,7 +36,8 @@ function navItemClass({ isActive }: { isActive: boolean }) {
 
 /** Compact daily-goal: a small progress ring with today's count + the goal. */
 function DailyGoalMini() {
-  const logs = useAllLogs();
+  // Only today's count is needed — a 2-day window, never the whole log.
+  const logs = useRecentLogs(2);
   const settings = useSettings();
   const goal = settings?.dailyGoal ?? 40;
   const today = studiedToday(logs);

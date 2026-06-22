@@ -6,6 +6,7 @@ import type {
   CardInput,
   DailyProgress,
   Deck,
+  DeckCountSet,
   DeckInput,
   GamificationState,
   MediaBlob,
@@ -42,12 +43,23 @@ export interface KiokuRepository {
   putCard(card: Card): Promise<void>;
   deleteCard(id: string): Promise<void>;
   countCards(deckId: string): Promise<number>;
+  /** Per-deck counts via server-side HEAD counts — no card rows transferred. */
+  deckListCounts(deckIds: string[], nowMs: number): Promise<Record<string, DeckCountSet>>;
+  /** The due/new cards a review session needs from one deck (never the whole deck). */
+  dueQueueCards(
+    deckId: string,
+    opts: { reviewLimit: number; newLimit: number; nowMs: number },
+  ): Promise<Card[]>;
 
   // review
   saveReview(card: Card, log: ReviewLog): Promise<void>;
   /** Undo a review: restore the card's pre-review state and delete its log. */
   undoReview(card: Card, logId: string): Promise<void>;
   dailyProgress(deckId: string, dayStart: number): Promise<DailyProgress>;
+  /** All-time review count via a server-side HEAD count (no log rows). */
+  countReviews(): Promise<number>;
+  /** The signed-in user's current streak via the my_streak() RPC (no log rows). */
+  myStreak(): Promise<number>;
   allLogs(): Promise<ReviewLog[]>;
   logsSince(ts: number): Promise<ReviewLog[]>;
   deckLogsSince(deckId: string, ts: number): Promise<ReviewLog[]>;

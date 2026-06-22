@@ -2,11 +2,10 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { DeckAvatar } from './deckIcons';
 import { useNestDrag, NestGhost } from './nestDrag';
-import type { Deck } from '../../db/types';
-import type { DeckCounts } from '../../lib/deckStats';
+import type { Deck, DeckCountSet } from '../../db/types';
 
 /** The three Anki counts (novos / aprendendo / a revisar), left-aligned. */
-export function GridCounts({ counts }: { counts: DeckCounts }) {
+export function GridCounts({ counts }: { counts: DeckCountSet }) {
   return (
     <div className="flex items-center gap-3 mono">
       <CountVal value={counts.newCount} color="var(--accent-blue)" />
@@ -71,7 +70,7 @@ export function DeckGridCard({
   onNest,
 }: {
   deck: Deck;
-  counts: DeckCounts;
+  counts: DeckCountSet;
   subdeckCount?: number;
   expanded?: boolean;
   onToggleSubdecks?: () => void;

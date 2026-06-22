@@ -1,11 +1,13 @@
 import { useQuery } from './store';
 import type { QueryResult } from './store';
 import { repo } from './repositories';
+import { startOfLocalDay, DAY_MS } from '../lib/date';
 import type {
   AchievementUnlock,
   AppSettings,
   Card,
   Deck,
+  DeckCountSet,
   GamificationState,
   ReviewLog,
 } from './types';
@@ -49,6 +51,60 @@ export function useAllCards(): Card[] {
   return useQuery('cards:all', () => repo.allCards(), EMPTY_CARDS).data;
 }
 
+const EMPTY_COUNTS: Record<string, DeckCountSet> = {};
+
+/**
+ * Per-deck counts (new / learning / review-due / due / total) via server-side
+ * HEAD counts — NO card rows downloaded. Keyed by the deck ids so it refetches
+ * when the deck set changes or after any write (invalidate). `due` uses the fetch
+ * time as "now". Pass the deck ids whose counts you need (e.g. all decks for the
+ * list, or a subtree for a parent deck).
+ */
+export function useDeckCounts(deckIds: string[]): Record<string, DeckCountSet> {
+  const key = `deckCounts:${[...deckIds].sort().join(',')}`;
+  return useQuery(
+    key,
+    () => (deckIds.length ? repo.deckListCounts(deckIds, Date.now()) : Promise.resolve(EMPTY_COUNTS)),
+    EMPTY_COUNTS,
+  ).data;
+}
+
+/** All-time review total via a HEAD count (no log rows). */
+export function useReviewCount(): number {
+  return useQuery('reviews:count', () => repo.countReviews(), 0).data;
+}
+
+/** Current streak via the server-side my_streak() RPC — accurate with no
+ *  time-window ceiling, no review rows downloaded. */
+export function useStreak(): number {
+  return useQuery('streak', () => repo.myStreak(), 0).data;
+}
+
+/**
+ * Reviews from the last `days` days only (bounded window — never the whole log
+ * table). Keyed by the day count so it's stable across renders and refetches on
+ * write. Used for streak / recent-activity stats off the hot path.
+ */
+export function useRecentLogs(days: number): ReviewLog[] {
+  return useQuery(
+    `logs:recent:${days}`,
+    () => repo.logsSince(startOfLocalDay() - days * DAY_MS),
+    EMPTY_LOGS,
+  ).data;
+}
+
+/** One deck's reviews from the last `days` days (bounded; for the deck heatmap). */
+export function useDeckRecentLogs(deckId: string | undefined, days: number): ReviewLog[] {
+  return useQuery(
+    deckId ? `logs:deck:${deckId}:${days}` : 'logs:deck:none',
+    () =>
+      deckId
+        ? repo.deckLogsSince(deckId, startOfLocalDay() - days * DAY_MS)
+        : Promise.resolve(EMPTY_LOGS),
+    EMPTY_LOGS,
+  ).data;
+}
+
 export function useAllLogs(): ReviewLog[] {
   return useQuery('logs:all', () => repo.allLogs(), EMPTY_LOGS).data;
 }
@@ -78,12 +134,14 @@ export function useAchievements(): AchievementUnlock[] {
  * hooks above, so pages read warm data after the gate resolves.
  */
 export function useInitialLoad(): { ready: boolean; error: unknown; reload: () => void } {
+  // Startup loads ONLY deck metadata + settings — never card rows or the whole
+  // review log. Counts come from server-side HEAD counts (useDeckCounts) and the
+  // review session pulls just its due cards, so a 28k-card account no longer
+  // bulk-downloads decks on load.
   const decks = useQuery('decks', () => repo.listDecks(), EMPTY_DECKS);
-  const cards = useQuery('cards:all', () => repo.allCards(), EMPTY_CARDS);
-  const logs = useQuery('logs:all', () => repo.allLogs(), EMPTY_LOGS);
   const settings = useQuery<AppSettings | undefined>('settings', () => repo.getSettings(), undefined);
 
-  const all = [decks, cards, logs, settings];
+  const all = [decks, settings];
   const ready = all.every((q) => q.loaded);
   const error = ready ? null : (all.find((q) => q.error !== undefined)?.error ?? null);
   const reload = () => all.forEach((q) => q.reload());

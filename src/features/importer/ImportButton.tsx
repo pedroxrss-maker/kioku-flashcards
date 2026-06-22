@@ -6,6 +6,7 @@ import { Loader2, Upload } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { recordFeatureUse } from '../gamification/achievements';
+import { beginAppBusy } from '../../lib/appBusy';
 import type { ImportProgress, ImportResult } from './apkg-import';
 
 interface ImportButtonProps {
@@ -80,49 +81,54 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
     setProgress(null);
     const controller = new AbortController();
     abortRef.current = controller;
-
-    // Read the FULL file into memory NOW, synchronously within this user-gesture
-    // handler, before any deck parsing or other awaits. Large or cloud-synced
-    // files (OneDrive/Drive) can lose their File reference if the read is
-    // deferred, which surfaces as "the requested file could not be read".
-    let bytes: Uint8Array;
-    try {
-      bytes = await readFileBytes(file);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[import] não foi possível ler o arquivo', err);
-      abortRef.current = null;
-      setBusy(false);
-      setError(
-        'Não foi possível ler o arquivo. Copie o .apkg/.colpkg para uma pasta local ' +
-          '(Área de Trabalho ou Downloads) e tente novamente. Evite pastas sincronizadas ' +
-          'na nuvem (OneDrive, Google Drive), que podem não ter o arquivo totalmente baixado.',
-      );
-      return;
-    }
+    // Hold the global busy guard for the WHOLE import (read → parse → upload →
+    // insert), so a service-worker update can NEVER reload the page mid-import.
+    // Released in the finally below on success, error AND cancel.
+    const releaseBusy = beginAppBusy();
 
     try {
-      const { importApkg } = await import('./apkg-import');
-      const res = await importApkg(
-        bytes,
-        file.name,
-        (p) => {
-          if (p.total > 0) setProgress(p);
-        },
-        controller.signal,
-      );
-      setResult(res);
-      void recordFeatureUse('import');
-    } catch (err) {
-      // A user cancel aborts the controller; the import rolls itself back, so we
-      // just close the dialog silently instead of showing an error.
-      if (!controller.signal.aborted) {
-        setError(err instanceof Error ? err.message : 'Falha ao importar o arquivo.');
+      // Read the FULL file into memory NOW, synchronously within this user-gesture
+      // handler, before any deck parsing or other awaits. Large or cloud-synced
+      // files (OneDrive/Drive) can lose their File reference if the read is
+      // deferred, which surfaces as "the requested file could not be read".
+      let bytes: Uint8Array;
+      try {
+        bytes = await readFileBytes(file);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[import] não foi possível ler o arquivo', err);
+        setError(
+          'Não foi possível ler o arquivo. Copie o .apkg/.colpkg para uma pasta local ' +
+            '(Área de Trabalho ou Downloads) e tente novamente. Evite pastas sincronizadas ' +
+            'na nuvem (OneDrive, Google Drive), que podem não ter o arquivo totalmente baixado.',
+        );
+        return;
+      }
+
+      try {
+        const { importApkg } = await import('./apkg-import');
+        const res = await importApkg(
+          bytes,
+          file.name,
+          (p) => {
+            if (p.total > 0) setProgress(p);
+          },
+          controller.signal,
+        );
+        setResult(res);
+        void recordFeatureUse('import');
+      } catch (err) {
+        // A user cancel aborts the controller; the import rolls itself back, so we
+        // just close the dialog silently instead of showing an error.
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Falha ao importar o arquivo.');
+        }
       }
     } finally {
       abortRef.current = null;
       setBusy(false);
       setProgress(null);
+      releaseBusy();
     }
   }
 

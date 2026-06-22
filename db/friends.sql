@@ -221,6 +221,18 @@ revoke all on function public.record_ever_friends(uuid, uuid)     from public, a
 revoke all on function public.were_ever_friends(uuid, uuid)       from public, anon, authenticated;
 revoke all on function public.compute_streak(uuid, text)          from public, anon, authenticated;
 
+-- my_streak(): thin PUBLIC wrapper so a signed-in user can read THEIR OWN current
+-- streak with no time-window ceiling. compute_streak stays REVOKEd from
+-- authenticated (it takes an arbitrary user id); this wrapper accepts NO argument
+-- and is hard-scoped to auth.uid(), so a caller can only ever get their own streak.
+-- SECURITY DEFINER is needed only to reach the revoked helper.
+create or replace function public.my_streak()
+returns integer language sql stable security definer set search_path = public as $$
+  select public.compute_streak(auth.uid());
+$$;
+revoke all on function public.my_streak() from public, anon;
+grant execute on function public.my_streak() to authenticated, service_role;
+
 
 -- ----------------------------------------------------------------------------
 -- 5) Enviar convite (por e-mail). Resolve para conta se existir; senao guarda

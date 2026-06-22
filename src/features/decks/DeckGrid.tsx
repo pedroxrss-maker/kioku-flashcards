@@ -3,14 +3,16 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Folder } from 'lucide-react';
-import { aggregateCounts, buildDeckTree, deckPathOf, nestDeckPaths } from '../../lib/deckTree';
+import { aggregateCountSet, buildDeckTree, deckPathOf, emptyCountSet, nestDeckPaths } from '../../lib/deckTree';
 import type { DeckTreeNode } from '../../lib/deckTree';
-import { countCards } from '../../lib/deckStats';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DeckGridCard, GridCounts, SubdeckToggle } from './DeckGridCard';
 import { useNestDrag } from './nestDrag';
-import type { Card, Deck } from '../../db/types';
+import type { Deck, DeckCountSet } from '../../db/types';
+
+/** No card rows: structure comes from deck metadata, numbers from the counts map. */
+const NO_CARDS = new Map<string, never[]>();
 
 /**
  * Mobile-only deck grid, hierarchy-aware. Two INDEPENDENT columns (masonry): a
@@ -20,12 +22,13 @@ import type { Card, Deck } from '../../db/types';
  */
 export function DeckGrid({
   decks,
-  cardsByDeck,
+  counts,
   query,
   maxRows,
 }: {
   decks: Deck[];
-  cardsByDeck: Map<string, Card[]>;
+  /** Per-deck counts from server-side HEAD counts (no card rows). */
+  counts: Record<string, DeckCountSet>;
   query?: string;
   /** Cap the number of top-level tiles (used on Home). */
   maxRows?: number;
@@ -41,8 +44,8 @@ export function DeckGrid({
     [decks, deckPaths],
   );
   const roots = useMemo(
-    () => buildDeckTree(decks, deckPaths, cardsByDeck, settings?.deckOrder),
-    [decks, deckPaths, cardsByDeck, settings?.deckOrder],
+    () => buildDeckTree(decks, deckPaths, NO_CARDS, settings?.deckOrder),
+    [decks, deckPaths, settings?.deckOrder],
   );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (path: string) =>
@@ -53,7 +56,6 @@ export function DeckGrid({
       return next;
     });
 
-  const now = Date.now();
   const q = query?.toLowerCase().trim() ?? '';
 
   // Search flattens to matching decks (name or full path), no nesting.
@@ -76,7 +78,7 @@ export function DeckGrid({
           <DeckGridCard
             key={d.id}
             deck={d}
-            counts={countCards(cardsByDeck.get(d.id) ?? [], now, d)}
+            counts={counts[d.id] ?? emptyCountSet()}
             nestPath={deckPathOf(d, deckPaths)}
             onNest={onNest}
           />
@@ -93,7 +95,7 @@ export function DeckGrid({
         <GridNode
           key={node.path}
           node={node}
-          now={now}
+          counts={counts}
           expandedSet={expanded}
           toggle={toggle}
           onNest={onNest}
@@ -120,25 +122,25 @@ function TwoColumns<T>({ items, render }: { items: T[]; render: (item: T) => Rea
 
 function GridNode({
   node,
-  now,
+  counts,
   expandedSet,
   toggle,
   onNest,
 }: {
   node: DeckTreeNode;
-  now: number;
+  counts: Record<string, DeckCountSet>;
   expandedSet: Set<string>;
   toggle: (path: string) => void;
   onNest: (dragPath: string, targetPath: string) => void;
 }) {
   const reduce = useReducedMotion();
-  const counts = aggregateCounts(node, now);
+  const c = aggregateCountSet(node, counts);
   const hasKids = node.children.length > 0;
   const open = expandedSet.has(node.path);
 
   if (!hasKids) {
     return node.deck ? (
-      <DeckGridCard deck={node.deck} counts={counts} nestPath={node.path} onNest={onNest} />
+      <DeckGridCard deck={node.deck} counts={c} nestPath={node.path} onNest={onNest} />
     ) : null;
   }
 
@@ -149,7 +151,7 @@ function GridNode({
       {node.deck ? (
         <DeckGridCard
           deck={node.deck}
-          counts={counts}
+          counts={c}
           subdeckCount={node.children.length}
           expanded={open}
           onToggleSubdecks={() => toggle(node.path)}
@@ -159,7 +161,7 @@ function GridNode({
       ) : (
         <FolderCard
           node={node}
-          counts={counts}
+          counts={c}
           expanded={open}
           onToggle={() => toggle(node.path)}
           onNest={onNest}
@@ -183,7 +185,7 @@ function GridNode({
                 <GridNode
                   key={child.path}
                   node={child}
-                  now={now}
+                  counts={counts}
                   expandedSet={expandedSet}
                   toggle={toggle}
                   onNest={onNest}
@@ -206,7 +208,7 @@ function FolderCard({
   onNest,
 }: {
   node: DeckTreeNode;
-  counts: ReturnType<typeof aggregateCounts>;
+  counts: DeckCountSet;
   expanded: boolean;
   onToggle: () => void;
   onNest: (dragPath: string, targetPath: string) => void;

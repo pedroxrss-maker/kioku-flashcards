@@ -10,9 +10,10 @@ import { DeckAvatar } from './deckIcons';
 import { AlgoBadge } from './AlgoBadge';
 import { CardCounts } from './CardCounts';
 import {
-  aggregateCounts,
+  aggregateCountSet,
   buildDeckTree,
   deckPathOf,
+  emptyCountSet,
   groupReviewToken,
   isStudiable,
   nestDeckPaths,
@@ -20,7 +21,11 @@ import {
 import type { DeckTreeNode } from '../../lib/deckTree';
 import { useNestDrag, NestGhost } from './nestDrag';
 import { cn } from '../../lib/cn';
-import type { Card, Deck } from '../../db/types';
+import type { Deck, DeckCountSet } from '../../db/types';
+
+/** Empty deck->cards map: the tree only needs deck metadata for STRUCTURE; the
+ *  numbers come from the server-side counts map, so no card rows are loaded. */
+const NO_CARDS = new Map<string, never[]>();
 
 /**
  * Shared column classes for the Decks "table" layout, so the header row rendered
@@ -34,7 +39,8 @@ export const DECK_TABLE = {
 
 interface DeckTreeProps {
   decks: Deck[];
-  cardsByDeck: Map<string, Card[]>;
+  /** Per-deck counts from server-side HEAD counts (no card rows). */
+  counts: Record<string, DeckCountSet>;
   /** Free-text filter; when set the tree flattens to matching decks. */
   query?: string;
   /** Cap the number of rendered rows (used on Home). */
@@ -107,7 +113,7 @@ function Collapse({
 
 export function DeckTree({
   decks,
-  cardsByDeck,
+  counts,
   query,
   maxRows,
   variant = 'plain',
@@ -164,8 +170,8 @@ export function DeckTree({
   const listClass = table ? 'flex flex-col' : 'flex flex-col gap-1';
 
   const roots = useMemo(
-    () => buildDeckTree(decks, deckPaths, cardsByDeck, order),
-    [decks, deckPaths, cardsByDeck, order],
+    () => buildDeckTree(decks, deckPaths, NO_CARDS, order),
+    [decks, deckPaths, order],
   );
 
   function toggle(path: string) {
@@ -190,15 +196,13 @@ export function DeckTree({
     return (
       <div className={listClass}>
         {matches.map(({ deck, path }) => {
-          const counts = aggregateCounts(
-            { path, name: deck.name, depth: 0, deck, ownCards: cardsByDeck.get(deck.id) ?? [], children: [] },
-            Date.now(),
-          );
+          const node: DeckTreeNode = { path, name: deck.name, depth: 0, deck, ownCards: [], children: [] };
+          const rowCounts = counts[deck.id] ?? emptyCountSet();
           return (
             <DeckTreeRow
               key={deck.id}
-              node={{ path, name: deck.name, depth: 0, deck, ownCards: cardsByDeck.get(deck.id) ?? [], children: [] }}
-              counts={counts}
+              node={node}
+              counts={rowCounts}
               variant={variant}
               expanded={false}
               fullPath={path}
@@ -233,7 +237,7 @@ export function DeckTree({
         <div key={node.path}>
           <DeckTreeRow
             node={node}
-            counts={aggregateCounts(node, Date.now())}
+            counts={aggregateCountSet(node, counts)}
             variant={variant}
             expanded={expanded}
             fullPath={node.path}
@@ -274,7 +278,7 @@ export function DeckTree({
         <ReorderRow
           key={node.path}
           node={node}
-          counts={aggregateCounts(node, Date.now())}
+          counts={aggregateCountSet(node, counts)}
           variant={variant}
           table={table}
           expanded={!collapsed.has(node.path)}
@@ -335,7 +339,7 @@ function ReorderRow({
   renderChildren,
 }: {
   node: DeckTreeNode;
-  counts: ReturnType<typeof aggregateCounts>;
+  counts: DeckCountSet;
   variant: 'plain' | 'table';
   table: boolean;
   expanded: boolean;
@@ -419,7 +423,7 @@ function DeckTreeRow({
   reorderHandle,
 }: {
   node: DeckTreeNode;
-  counts: ReturnType<typeof aggregateCounts>;
+  counts: DeckCountSet;
   variant: 'plain' | 'table';
   expanded: boolean;
   fullPath: string;

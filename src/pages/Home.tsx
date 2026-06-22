@@ -17,7 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useAllCards, useAllLogs, useDecks, useSettings } from '../db/hooks';
+import { useDeckCounts, useDecks, useRecentLogs, useReviewCount, useSettings, useStreak } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { Panel } from '../components/Panel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -30,12 +30,11 @@ import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
 import { PlanUsageBadge } from '../features/usage/PlanUsageBadge';
 import { FriendsHeaderButton } from '../features/friends/FriendsHeaderButton';
-import { countCards, groupCardsByDeck } from '../lib/deckStats';
-import { hasHierarchy } from '../lib/deckTree';
+import { emptyCountSet, hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
 import { DeckGrid } from '../features/decks/DeckGrid';
 import { useIsMobile } from '../lib/useIsMobile';
-import { computeStreak, greeting } from '../lib/greeting';
+import { greeting } from '../lib/greeting';
 import { dayKey, startOfLocalDay } from '../lib/date';
 import {
   accuracySince,
@@ -46,6 +45,9 @@ import {
 import type { Deck } from '../db/types';
 
 const DAY = 86_400_000;
+// Recent-activity window for streak / 7-day stats (no full review-log download).
+// Covers streaks up to ~1 year; the all-time total uses a HEAD count instead.
+const RECENT_LOG_DAYS = 400;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -218,8 +220,14 @@ export function Home() {
   const { displayName, signOut } = useAuth();
   const settings = useSettings();
   const decks = useDecks();
-  const allCards = useAllCards();
-  const logs = useAllLogs();
+  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
+  const counts = useDeckCounts(deckIds);
+  // Bounded recent-activity window (no full review-log download). Streak/best are
+  // computed from this window; all-time total comes from a HEAD count.
+  const logs = useRecentLogs(RECENT_LOG_DAYS);
+  const totalReviews = useReviewCount();
+  // Current streak from the server (my_streak RPC) — no time-window ceiling.
+  const streak = useStreak();
 
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false); // mobile: a lupa expande a busca
@@ -236,13 +244,10 @@ export function Home() {
   // Drives both the time-of-day hero image and the greeting, live across boundaries.
   const dayPart = useDayPart();
 
-  const byDeck = useMemo(() => groupCardsByDeck(allCards), [allCards]);
-
   const deckRows = useMemo(() => {
-    const now = Date.now();
     return decks
       .map((deck) => {
-        const c = countCards(byDeck.get(deck.id) ?? [], now, deck);
+        const c = counts[deck.id] ?? emptyCountSet();
         return {
           deck,
           due: c.due,
@@ -252,7 +257,7 @@ export function Home() {
         };
       })
       .sort((a, b) => b.due - a.due);
-  }, [decks, byDeck]);
+  }, [decks, counts]);
 
   const filteredRows = deckRows.filter((r) =>
     r.deck.name.toLowerCase().includes(query.toLowerCase().trim()),
@@ -277,15 +282,15 @@ export function Home() {
     return {
       totalDecks: decks.length,
       decksMonth: decksCreatedThisMonth(decks),
-      totalReviews: logs.length,
+      totalReviews,
       reviews7d: reviewsSince(logs, weekAgo),
-      streak: computeStreak(keys),
+      streak,
       best: longestStreak(keys),
       accuracy7d: accuracySince(logs, weekAgo),
       today: todayCount,
       todayAvgSec: todayCount ? todayMs / todayCount / 1000 : 0,
     };
-  }, [logs, decks]);
+  }, [logs, decks, totalReviews, streak]);
 
   return (
     <div className="flex flex-col gap-6 rise">
@@ -504,7 +509,7 @@ export function Home() {
               {/* Mobile: 2-column grid of color deck cards (tap opens the deck
                   overview, no "Estudar" button; decks with subdecks expand). */}
               <div className="sm:hidden">
-                <DeckGrid decks={decks} cardsByDeck={byDeck} query={query} maxRows={6} />
+                <DeckGrid decks={decks} counts={counts} query={query} maxRows={6} />
               </div>
 
               {/* Desktop: the existing rows / nested collapsible tree. */}
@@ -512,7 +517,7 @@ export function Home() {
                 {hierarchical ? (
                   <DeckTree
                     decks={decks}
-                    cardsByDeck={byDeck}
+                    counts={counts}
                     query={query}
                     maxRows={8}
                     onConfig={(d) => setSettingsDeck(d)}

@@ -58,14 +58,14 @@ function WaveBars({ on, reduce, color = 'var(--accent)' }: DemoProps & { color?:
 
 /* ------------------------------------------------------------- 9 demos ----- */
 function DemoAI({ on, reduce }: DemoProps) {
-  // O card revela a resposta sozinho 1,5s DEPOIS que a seção entra em tela (uma
+  // O card revela a resposta sozinho 2,5s DEPOIS que a seção entra em tela (uma
   // vez), e fica revelado — independente de hover.
   const ref = useRef<HTMLDivElement>(null);
   const reached = useInView(ref, { amount: 0.5, once: true });
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (!reached || reduce) return;
-    const t = setTimeout(() => setRevealed(true), 1500);
+    const t = setTimeout(() => setRevealed(true), 2500);
     return () => clearTimeout(t);
   }, [reached, reduce]);
 
@@ -460,6 +460,7 @@ function FeatureCard({ icon: Icon, title, desc, Demo, autoOpen = false }: Featur
 }
 
 export function Features() {
+  const reduce = useReducedMotion();
   return (
     <section id="recursos" className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28" style={{ scrollMarginTop: 76 }}>
       <Reveal>
@@ -468,9 +469,16 @@ export function Features() {
             Recursos
           </h2>
           <p className="text-muted mt-3" style={{ lineHeight: 1.6 }}>
-            Tudo que você precisa para transformar estudo em memória de longo prazo. Passe o mouse para
-            ver cada recurso em ação.
+            Tudo que você precisa para transformar estudo em memória de longo prazo.
           </p>
+          <motion.p
+            className="mt-2"
+            style={{ lineHeight: 1.6, color: '#fff', fontWeight: 700 }}
+            animate={reduce ? undefined : { opacity: [1, 0.55, 1] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            Passe o mouse para ver cada recurso em ação.
+          </motion.p>
         </div>
       </Reveal>
 

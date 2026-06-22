@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { CalendarDays, Folder, Play, Plus, Search, Settings2, Volume2, Zap } from 'lucide-react';
 import { BackLink } from '../components/BackLink';
-import { useAllCards, useAllLogs, useCards, useDeckResource, useDecks, useSettings } from '../db/hooks';
+import { useCards, useDeckCounts, useDeckRecentLogs, useDeckResource, useDecks, useSettings } from '../db/hooks';
 import { Button } from '../components/Button';
 import { Panel } from '../components/Panel';
 import { Heatmap } from '../features/stats/Heatmap';
@@ -12,15 +12,18 @@ import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { DeckAvatar } from '../features/decks/deckIcons';
 import { ExportButton } from '../features/importer/ExportButton';
-import { countCards, groupCardsByDeck } from '../lib/deckStats';
+import { countCards } from '../lib/deckStats';
 import { stripHtml } from '../lib/text';
 import {
-  aggregateCounts,
+  aggregateCountSet,
   buildDeckTree,
   deckPathOf,
   groupReviewToken,
 } from '../lib/deckTree';
 import type { DeckTreeNode } from '../lib/deckTree';
+
+// Bounded recent window for THIS deck's heatmap (no full review-log download).
+const DECK_LOG_DAYS = 400;
 import { isTtsConfigured } from '../features/tts/googleProvider';
 import { GenerateDeckAudioDialog } from '../features/tts/GenerateDeckAudioDialog';
 import type { Card } from '../db/types';
@@ -30,15 +33,12 @@ export function DeckDetail() {
   const { data: deck, loading, error, reload } = useDeckResource(id);
   const cards = useCards(id);
   const decks = useDecks();
-  const allCards = useAllCards();
-  const allLogs = useAllLogs();
   const settings = useSettings();
-
-  // Reviews that belong to THIS deck (its own cards), for the deck heatmap.
-  const deckLogs = useMemo(
-    () => (id ? allLogs.filter((l) => l.deckId === id) : []),
-    [allLogs, id],
-  );
+  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
+  // Subdeck counts via server-side HEAD counts (no card rows for the subdeck list).
+  const deckCounts = useDeckCounts(deckIds);
+  // Reviews of THIS deck for its heatmap — bounded recent window (no full log pull).
+  const deckLogs = useDeckRecentLogs(id, DECK_LOG_DAYS);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -62,7 +62,7 @@ export function DeckDetail() {
   // Direct subdecks of this deck (one level down), for parent decks.
   const subNodes = useMemo<DeckTreeNode[]>(() => {
     if (!deck) return [];
-    const tree = buildDeckTree(decks, settings?.deckPaths, groupCardsByDeck(allCards), settings?.deckOrder);
+    const tree = buildDeckTree(decks, settings?.deckPaths, new Map<string, Card[]>(), settings?.deckOrder);
     const path = deckPathOf(deck, settings?.deckPaths);
     const find = (nodes: DeckTreeNode[]): DeckTreeNode | null => {
       for (const n of nodes) {
@@ -73,7 +73,7 @@ export function DeckDetail() {
       return null;
     };
     return find(tree)?.children ?? [];
-  }, [deck, decks, allCards, settings?.deckPaths, settings?.deckOrder]);
+  }, [deck, decks, settings?.deckPaths, settings?.deckOrder]);
 
   useEffect(() => {
     if (!focusCardId) return;
@@ -259,7 +259,7 @@ export function DeckDetail() {
           <h2 className="mono text-sm text-muted mb-4">Subdecks · {subNodes.length}</h2>
           <div className="flex flex-col gap-2">
             {subNodes.map((n) => {
-              const c = aggregateCounts(n, Date.now());
+              const c = aggregateCountSet(n, deckCounts);
               const target = n.deck ? n.deck.id : groupReviewToken(n.path);
               const accent = n.deck?.color ?? 'var(--accent)';
               return (

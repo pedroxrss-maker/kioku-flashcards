@@ -164,6 +164,25 @@ export interface AppSettings {
   storageBytesUsed?: number;
 }
 
+/**
+ * Per-deck counts derived from SERVER-SIDE head counts (no card rows downloaded).
+ * It's the subset the deck list / dashboard show, so the UI never needs to pull
+ * whole decks just to render numbers. (`mastered`/maturity stays card-level — it
+ * needs the scheduled interval, which has no head-countable column.)
+ */
+export interface DeckCountSet {
+  /** Cards in the `new` state. */
+  newCount: number;
+  /** Cards in `learning` or `relearning` (any due time). */
+  learning: number;
+  /** `review` cards whose due has arrived (the green "a revisar"). */
+  reviewDue: number;
+  /** All cards whose due has arrived, any state (drives "due"/ordering). */
+  due: number;
+  /** Total cards in the deck. */
+  total: number;
+}
+
 /* --------------------------------------------------------- creation inputs */
 
 export interface DeckInput {
