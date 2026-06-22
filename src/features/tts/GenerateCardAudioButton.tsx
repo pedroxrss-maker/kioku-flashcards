@@ -3,7 +3,7 @@ import { Loader2, Trash2, Volume2 } from 'lucide-react';
 import { useSettings } from '../../db/hooks';
 import { repo } from '../../db/repositories';
 import { pushToast } from '../../lib/toast';
-import { scheduleAchievementCheck } from '../gamification/achievements';
+import { recordFeatureUse } from '../gamification/achievements';
 import { recordStorageUpload } from '../media/usage';
 import { removeMedia } from '../media/storage';
 import { generateAndStoreCardAudio } from './audioGen';
@@ -91,7 +91,8 @@ export function GenerateCardAudioButton({
       }
       setLocalPaths((p) => ({ ...p, [side]: r.path }));
       onAudioChange?.(r.path, side);
-      if (persist) scheduleAchievementCheck(); // feat_audio (saved to an existing card)
+      // feat_audio, event-driven (counter in settings) → instant, no card scan.
+      void recordFeatureUse('audio');
       // Toca uma vez para o usuário confirmar que deu certo.
       try {
         const url = URL.createObjectURL(r.blob);

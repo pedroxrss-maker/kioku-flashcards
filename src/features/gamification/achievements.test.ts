@@ -81,7 +81,16 @@ describe('computeMetrics', () => {
       scheduledDays: 1,
     }));
 
-    const m = computeMetrics({ logs, cards, decks: [deck], settings: defaultSettings() });
+    // Card-aware pass (the Stats page): totals come from HEAD counts; cards are
+    // present so maturity + media flags are evaluated.
+    const m = computeMetrics({
+      logs,
+      cards,
+      decks: [deck],
+      settings: defaultSettings(),
+      totalReviews: 3,
+      totalCards: 3,
+    });
     expect(m.totalReviews).toBe(3);
     expect(m.cardCount).toBe(3);
     expect(m.deckCount).toBe(1);
@@ -93,7 +102,7 @@ describe('computeMetrics', () => {
   it('reads featureCounts for the Exploração achievements', () => {
     const deck = makeDeck({ name: 'D', color: '#fff', algorithm: 'sm2' });
     const settings = { ...defaultSettings(), featureCounts: { tutor: 1, export: 2 } };
-    const m = computeMetrics({ logs: [], cards: [], decks: [deck], settings });
+    const m = computeMetrics({ logs: [], cards: [], decks: [deck], settings, totalReviews: 0, totalCards: 0 });
     expect(m.tutorUsed).toBe(true);
     expect(m.exportUsed).toBe(true);
     expect(m.aigenUsed).toBe(false);
@@ -101,5 +110,40 @@ describe('computeMetrics', () => {
     // And the achievements read those metrics.
     expect(find('feat_tutor').check(m)).toBe(true);
     expect(find('feat_import').check(m)).toBe(false);
+  });
+
+  it('card-free (routine) pass defers maturity/card-scan but keeps HEAD-count totals', () => {
+    const deck = makeDeck({ name: 'D', color: '#fff', algorithm: 'sm2' });
+    // cards = null → the routine/startup pass that never downloaded card rows.
+    const m = computeMetrics({
+      logs: [],
+      cards: null,
+      decks: [deck],
+      settings: defaultSettings(),
+      totalReviews: 1234,
+      totalCards: 5678,
+    });
+    expect(m.totalReviews).toBe(1234); // from HEAD count, not rows
+    expect(m.cardCount).toBe(5678); // from HEAD count, not rows
+    expect(m.mastered).toBe(0); // maturity deferred to the Stats (card-aware) pass
+    expect(m.hasImage).toBe(false); // <img> scan needs card rows
+  });
+
+  it('unlocks feat_image/feat_audio from featureCounts WITHOUT card rows (event-driven)', () => {
+    const deck = makeDeck({ name: 'D', color: '#fff', algorithm: 'sm2' });
+    const settings = { ...defaultSettings(), featureCounts: { image: 1, audio: 1 } };
+    // cards = null → the card-free pass that runs at startup / after the event.
+    const m = computeMetrics({
+      logs: [],
+      cards: null,
+      decks: [deck],
+      settings,
+      totalReviews: 0,
+      totalCards: 0,
+    });
+    expect(m.hasImage).toBe(true); // from the counter, not a card scan
+    expect(m.hasAudio).toBe(true);
+    expect(find('feat_image').check(m)).toBe(true);
+    expect(find('feat_audio').check(m)).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ import { aiDeckMaxCards } from '../features/usage/limits';
 import { fileToBase64 } from '../features/ai/readFile';
 import { extractFromUrl } from '../features/ai/url';
 import { generateDeckAudio } from '../features/tts/audioGen';
-import { recordFeatureUse, scheduleAchievementCheck } from '../features/gamification/achievements';
+import { recordFeatureUse } from '../features/gamification/achievements';
 import { useUpgradeModal } from '../features/billing/UpgradeModalProvider';
 import {
   appendImageHtml,
@@ -343,7 +343,8 @@ export function GenerateDeck() {
         if (made > 0) await recordImageGeneration(made);
 
         setImageProgress(null);
-        if (made > 0) scheduleAchievementCheck(); // feat_image
+        // feat_image, event-driven (counter in settings) → instant, no card scan.
+        if (made > 0) void recordFeatureUse('image');
         if (made > 0 || failed > 0) {
           pushToast(
             failed > 0 ? 'error' : 'success',

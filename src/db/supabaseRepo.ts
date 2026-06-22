@@ -491,6 +491,14 @@ export class SupabaseRepository implements KiokuRepository {
     if (error) readFail(error);
     return count ?? 0;
   }
+  async countAllCards(): Promise<number> {
+    // Total cards across all the user's decks via a HEAD count (no card rows).
+    const { count, error } = await supabase
+      .from('cards')
+      .select('id', { count: 'exact', head: true });
+    if (error) readFail(error);
+    return count ?? 0;
+  }
   async myStreak(): Promise<number> {
     // Server-side current streak (America/Sao_Paulo), no time-window ceiling.
     const { data, error } = await supabase.rpc('my_streak');

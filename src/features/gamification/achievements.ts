@@ -19,12 +19,16 @@ import { celebrate } from './celebration';
 import {
   longestStreak,
   reviewsByDay,
-  statsSummary,
   studiedToday,
 } from '../stats/compute';
 import { countCardStates } from '../../lib/deckStats';
-import { dayKey } from '../../lib/date';
+import { dayKey, startOfLocalDay, DAY_MS } from '../../lib/date';
 import type { AppSettings, Card, Deck, ReviewLog } from '../../db/types';
+
+// Bounded recent window for the routine (card-free) evaluation — covers every
+// log-based threshold (longest streak / study days all top out at 100). The
+// all-time totals come from HEAD counts, never from downloading rows.
+const ACHIEVEMENT_LOG_DAYS = 400;
 
 export type AchievementCategory =
   | 'milestones'
@@ -129,15 +133,24 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 ];
 
 interface AchievementContext {
+  /** Recent reviews only (bounded window) — never the whole log table. */
   logs: ReviewLog[];
-  cards: Card[];
+  /** All-time review total (HEAD count). */
+  totalReviews: number;
+  /** All-time card total (HEAD count). */
+  totalCards: number;
   decks: Deck[];
   settings: AppSettings;
+  /** Card ROWS — present ONLY in a card-aware pass (the Stats page, which already
+   *  loaded them). Null in the routine/startup pass, so maturity + the card-scan
+   *  badges are simply not (newly) unlocked there. Evaluation is additive, so this
+   *  never un-earns anything already unlocked. */
+  cards: Card[] | null;
 }
 
 /** Derive every metric from the persisted data, once. */
 export function computeMetrics(ctx: AchievementContext): AchievementMetrics {
-  const { logs, cards, decks, settings } = ctx;
+  const { logs, cards, decks, settings, totalReviews, totalCards } = ctx;
   const dayKeys = new Set(logs.map((l) => dayKey(l.reviewedAt)));
   const deckById = new Map(decks.map((d) => [d.id, d]));
   const byDay = reviewsByDay(logs);
@@ -147,19 +160,29 @@ export function computeMetrics(ctx: AchievementContext): AchievementMetrics {
   if (dailyGoal > 0) for (const n of byDay.values()) if (n >= dailyGoal) daysGoalMet += 1;
 
   const cardAudio = settings.cardAudio ?? {};
-  const hasAudio =
-    cards.some((c) => !!c.audioPath) ||
-    Object.values(cardAudio).some((v) => !!v && (!!v.front || !!v.back));
-  const hasImage = cards.some((c) => /<img/i.test(c.front) || /<img/i.test(c.back));
   const fc = settings.featureCounts ?? {};
+  // hasAudio / hasImage are now resolvable WITHOUT card rows:
+  //   - the event counter (fc.audio / fc.image), bumped the instant a TTS/image
+  //     generation succeeds (no card scan) — gives the badge instantly;
+  //   - attached-audio chips in settings.cardAudio (already card-free);
+  //   - and, ONLY in a card-aware (Stats) pass, a scan of the actual rows — the
+  //     retroactive backstop for content created before this became event-driven.
+  const hasAudio =
+    (fc.audio ?? 0) >= 1 ||
+    Object.values(cardAudio).some((v) => !!v && (!!v.front || !!v.back)) ||
+    (cards != null && cards.some((c) => !!c.audioPath));
+  const hasImage =
+    (fc.image ?? 0) >= 1 ||
+    (cards != null && cards.some((c) => /<img/i.test(c.front) || /<img/i.test(c.back)));
 
   return {
-    totalReviews: statsSummary(logs).totalReviews,
-    cardCount: cards.length,
+    totalReviews,
+    cardCount: totalCards,
     deckCount: decks.length,
     longest: longestStreak(dayKeys),
     studyDays: dayKeys.size,
-    mastered: countCardStates(cards, deckById).mature,
+    // Maturity needs the scheduled interval (sm2/fsrs) → only in a card-aware pass.
+    mastered: cards != null ? countCardStates(cards, deckById).mature : 0,
     studiedToday: studiedToday(logs),
     dailyGoal,
     daysGoalMet,
@@ -172,15 +195,22 @@ export function computeMetrics(ctx: AchievementContext): AchievementMetrics {
   };
 }
 
-async function loadContext(): Promise<AchievementContext> {
-  // Read fresh so an evaluation right after a review/create sees the new data.
-  const [logs, cards, decks, settings] = await Promise.all([
-    repo.allLogs(),
-    repo.allCards(),
+/**
+ * Load the evaluation context. The routine pass NEVER downloads card rows: it uses
+ * a bounded recent-log window + HEAD counts (totals) + deck/settings. A card-aware
+ * pass (`cards` provided by the Stats page, which already has them) additionally
+ * evaluates the maturity / card-scan badges.
+ */
+async function loadContext(cards: Card[] | null): Promise<AchievementContext> {
+  const since = startOfLocalDay() - ACHIEVEMENT_LOG_DAYS * DAY_MS;
+  const [logs, decks, settings, totalReviews, totalCards] = await Promise.all([
+    repo.logsSince(since),
     repo.listDecks(),
     repo.getSettings(),
+    repo.countReviews(),
+    repo.countAllCards(),
   ]);
-  return { logs, cards, decks, settings };
+  return { logs, cards, decks, settings, totalReviews, totalCards };
 }
 
 let running = false;
@@ -196,7 +226,7 @@ export function scheduleAchievementCheck(delay = 800): void {
   }, delay);
 }
 
-export type FeatureCountKey = 'tutor' | 'aigen' | 'import' | 'export';
+export type FeatureCountKey = 'tutor' | 'aigen' | 'import' | 'export' | 'image' | 'audio';
 
 /**
  * Record a one-off feature use (tutor / AI deck generation / import / export) by
@@ -224,11 +254,11 @@ export async function recordFeatureUse(key: FeatureCountKey): Promise<void> {
  *    banner, and stamp the flag — so an existing user isn't spammed with dozens.
  *  - Afterwards: 1-3 new -> individual banners (queued); >3 -> one summary.
  */
-export async function evaluateAchievements(): Promise<void> {
+export async function evaluateAchievements(opts?: { cards?: Card[] }): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const ctx = await loadContext();
+    const ctx = await loadContext(opts?.cards ?? null);
     const metrics = computeMetrics(ctx);
     const firstRun = ctx.settings.achievementsSeededAt == null;
     const unlocked = new Set((await repo.listAchievements()).map((a) => a.key));

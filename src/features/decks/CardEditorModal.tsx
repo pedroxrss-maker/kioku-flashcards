@@ -36,7 +36,7 @@ import { deckAudioEnabled } from '../../lib/deckAudio';
 import { clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
 import { cardTypeOf, markTypeIn, stripTypeInMark } from '../../lib/cardType';
 import { pushToast } from '../../lib/toast';
-import { scheduleAchievementCheck } from '../gamification/achievements';
+import { recordFeatureUse, scheduleAchievementCheck } from '../gamification/achievements';
 import type { CardType } from '../../lib/cardType';
 import type { Card } from '../../db/types';
 
@@ -315,7 +315,7 @@ export function CardEditorModal({
 
   /** Generate an AI illustration for the CURRENT content and insert it into the
    *  field (back for basic/cloze, front for type-in). Persisted when the card is
-   *  saved; the achievement fires from the existing save trigger. */
+   *  saved; the feat_image badge fires instantly here (event-driven counter). */
   async function genImage() {
     if (imgBusy || atImageCap(settings)) return;
     setImgBusy(true);
@@ -324,6 +324,8 @@ export function CardEditorModal({
       const targetRef = imageSideForType(type) === 'front' ? frontRef : backRef;
       targetRef.current?.insertImage(img.url, img.path);
       await recordImageGeneration();
+      // feat_image, event-driven (counter in settings) → unlocks instantly, no card scan.
+      void recordFeatureUse('image');
       pushToast('success', 'Imagem gerada e anexada ao card.');
     } catch (e) {
       // Free user without image quota → upsell modal instead of an error toast.

@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Activity, CalendarDays, Flame, PieChart, Trophy } from 'lucide-react';
 import { useAllCards, useAllLogs, useDecks } from '../db/hooks';
+import { evaluateAchievements } from '../features/gamification/achievements';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { StatTile } from '../components/StatTile';
@@ -41,6 +42,16 @@ export function Stats() {
   const logs = useAllLogs();
   const cards = useAllCards();
   const decks = useDecks();
+
+  // Stats is the ONLY place that loads card rows for maturity. Since they're here
+  // anyway, run a card-aware achievement pass once so maturity / image / audio
+  // badges unlock here (on-demand) — they're intentionally skipped at startup.
+  const cardAwareEvalDone = useRef(false);
+  useEffect(() => {
+    if (cardAwareEvalDone.current || cards.length === 0) return;
+    cardAwareEvalDone.current = true;
+    void evaluateAchievements({ cards });
+  }, [cards]);
 
   const byDeck = useMemo(() => groupCardsByDeck(cards), [cards]);
   const deckById = useMemo(() => new Map(decks.map((d) => [d.id, d])), [decks]);

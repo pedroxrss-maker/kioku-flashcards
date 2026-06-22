@@ -58,6 +58,8 @@ export interface KiokuRepository {
   dailyProgress(deckId: string, dayStart: number): Promise<DailyProgress>;
   /** All-time review count via a server-side HEAD count (no log rows). */
   countReviews(): Promise<number>;
+  /** Total card count across all decks via a server-side HEAD count (no card rows). */
+  countAllCards(): Promise<number>;
   /** The signed-in user's current streak via the my_streak() RPC (no log rows). */
   myStreak(): Promise<number>;
   allLogs(): Promise<ReviewLog[]>;

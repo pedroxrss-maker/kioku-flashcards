@@ -5,6 +5,7 @@ import { Button } from '../../components/Button';
 import { useSettings } from '../../db/hooks';
 import { pushToast } from '../../lib/toast';
 import { recordStorageUpload, warnIfStorageHigh } from '../media/usage';
+import { recordFeatureUse } from '../gamification/achievements';
 import { generateDeckAudio } from './audioGen';
 import type { AudioSide, DeckAudioProgress } from './audioGen';
 import {
@@ -86,6 +87,8 @@ export function GenerateDeckAudioDialog({ open, onClose, deckId, deckName }: Pro
         const total = await recordStorageUpload(res.bytes);
         warnIfStorageHigh(total);
       }
+      // feat_audio, event-driven (counter in settings) → instant, no card scan.
+      if (res.ok > 0) void recordFeatureUse('audio');
       if (res.total === 0) {
         pushToast('info', 'Todos os cards com texto já têm áudio neste deck.');
       } else {

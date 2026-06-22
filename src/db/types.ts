@@ -128,6 +128,10 @@ export interface AppSettings {
     aigen?: number;
     import?: number;
     export?: number;
+    /** Generated a card illustration (feat_image) — event-driven, no card scan. */
+    image?: number;
+    /** Generated TTS audio (feat_audio) — event-driven, no card scan. */
+    audio?: number;
   };
   /** How many AI images this user has generated (provisional global test cap).
    *  Incremented only on a successful generation; gates the generate controls. */
