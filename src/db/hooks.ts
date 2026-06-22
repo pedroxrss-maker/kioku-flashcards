@@ -39,16 +39,21 @@ export function useDeckResource(id: string | undefined): QueryResult<Deck | unde
   );
 }
 
+/** A deck's card rows (the deck card table). HEAVY + on-demand → `live: false`:
+ *  fetched once, cached across remounts, and NEVER re-downloaded by the coarse
+ *  invalidate after a review. Card edits refresh it explicitly (refetchKeys). */
 export function useCards(deckId: string | undefined): Card[] {
   return useQuery(
     deckId ? `cards:deck:${deckId}` : 'cards:none',
     () => (deckId ? repo.listCards(deckId) : Promise.resolve(EMPTY_CARDS)),
     EMPTY_CARDS,
+    { live: false },
   ).data;
 }
 
+/** ALL card rows (Stats maturity). HEAVY + on-demand → `live: false`. */
 export function useAllCards(): Card[] {
-  return useQuery('cards:all', () => repo.allCards(), EMPTY_CARDS).data;
+  return useQuery('cards:all', () => repo.allCards(), EMPTY_CARDS, { live: false }).data;
 }
 
 const EMPTY_COUNTS: Record<string, DeckCountSet> = {};
@@ -101,8 +106,9 @@ export function useDeckRecentLogs(deckId: string | undefined, days: number): Rev
   ).data;
 }
 
+/** Whole review-log table (Stats). HEAVY + on-demand → `live: false`. */
 export function useAllLogs(): ReviewLog[] {
-  return useQuery('logs:all', () => repo.allLogs(), EMPTY_LOGS).data;
+  return useQuery('logs:all', () => repo.allLogs(), EMPTY_LOGS, { live: false }).data;
 }
 
 export function useSettings(): AppSettings | undefined {

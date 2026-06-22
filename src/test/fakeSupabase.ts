@@ -15,7 +15,7 @@ export interface FakeTables {
 
 type Op = 'select' | 'insert' | 'update' | 'delete' | 'upsert';
 interface Filter {
-  type: 'eq' | 'gte';
+  type: 'eq' | 'gte' | 'lte' | 'in';
   col: string;
   val: unknown;
 }
@@ -28,6 +28,7 @@ class Query {
   private single = false;
   private count = false;
   private rangeSpec: { from: number; to: number } | null = null;
+  private limitN: number | null = null;
   private conflictCols: string[] = ['id'];
   private ignoreDup = false;
 
@@ -68,6 +69,14 @@ class Query {
     this.filters.push({ type: 'gte', col, val });
     return this;
   }
+  lte(col: string, val: unknown) {
+    this.filters.push({ type: 'lte', col, val });
+    return this;
+  }
+  in(col: string, vals: unknown[]) {
+    this.filters.push({ type: 'in', col, val: vals });
+    return this;
+  }
   order(col: string, opts?: { ascending?: boolean }) {
     this.orderSpec = { col, ascending: opts?.ascending ?? true };
     return this;
@@ -76,7 +85,8 @@ class Query {
     this.single = true;
     return this;
   }
-  limit() {
+  limit(n: number) {
+    this.limitN = n;
     return this;
   }
   range(from: number, to: number) {
@@ -87,7 +97,10 @@ class Query {
   private matches(r: Record<string, unknown>): boolean {
     return this.filters.every((f) => {
       if (f.type === 'eq') return r[f.col] === f.val;
-      return new Date(String(r[f.col])).getTime() >= new Date(String(f.val)).getTime();
+      if (f.type === 'in') return Array.isArray(f.val) && (f.val as unknown[]).includes(r[f.col]);
+      const t = new Date(String(r[f.col])).getTime();
+      const v = new Date(String(f.val)).getTime();
+      return f.type === 'lte' ? t <= v : t >= v; // 'gte'
     });
   }
 
@@ -138,6 +151,7 @@ class Query {
     if (this.rangeSpec) {
       result = result.slice(this.rangeSpec.from, this.rangeSpec.to + 1);
     }
+    if (this.limitN != null) result = result.slice(0, this.limitN);
     if (this.count) return { data: null, count: result.length, error: null };
     if (this.single) return { data: result[0] ? { ...result[0] } : null, error: null };
     return { data: result.map((r) => ({ ...r })), error: null };

@@ -16,7 +16,7 @@
 import { supabase } from '../lib/supabase';
 import { db } from './db';
 import { defaultSettings, makeCard, makeDeck, newFsrsFields, newSm2Fields } from './factories';
-import { getQueryData, invalidate, setQueryData } from './store';
+import { getQueryData, invalidate, refetchKeys, setQueryData } from './store';
 import { pushToast } from '../lib/toast';
 import { startOfLocalDay } from '../lib/date';
 import { levelForXp } from '../features/gamification/xp';
@@ -234,6 +234,15 @@ function rowToLog(r: LogRow): ReviewLog {
 // a card (review / card list), and name the light columns elsewhere.
 const CARD_COLS = 'id, deck_id, front, back, state, due, sm2, fsrs, created_at, updated_at, audio_path';
 const LOG_COLS = 'id, card_id, deck_id, rating, reviewed_at, duration_ms, prev_state, scheduled_days';
+const DECK_COLS =
+  'id, name, color, category, algorithm, new_per_day, reviews_per_day, desired_retention, button_count, created_at';
+
+/** Refresh ONLY the (non-live) card-row queries (deck card table / Stats) after a
+ *  card mutation. A REVIEW write deliberately does NOT call this, so saving a
+ *  review never re-downloads a deck's cards. */
+function refreshCardQueries(): void {
+  refetchKeys((k) => k.startsWith('cards:'));
+}
 
 // Cap for a single review session pulled from the server, so an unlimited deck
 // with a huge backlog can't drag the whole deck into memory. Normal (capped)
@@ -245,15 +254,15 @@ export class SupabaseRepository implements KiokuRepository {
   async listDecks(): Promise<Deck[]> {
     const { data, error } = await supabase
       .from('decks')
-      .select('*')
+      .select(DECK_COLS)
       .order('created_at', { ascending: true });
     if (error) readFail(error);
-    return ((data ?? []) as DeckRow[]).map(rowToDeck);
+    return ((data ?? []) as unknown as DeckRow[]).map(rowToDeck);
   }
   async getDeck(id: string): Promise<Deck | undefined> {
-    const { data, error } = await supabase.from('decks').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await supabase.from('decks').select(DECK_COLS).eq('id', id).maybeSingle();
     if (error) readFail(error);
-    return data ? rowToDeck(data as DeckRow) : undefined;
+    return data ? rowToDeck(data as unknown as DeckRow) : undefined;
   }
   async createDeck(input: DeckInput): Promise<Deck> {
     const deck = makeDeck(input);
@@ -278,6 +287,7 @@ export class SupabaseRepository implements KiokuRepository {
     await del('cards', 'deck_id');
     await del('decks', 'id');
     invalidate();
+    refreshCardQueries();
   }
   async resetDeck(id: string): Promise<void> {
     const now = Date.now();
@@ -301,6 +311,7 @@ export class SupabaseRepository implements KiokuRepository {
       .gte('reviewed_at', toIso(startOfLocalDay()));
     if (logRes.error) writeFail(logRes.error, 'Não foi possível reiniciar o deck. Tente novamente.');
     invalidate();
+    refreshCardQueries();
   }
 
   // ---------------------------------------------------------------- cards --
@@ -348,10 +359,9 @@ export class SupabaseRepository implements KiokuRepository {
     return rows.map(rowToCard);
   }
   /**
-   * Per-deck counts via Postgres HEAD counts — zero card rows transferred, just
-   * the numbers. Five small counts per deck (new / learning / review-due / any-due
-   * / total), all in parallel, so the deck list & dashboard render without ever
-   * downloading cards. `nowMs` is the "due" cutoff (caller passes local now).
+   * Per-deck counts for the user in ONE round trip (the deck_counts() RPC). No
+   * card rows; the server computes new / learning / review-due / any-due / total
+   * per deck. A LIVE query → it refreshes cheaply after a review write.
    */
   async deckCounts(): Promise<Record<string, DeckCountSet>> {
     // ONE round trip: the deck_counts() RPC returns a row per deck (for auth.uid())
@@ -416,6 +426,7 @@ export class SupabaseRepository implements KiokuRepository {
     const { error } = await supabase.from('cards').insert(cardToRow(card, userId));
     if (error) writeFail(error);
     invalidate();
+    refreshCardQueries();
     return card;
   }
   async bulkInsertCards(cards: Card[]): Promise<void> {
@@ -431,6 +442,7 @@ export class SupabaseRepository implements KiokuRepository {
       if (error) writeFail(error);
     }
     invalidate();
+    refreshCardQueries();
   }
   async seedDeckWithCards(deck: Deck, cards: Card[]): Promise<void> {
     // First-run seed persistence: insert the deck and its cards as ONE unit with
@@ -448,6 +460,7 @@ export class SupabaseRepository implements KiokuRepository {
       }
     } finally {
       invalidate();
+      refreshCardQueries();
     }
   }
   async updateCard(id: string, patch: Partial<Card>): Promise<void> {
@@ -463,17 +476,20 @@ export class SupabaseRepository implements KiokuRepository {
     const { error } = await supabase.from('cards').update(row).eq('id', id);
     if (error) writeFail(error);
     invalidate();
+    refreshCardQueries();
   }
   async putCard(card: Card): Promise<void> {
     const userId = await currentUserId();
     const { error } = await supabase.from('cards').upsert(cardToRow(card, userId));
     if (error) writeFail(error);
     invalidate();
+    refreshCardQueries();
   }
   async deleteCard(id: string): Promise<void> {
     const { error } = await supabase.from('cards').delete().eq('id', id);
     if (error) writeFail(error, 'Não foi possível excluir. Tente novamente.');
     invalidate();
+    refreshCardQueries();
   }
   async countCards(deckId: string): Promise<number> {
     const { count, error } = await supabase

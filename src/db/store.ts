@@ -65,10 +65,24 @@ function run(key: string, fetcher: () => Promise<unknown>): void {
   notify();
 }
 
-/** Refetch every active query (call after any successful write). */
+/** Refetch every active LIVE query (call after any successful write). Non-live
+ *  queries (e.g. whole-deck card rows) deliberately ignore this — they are
+ *  refreshed only on mount-when-empty, explicit reload(), or refetchKeys(). */
 export function invalidate(): void {
   mutationVersion += 1;
   notify();
+}
+
+/**
+ * Re-run ONLY the cached queries whose key matches — WITHOUT bumping the global
+ * mutation version. Used to refresh a targeted set (e.g. just the card-row
+ * queries after a card edit) without sweeping in everything. A review write must
+ * NOT match any card-row key here, so saving a review never re-downloads a deck.
+ */
+export function refetchKeys(match: (key: string) => boolean): void {
+  for (const [key, e] of cache) {
+    if (e.fetcher && match(key)) run(key, e.fetcher);
+  }
 }
 
 /** Drop all cached query data — call on sign-out / account switch so one user
@@ -105,6 +119,16 @@ export interface QueryResult<T> {
   reload: () => void;
 }
 
+export interface QueryOptions {
+  /**
+   * `false` = a HEAVY, on-demand query (whole-deck card rows): fetch ONCE when not
+   * already cached, then ignore the coarse invalidate() and don't re-download on
+   * remount — refresh only via reload() or refetchKeys(). Default `true` (the
+   * query refetches on mount and after every write, as before).
+   */
+  live?: boolean;
+}
+
 /**
  * Subscribe a component to a keyed async read. Returns the last known data
  * (kept across refetches so the UI never flashes empty), plus loading/error.
@@ -113,7 +137,9 @@ export function useQuery<T>(
   key: string,
   fetcher: () => Promise<T>,
   initial: T,
+  options?: QueryOptions,
 ): QueryResult<T> {
+  const live = options?.live !== false;
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -124,11 +150,13 @@ export function useQuery<T>(
     };
   }, []);
 
-  // Fetch on mount, when the key changes, or after any invalidate().
+  // Live: fetch on mount, key change, and every invalidate(). Non-live: fetch only
+  // when not already cached (so a remount reuses the cache — no re-download), and
+  // never on the coarse invalidate (mutationVersion is dropped from the deps).
   useEffect(() => {
-    run(key, fetcher as () => Promise<unknown>);
+    if (live || !entryFor(key).loaded) run(key, fetcher as () => Promise<unknown>);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, mutationVersion]);
+  }, [key, live ? mutationVersion : -1]);
 
   const e = entryFor(key);
   return {
