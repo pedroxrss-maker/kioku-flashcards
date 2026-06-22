@@ -22,7 +22,7 @@ import { repo } from '../db/repositories';
 import { stripHtml } from '../lib/text';
 import { prefetchMediaHtml } from '../features/media/media';
 import { deckAudioEnabled } from '../lib/deckAudio';
-import { faceAudioUrl, faceHasAudio } from '../features/tts/cardAudio';
+import { faceAudioUrl, faceHasAudio, warmCardMedia } from '../features/tts/cardAudio';
 
 // All decks use 4 answer buttons (the King of Buttons option was removed).
 const REVIEW_BUTTONS = 4 as const;
@@ -141,6 +141,17 @@ export function ReviewSession() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [current, flipped, deck, flip, rate, undo, nav, exitTo, editOpen, frontAudioUrl, backAudioUrl]);
+
+  // BATCH-sign all media (audio + images) for the current card AND the next one
+  // (look-ahead 1) in ONE Storage request, BEFORE the per-face/per-image resolves
+  // run — those then read from the cache (de-duped in-flight), so a card costs a
+  // single signing round-trip, never one-per-file across the queue. Runs FIRST so
+  // the audio resolve + CardHtml resolve below hit the warmed cache.
+  useEffect(() => {
+    const ahead = [current, next].filter((c): c is NonNullable<typeof c> => !!c);
+    if (ahead.length === 0) return;
+    void warmCardMedia(ahead, settings);
+  }, [current?.id, next?.id, settings]);
 
   // Resolve EACH face's audio as a card appears, and auto-play the front:
   //   - A face's audio is the generated audio (cards.audio_path) made for THAT

@@ -51,6 +51,9 @@ interface CachedUrl {
 }
 const signedCache = new Map<string, CachedUrl>();
 const SIGN_MARGIN_MS = 60_000; // refresh a bit before actual expiry
+// In-flight signs, keyed by path: a concurrent single + batch (or two batches)
+// asking for the same path share ONE network round-trip instead of racing.
+const inflightSign = new Map<string, Promise<void>>();
 
 /* ------------------------------------------------------------------ paths -- */
 /** Current authenticated user id (first path segment, enforced by RLS). */
@@ -96,19 +99,70 @@ export async function uploadMedia(path: string, blob: Blob, contentType: string)
 }
 
 /* ------------------------------------------------------------- signed url -- */
-export async function getSignedUrl(path: string, expiresIn = 3600): Promise<string> {
+/**
+ * Sign MANY object paths in ONE request (Storage `createSignedUrls`), reusing the
+ * in-memory cache and de-duping in-flight signs. Returns path -> URL for every
+ * path that resolved (a per-item failure is just omitted, so one broken media
+ * never blocks the rest). Throws only on a setup error (bucket/policy missing).
+ */
+export async function getSignedUrls(
+  paths: string[],
+  expiresIn = 3600,
+): Promise<Map<string, string>> {
   const now = Date.now();
-  const hit = signedCache.get(path);
-  if (hit && hit.expiresAt - now > SIGN_MARGIN_MS) return hit.url;
-
-  const { data, error } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrl(path, expiresIn);
-  if (error || !data?.signedUrl) {
-    const setup = asSetupError(error);
-    if (setup) throw setup;
-    throw new Error('Não foi possível carregar a mídia.');
+  const result = new Map<string, string>();
+  const need: string[] = [];
+  const waits: Promise<void>[] = [];
+  for (const p of paths) {
+    const hit = signedCache.get(p);
+    if (hit && hit.expiresAt - now > SIGN_MARGIN_MS) {
+      result.set(p, hit.url);
+      continue;
+    }
+    const pending = inflightSign.get(p);
+    if (pending) waits.push(pending); // already being signed — just wait, no new call
+    else need.push(p);
   }
-  signedCache.set(path, { url: data.signedUrl, expiresAt: now + expiresIn * 1000 });
-  return data.signedUrl;
+
+  if (need.length > 0) {
+    const batch = (async () => {
+      const { data, error } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrls(need, expiresIn);
+      if (error) {
+        const setup = asSetupError(error);
+        if (setup) throw setup;
+        return; // transient: leave unsigned (callers fall back), don't poison the cache
+      }
+      const at = Date.now() + expiresIn * 1000;
+      for (const item of data ?? []) {
+        if (item?.signedUrl && item?.path) signedCache.set(item.path, { url: item.signedUrl, expiresAt: at });
+      }
+    })();
+    // Mark each path in-flight so a concurrent caller waits on this one batch.
+    const settled = batch.then(
+      () => {},
+      () => {},
+    );
+    for (const p of need) inflightSign.set(p, settled.finally(() => inflightSign.delete(p)));
+    await batch; // rethrows a setup error to the caller
+  }
+
+  if (waits.length > 0) await Promise.allSettled(waits);
+
+  for (const p of paths) {
+    if (result.has(p)) continue;
+    const hit = signedCache.get(p);
+    if (hit) result.set(p, hit.url);
+  }
+  return result;
+}
+
+/** Sign ONE object path (delegates to the batched signer, so it shares the cache
+ *  + in-flight de-dup). Throws if it could not be signed. */
+export async function getSignedUrl(path: string, expiresIn = 3600): Promise<string> {
+  const urls = await getSignedUrls([path], expiresIn);
+  const url = urls.get(path);
+  if (!url) throw new Error('Não foi possível carregar a mídia.');
+  return url;
 }
 
 /* ----------------------------------------------------------------- remove -- */

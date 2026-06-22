@@ -1,6 +1,6 @@
 import { repo } from '../../db/repositories';
 import { uuid } from '../../lib/uuid';
-import { getSignedUrl, mediaObjectPath, uploadMedia } from './storage';
+import { getSignedUrl, getSignedUrls, mediaObjectPath, uploadMedia } from './storage';
 import { resizeImageBlob } from './image';
 
 /**
@@ -42,6 +42,19 @@ function refId(src: string): { id: string; isAudio: boolean } | null {
 /** A ref id with a "/" is a Storage object path; a bare id is a legacy blob. */
 function isStoragePath(id: string): boolean {
   return id.includes('/');
+}
+
+/** All distinct Storage object paths referenced by a card-HTML blob (images +
+ *  attached-audio chips). Used to BATCH-sign a card's media in one request. */
+export function storagePathsInHtml(html: string): string[] {
+  if (!html || (!html.includes(MEDIA_PROTOCOL) && !html.includes(AUDIO_PROTOCOL))) return [];
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  const out = new Set<string>();
+  for (const el of Array.from(doc.querySelectorAll('img, audio'))) {
+    const ref = refId(el.getAttribute('src') ?? '');
+    if (ref && isStoragePath(ref.id)) out.add(ref.id);
+  }
+  return [...out];
 }
 
 /** Resolve a media ref id to a displayable URL: Storage paths become short-lived
@@ -102,6 +115,19 @@ export async function prefetchMediaHtml(html: string): Promise<void> {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const imgs = Array.from(doc.querySelectorAll('img'));
   if (imgs.length === 0) return;
+  // Sign ALL of this card's Storage images in ONE batched request first, so the
+  // per-img urlForRef calls below are cache hits (never one-call-per-image).
+  const paths = imgs
+    .map((el) => refId(el.getAttribute('src') ?? ''))
+    .filter((r): r is { id: string; isAudio: boolean } => !!r && !r.isAudio && isStoragePath(r.id))
+    .map((r) => r.id);
+  if (paths.length > 0) {
+    try {
+      await getSignedUrls(paths);
+    } catch {
+      /* best-effort warm; urlForRef falls back per image */
+    }
+  }
   await Promise.all(
     imgs.map(async (el) => {
       const src = el.getAttribute('src') ?? '';
@@ -123,6 +149,24 @@ export async function resolveMediaHtml(html: string): Promise<string> {
   if (!html.includes(MEDIA_PROTOCOL) && !html.includes(AUDIO_PROTOCOL)) return html;
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const els = Array.from(doc.querySelectorAll('img, audio'));
+  // Batch-sign every Storage path in this blob in ONE request up front, so the
+  // per-element urlForRef below resolves from the cache (legacy blob ids still
+  // resolve individually, but those are local — no network).
+  const storagePaths = [
+    ...new Set(
+      els
+        .map((el) => refId(el.getAttribute('src') ?? ''))
+        .filter((r): r is { id: string; isAudio: boolean } => !!r && isStoragePath(r.id))
+        .map((r) => r.id),
+    ),
+  ];
+  if (storagePaths.length > 0) {
+    try {
+      await getSignedUrls(storagePaths);
+    } catch {
+      /* best-effort; urlForRef falls back per ref */
+    }
+  }
   await Promise.all(
     els.map(async (el) => {
       const ref = refId(el.getAttribute('src') ?? '');

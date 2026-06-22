@@ -7,8 +7,8 @@
  * O áudio gerado do lado vence o chip anexado do mesmo lado (mesma prioridade da
  * revisão). Assim o botão de cada face toca a faixa daquela face.
  */
-import { getSignedUrl } from '../media/storage';
-import { firstAudioUrl } from '../media/media';
+import { getSignedUrl, getSignedUrls } from '../media/storage';
+import { firstAudioUrl, storagePathsInHtml } from '../media/media';
 import type { AppSettings, Card } from '../../db/types';
 import type { AudioSide } from './audioGen';
 
@@ -54,6 +54,38 @@ export function faceHasAudio(
   if (generatedFacePath(card, side, settings)) return true;
   const html = side === 'front' ? card.front : card.back;
   return html.includes('kioku-audio://');
+}
+
+/** Todos os caminhos de mídia em Storage de um card (áudio gerado das duas faces
+ *  + imagens/chips de áudio anexados no HTML). Usado para ASSINAR em lote. */
+export function cardMediaStoragePaths(card: Card, settings: AppSettings | undefined): string[] {
+  const paths = new Set<string>();
+  for (const side of ['front', 'back'] as const) {
+    const p = generatedFacePath(card, side, settings);
+    if (p && p.includes('/')) paths.add(p); // caminho de Storage (legado/blob não tem "/")
+  }
+  for (const p of storagePathsInHtml(card.front)) paths.add(p);
+  for (const p of storagePathsInHtml(card.back)) paths.add(p);
+  return [...paths];
+}
+
+/**
+ * Pré-assina, em UMA requisição, toda a mídia (áudio + imagens) de um punhado de
+ * cards (o atual + 1-2 à frente). Aquece o cache de URLs assinadas, então o
+ * render do card e o botão de áudio leem do cache sem novas chamadas. Best-effort.
+ */
+export async function warmCardMedia(
+  cards: Card[],
+  settings: AppSettings | undefined,
+): Promise<void> {
+  const paths = new Set<string>();
+  for (const c of cards) for (const p of cardMediaStoragePaths(c, settings)) paths.add(p);
+  if (paths.size === 0) return;
+  try {
+    await getSignedUrls([...paths]);
+  } catch {
+    /* aquecimento best-effort; cada resolução cai no caminho individual se falhar */
+  }
 }
 
 /** URL tocável da face (ou null). O áudio gerado do lado vence o chip do lado. */
