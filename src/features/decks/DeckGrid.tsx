@@ -41,8 +41,8 @@ export function DeckGrid({
     [decks, deckPaths],
   );
   const roots = useMemo(
-    () => buildDeckTree(decks, deckPaths, cardsByDeck),
-    [decks, deckPaths, cardsByDeck],
+    () => buildDeckTree(decks, deckPaths, cardsByDeck, settings?.deckOrder),
+    [decks, deckPaths, cardsByDeck, settings?.deckOrder],
   );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (path: string) =>

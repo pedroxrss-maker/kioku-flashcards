@@ -62,7 +62,7 @@ export function DeckDetail() {
   // Direct subdecks of this deck (one level down), for parent decks.
   const subNodes = useMemo<DeckTreeNode[]>(() => {
     if (!deck) return [];
-    const tree = buildDeckTree(decks, settings?.deckPaths, groupCardsByDeck(allCards));
+    const tree = buildDeckTree(decks, settings?.deckPaths, groupCardsByDeck(allCards), settings?.deckOrder);
     const path = deckPathOf(deck, settings?.deckPaths);
     const find = (nodes: DeckTreeNode[]): DeckTreeNode | null => {
       for (const n of nodes) {
@@ -73,7 +73,7 @@ export function DeckDetail() {
       return null;
     };
     return find(tree)?.children ?? [];
-  }, [deck, decks, allCards, settings?.deckPaths]);
+  }, [deck, decks, allCards, settings?.deckPaths, settings?.deckOrder]);
 
   useEffect(() => {
     if (!focusCardId) return;

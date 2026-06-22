@@ -10,7 +10,7 @@
  */
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
+import { AnimatePresence, motion, useAnimationControls, useScroll, useTransform } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { useIsMobile } from '../../lib/useIsMobile';
 import type { MotionValue } from 'framer-motion';
@@ -324,6 +324,7 @@ function MainCard() {
                   <p style={{ color: 'var(--fg)', fontSize: 19, fontWeight: 600, lineHeight: 1.35, fontFamily: 'var(--body)' }}>{meta.q}</p>
                 </div>
                 <motion.span
+                  data-hand-target="cta"
                   style={{
                     display: 'inline-flex',
                     alignSelf: 'flex-start',
@@ -390,6 +391,7 @@ function AnswerButtons() {
           <Tilt3D fill>
             <div
               className="answer-chip"
+              data-hand-target={`ans-${a.rating}`}
               style={{ '--bc': a.color, '--tc': a.text, height: '100%', opacity: active ? 1 : 0.4 } as CSSProperties}
               onClick={() => rate(a.rating)}
             >
@@ -532,6 +534,107 @@ export function HeroMockup() {
   const demo = useSm2Demo();
   const reduce = useReducedMotion();
 
+  // ── Mão guiada: encena uma sessão real (revela + avalia) e some no fim. ──────
+  const handRef = useRef<HTMLDivElement>(null);
+  const handControls = useAnimationControls();
+  const [handVisible, setHandVisible] = useState(true);
+  // Aponta sempre para o demo MAIS RECENTE: flip/rate fecham sobre o estado e a
+  // orquestração roda uma única vez, precisando do estado atual a cada passo.
+  const demoRef = useRef(demo);
+  demoRef.current = demo;
+
+  useEffect(() => {
+    if (reduce) return;
+    let cancelled = false;
+    const FINGER_DX = 10; // ponta do dedo dentro do SVG da mão (30x34)
+    const FINGER_DY = 3;
+    const SLOW = 1.15; // mão 15% mais lenta
+
+    const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    /** Centro do alvo (data-hand-target) em coords do design box (520x460), já
+     *  descontando o deslocamento da ponta do dedo. Mede ao vivo (3D/escala). */
+    const targetXY = (sel: string): { x: number; y: number } | null => {
+      const parent = handRef.current?.offsetParent as HTMLElement | null;
+      const el = parent?.querySelector(sel) as HTMLElement | null;
+      if (!parent || !el) return null;
+      const pr = parent.getBoundingClientRect();
+      const scale = pr.width / 520 || 1;
+      const r = el.getBoundingClientRect();
+      return {
+        x: (r.left + r.width / 2 - pr.left) / scale - FINGER_DX,
+        y: (r.top + r.height / 2 - pr.top) / scale - FINGER_DY,
+      };
+    };
+    const moveTo = async (sel: string, dur: number) => {
+      const p = targetXY(sel);
+      if (!p) return;
+      await handControls.start({
+        x: p.x,
+        y: p.y,
+        opacity: 1,
+        transition: { duration: dur * SLOW, ease: EASE },
+      });
+    };
+    const tap = async () => {
+      await handControls.start({ scale: 0.82, transition: { duration: 0.12, ease: 'easeOut' } });
+      await handControls.start({ scale: 1, transition: { duration: 0.14, ease: 'easeOut' } });
+    };
+
+    void (async () => {
+      await wait(700); // deixa o mockup assentar e medir certo
+      if (cancelled) return;
+
+      // Card 1 → revela → avalia "good"
+      await moveTo('[data-hand-target="cta"]', 1.3);
+      if (cancelled) return;
+      await tap();
+      demoRef.current.flip();
+      await wait(2000);
+      if (cancelled) return;
+      await moveTo('[data-hand-target="ans-good"]', 1.0);
+      if (cancelled) return;
+      await tap();
+      demoRef.current.rate('good');
+      await wait(3000);
+      if (cancelled) return;
+
+      // Card 2 → revela → avalia "again"
+      await moveTo('[data-hand-target="cta"]', 1.0);
+      if (cancelled) return;
+      await tap();
+      demoRef.current.flip();
+      await wait(2000);
+      if (cancelled) return;
+      await moveTo('[data-hand-target="ans-again"]', 1.0);
+      if (cancelled) return;
+      await tap();
+      demoRef.current.rate('again');
+      await wait(3000);
+      if (cancelled) return;
+
+      // Card 3 → revela → avalia "easy"
+      await moveTo('[data-hand-target="cta"]', 1.0);
+      if (cancelled) return;
+      await tap();
+      demoRef.current.flip();
+      await wait(2000);
+      if (cancelled) return;
+      await moveTo('[data-hand-target="ans-easy"]', 1.0);
+      if (cancelled) return;
+      await tap();
+      demoRef.current.rate('easy');
+
+      // Fim: some suavemente.
+      await handControls.start({ opacity: 0, transition: { duration: 0.5, ease: 'easeOut' } });
+      if (!cancelled) setHandVisible(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduce]);
+
   return (
     <DemoCtx.Provider value={demo}>
     <Scaler designWidth={520} designHeight={460} maxWidth={680}>
@@ -568,13 +671,16 @@ export function HeroMockup() {
         </Draggable>
       </FloatItem>
 
-      {/* Click-hand cursor: rises from "Evolução" up to the card's CTA, taps,
-          then loops — a gentle hint to click the demo. Vanishes once the user
-          flips the card the first time. Decorative + off under reduced motion.
-          Coords are in the 520x460 design box. */}
-      {!reduce && !demo.touched && (
+      {/* Click-hand cursor (guiado por JS): encena uma sessão real — revela o card
+          e avalia good → again → easy, em sincronia com o demo — e some no fim.
+          Decorativo, desligado sob reduced motion. Posições medidas ao vivo nos
+          alvos (data-hand-target), então acompanham o tilt 3D e a escala. */}
+      {!reduce && handVisible && (
         <motion.div
+          ref={handRef}
           aria-hidden
+          initial={{ x: 235, y: 425, opacity: 0, scale: 1 }}
+          animate={handControls}
           style={{
             position: 'absolute',
             left: 0,
@@ -582,18 +688,6 @@ export function HeroMockup() {
             zIndex: 20,
             pointerEvents: 'none',
             filter: 'drop-shadow(0 3px 7px rgba(0,0,0,0.55))',
-          }}
-          animate={{
-            x: [420, 420, 116, 116, 116, 116, 116, 420],
-            y: [372, 372, 280, 280, 280, 280, 280, 372],
-            opacity: [0, 1, 1, 1, 1, 1, 0, 0],
-            scale: [1, 1, 1, 0.82, 1, 1, 1, 1],
-          }}
-          transition={{
-            duration: 4,
-            times: [0, 0.1, 0.42, 0.5, 0.57, 0.74, 0.82, 1],
-            repeat: Infinity,
-            ease: 'easeInOut',
           }}
         >
           <ClickHand size={30} />

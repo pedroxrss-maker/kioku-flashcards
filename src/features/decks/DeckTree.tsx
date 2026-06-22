@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, Reorder, useDragControls } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Folder, MoreVertical, Pencil, Play, Settings2, Trash2 } from 'lucide-react';
+import { ArrowDownUp, Check, ChevronRight, Folder, GripVertical, MoreVertical, Pencil, Play, Settings2, Trash2 } from 'lucide-react';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DeckAvatar } from './deckIcons';
@@ -133,6 +133,24 @@ export function DeckTree({
     setCollapsed(new Set(settings?.deckTreeCollapsed ?? []));
   }, [settings?.deckTreeCollapsed]);
   const [menuPath, setMenuPath] = useState<string | null>(null);
+  // Reposicionar: arrastar decks para reordenar IRMÃOS (≠ aninhar/criar subdeck).
+  // Em reorder mode usamos uma ordem LOCAL (atualizada na hora p/ o Reorder não
+  // dar "snap back") e persistimos em settings.deckOrder em background.
+  const [reorderMode, setReorderMode] = useState(false);
+  const [localOrder, setLocalOrder] = useState<Record<string, number>>({});
+  const order = reorderMode ? localOrder : settings?.deckOrder;
+  const enterReorder = () => {
+    setLocalOrder({ ...(settings?.deckOrder ?? {}) });
+    setReorderMode(true);
+  };
+  const applyReorder = (paths: string[]) => {
+    const next = { ...localOrder };
+    paths.forEach((p, i) => {
+      next[p] = i;
+    });
+    setLocalOrder(next);
+    void repo.saveSettings({ deckOrder: next });
+  };
   // Re-parent a deck (drag source) under a target path, persisting deckPaths.
   const onNest = useCallback(
     (dragPath: string, targetPath: string) => {
@@ -146,8 +164,8 @@ export function DeckTree({
   const listClass = table ? 'flex flex-col' : 'flex flex-col gap-1';
 
   const roots = useMemo(
-    () => buildDeckTree(decks, deckPaths, cardsByDeck),
-    [decks, deckPaths, cardsByDeck],
+    () => buildDeckTree(decks, deckPaths, cardsByDeck, order),
+    [decks, deckPaths, cardsByDeck, order],
   );
 
   function toggle(path: string) {
@@ -192,6 +210,7 @@ export function DeckTree({
               onConfig={onConfig}
               onDelete={onDelete}
               onNest={onNest}
+              onReposition={enterReorder}
             />
           );
         })}
@@ -226,6 +245,7 @@ export function DeckTree({
             onConfig={onConfig}
             onDelete={onDelete}
             onNest={onNest}
+            onReposition={enterReorder}
           />
           {node.children.length > 0 && (
             // Gate the recursion on `expanded` so collapsed subtrees neither
@@ -241,7 +261,143 @@ export function DeckTree({
     return out;
   };
 
-  return <div className={listClass}>{renderNodes(roots)}</div>;
+  // Reorder mode: each sibling group is a Reorder.Group; rows drag by the handle.
+  const renderReorder = (nodes: DeckTreeNode[]): ReactNode => (
+    <Reorder.Group
+      as="div"
+      axis="y"
+      values={nodes.map((n) => n.path)}
+      onReorder={applyReorder}
+      className={listClass}
+    >
+      {nodes.map((node) => (
+        <ReorderRow
+          key={node.path}
+          node={node}
+          counts={aggregateCounts(node, Date.now())}
+          variant={variant}
+          table={table}
+          expanded={!collapsed.has(node.path)}
+          onToggle={() => toggle(node.path)}
+          onConfig={onConfig}
+          onDelete={onDelete}
+          renderChildren={renderReorder}
+        />
+      ))}
+    </Reorder.Group>
+  );
+
+  return (
+    <div>
+      <AnimatePresence>
+        {reorderMode && (
+          <motion.div
+            key="reorder-bar"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div
+              className="flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-[var(--r-sm)]"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+            >
+              <span className="text-sm text-muted flex items-center gap-2 min-w-0">
+                <GripVertical size={15} className="shrink-0" />
+                <span className="truncate">Arraste pelo punho para reposicionar os decks.</span>
+              </span>
+              <button type="button" onClick={() => setReorderMode(false)} className="btn btn-accent btn-sm shrink-0">
+                <Check size={14} /> Concluir
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {reorderMode ? renderReorder(roots) : <div className={listClass}>{renderNodes(roots)}</div>}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------- reorder row --- */
+/** A deck row in reposition mode: a Reorder.Item dragged by its left handle (the
+ *  handle fades in and slides the row content right). Reorders SIBLINGS only —
+ *  never nests. Its own subtree (if expanded) is a nested Reorder.Group. */
+function ReorderRow({
+  node,
+  counts,
+  variant,
+  table,
+  expanded,
+  onToggle,
+  onConfig,
+  onDelete,
+  renderChildren,
+}: {
+  node: DeckTreeNode;
+  counts: ReturnType<typeof aggregateCounts>;
+  variant: 'plain' | 'table';
+  table: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onConfig?: (deck: Deck) => void;
+  onDelete?: (deck: Deck) => void;
+  renderChildren: (nodes: DeckTreeNode[]) => ReactNode;
+}) {
+  const reduce = useReducedMotion();
+  const controls = useDragControls();
+  const handle = (
+    <motion.div
+      initial={reduce ? { opacity: 0 } : { opacity: 0, width: 0, marginRight: 0 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, width: 22, marginRight: 6 }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, width: 0, marginRight: 0 }}
+      transition={{ duration: reduce ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+      style={{ overflow: 'hidden', flexShrink: 0, display: 'inline-flex' }}
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => controls.start(e)}
+        aria-label="Arraste para reposicionar"
+        title="Arraste para reposicionar"
+        className="grid place-items-center text-muted hover:text-fg"
+        style={{ cursor: 'grab', touchAction: 'none', width: 22 }}
+      >
+        <GripVertical size={18} />
+      </button>
+    </motion.div>
+  );
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={node.path}
+      dragListener={false}
+      dragControls={controls}
+      transition={{ duration: reduce ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <DeckTreeRow
+        node={node}
+        counts={counts}
+        variant={variant}
+        expanded={expanded}
+        fullPath={node.path}
+        onToggle={onToggle}
+        menuOpen={false}
+        onMenu={() => {}}
+        onOpenMenu={() => {}}
+        onCloseMenu={() => {}}
+        onConfig={onConfig}
+        onDelete={onDelete}
+        onNest={() => {}}
+        reorderHandle={handle}
+      />
+      {node.children.length > 0 && (
+        <Collapse open={expanded} className={table ? 'flex flex-col' : 'flex flex-col gap-1 pt-1'}>
+          {expanded ? renderChildren(node.children) : null}
+        </Collapse>
+      )}
+    </Reorder.Item>
+  );
 }
 
 /* ------------------------------------------------------------------- row --- */
@@ -259,6 +415,8 @@ function DeckTreeRow({
   onConfig,
   onDelete,
   onNest,
+  onReposition,
+  reorderHandle,
 }: {
   node: DeckTreeNode;
   counts: ReturnType<typeof aggregateCounts>;
@@ -273,15 +431,21 @@ function DeckTreeRow({
   onConfig?: (deck: Deck) => void;
   onDelete?: (deck: Deck) => void;
   onNest: (dragPath: string, targetPath: string) => void;
+  /** Abre o modo de reposicionar (a partir do menu de contexto). */
+  onReposition?: () => void;
+  /** Quando presente, a linha está em modo reposicionar: mostra este punho à
+   *  esquerda (fade+slide) e desliga o arraste de aninhamento e o menu. */
+  reorderHandle?: ReactNode;
 }) {
   const nav = useNavigate();
   const hasChildren = node.children.length > 0;
   const studiable = isStudiable(node);
   const table = variant === 'table';
+  const reordering = reorderHandle !== undefined;
   const { nestProps, dragging, isTarget } = useNestDrag({
     path: node.path,
     label: node.name,
-    enabled: !!node.deck,
+    enabled: !!node.deck && !reordering,
     onDrop: onNest,
   });
 
@@ -295,7 +459,7 @@ function DeckTreeRow({
     </Link>
   ) : null;
 
-  const kebab = node.deck ? (
+  const kebab = node.deck && !reordering ? (
     <div className="relative shrink-0">
       <button
         type="button"
@@ -345,6 +509,18 @@ function DeckTreeRow({
                 <Settings2 size={14} /> Configurações
               </button>
             )}
+            {onReposition && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                onClick={() => {
+                  onCloseMenu();
+                  onReposition();
+                }}
+              >
+                <ArrowDownUp size={14} /> Reposicionar
+              </button>
+            )}
             {onDelete && (
               <button
                 type="button"
@@ -365,19 +541,23 @@ function DeckTreeRow({
 
   return (
     <div
-      {...nestProps}
-      onContextMenu={(e) => {
-        // Right-click a deck opens its settings/kebab menu (desktop).
-        if (!node.deck) return;
-        e.preventDefault();
-        onOpenMenu();
-      }}
+      {...(reordering ? {} : nestProps)}
+      onContextMenu={
+        reordering
+          ? undefined
+          : (e) => {
+              // Right-click a deck opens its settings/kebab menu (desktop).
+              if (!node.deck) return;
+              e.preventDefault();
+              onOpenMenu();
+            }
+      }
       className={cn(
         // Sidebar-style hover "jump" (rightward nudge). Locked while this row's
         // menu is open so the dropdown stays put. Tight left spacing on mobile so
         // the deck name gets the room (icons sit further left).
         'deck-jump flex items-center gap-1.5 sm:gap-3 hover:bg-[color:var(--surface-2)] min-w-0',
-        (menuOpen || dragging) && 'deck-jump-locked',
+        (menuOpen || dragging || reordering) && 'deck-jump-locked',
         table ? 'px-2 sm:px-3 py-2.5' : 'py-2.5 pl-1.5 pr-2 sm:p-3 rounded-[var(--r-sm)]',
       )}
       style={{
@@ -385,7 +565,7 @@ function DeckTreeRow({
         borderLeft: node.depth > 0 ? '1px solid var(--line)' : undefined,
         paddingLeft: node.depth > 0 ? 12 : undefined,
         borderBottom: table ? '1px solid var(--line)' : undefined,
-        opacity: dragging ? 0.5 : undefined,
+        opacity: dragging && !reordering ? 0.5 : undefined,
         outline: isTarget ? '2px solid var(--accent)' : undefined,
         outlineOffset: isTarget ? -2 : undefined,
         background: isTarget ? 'var(--surface-2)' : undefined,
@@ -398,7 +578,8 @@ function DeckTreeRow({
       }}
       title={fullPath}
     >
-      {dragging && <NestGhost />}
+      {reorderHandle}
+      {!reordering && dragging && <NestGhost />}
       {/* Chevron (or aligned spacer so rows line up) */}
       {hasChildren ? (
         <button

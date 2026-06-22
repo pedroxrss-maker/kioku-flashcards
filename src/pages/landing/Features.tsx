@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
@@ -58,8 +58,19 @@ function WaveBars({ on, reduce, color = 'var(--accent)' }: DemoProps & { color?:
 
 /* ------------------------------------------------------------- 9 demos ----- */
 function DemoAI({ on, reduce }: DemoProps) {
+  // O card revela a resposta sozinho 1,5s DEPOIS que a seção entra em tela (uma
+  // vez), e fica revelado — independente de hover.
+  const ref = useRef<HTMLDivElement>(null);
+  const reached = useInView(ref, { amount: 0.5, once: true });
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!reached || reduce) return;
+    const t = setTimeout(() => setRevealed(true), 1500);
+    return () => clearTimeout(t);
+  }, [reached, reduce]);
+
   return (
-    <div className="flex flex-col gap-2 h-full justify-center">
+    <div ref={ref} className="flex flex-col gap-2 h-full justify-center">
       <span className="text-[10px] mono" style={{ color: 'var(--muted)' }}>
         tema do deck
       </span>
@@ -72,7 +83,8 @@ function DemoAI({ on, reduce }: DemoProps) {
           |
         </motion.span>
       </div>
-      {/* card gerado: aparece e depois flipa (frente -> verso), em loop */}
+      {/* card gerado: aparece e, 1,5s após a seção entrar em tela, flipa sozinho
+          (frente -> verso) e PERMANECE revelado. */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -82,12 +94,8 @@ function DemoAI({ on, reduce }: DemoProps) {
         <motion.div
           className="relative"
           style={{ transformStyle: 'preserve-3d', height: 84 }}
-          animate={on && !reduce ? { rotateY: [0, 0, 180, 180, 0] } : { rotateY: 0 }}
-          transition={
-            on && !reduce
-              ? { repeat: Infinity, duration: 3.6, times: [0, 0.3, 0.5, 0.8, 1], delay: 0.8 }
-              : { duration: 0 }
-          }
+          animate={{ rotateY: revealed && !reduce ? 180 : 0 }}
+          transition={{ duration: reduce ? 0 : 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
           {/* frente */}
           <div

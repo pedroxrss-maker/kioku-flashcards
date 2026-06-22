@@ -154,6 +154,10 @@ export interface AppSettings {
   /** Collapsed nodes in the deck tree (full paths), persisted so expand/collapse
    *  survives reload. A path absent from this list renders expanded. */
   deckTreeCollapsed?: string[];
+  /** Custom sibling order from drag-to-reposition (full path -> index within its
+   *  own sibling group). Sorting is per-group, so indices only matter relative to
+   *  siblings; paths absent keep their default (createdAt) order. */
+  deckOrder?: Record<string, number>;
   /** Approximate running total of Supabase Storage bytes used by this user's
    *  media. Bumped after uploads so we can warn near the free-tier limit without
    *  listing the whole bucket. */
