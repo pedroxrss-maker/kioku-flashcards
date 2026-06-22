@@ -37,8 +37,7 @@ const SECTION_SLIDE = {
 
 export function DeckBrowser() {
   const decks = useDecks();
-  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
-  const counts = useDeckCounts(deckIds);
+  const counts = useDeckCounts();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [catDir, setCatDir] = useState(0);

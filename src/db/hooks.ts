@@ -54,19 +54,15 @@ export function useAllCards(): Card[] {
 const EMPTY_COUNTS: Record<string, DeckCountSet> = {};
 
 /**
- * Per-deck counts (new / learning / review-due / due / total) via server-side
- * HEAD counts — NO card rows downloaded. Keyed by the deck ids so it refetches
- * when the deck set changes or after any write (invalidate). `due` uses the fetch
- * time as "now". Pass the deck ids whose counts you need (e.g. all decks for the
- * list, or a subtree for a parent deck).
+ * Per-deck counts (new / learning / review-due / due / total) for ALL the user's
+ * decks, in ONE request (the deck_counts() RPC — no card rows). A deck absent from
+ * the map has no cards (callers use `?? emptyCountSet()`). The query key is a fixed
+ * string, so it fetches once on mount and only re-runs on invalidate (a real data
+ * change), NEVER per render. Consumers index the result by deck id; for a parent
+ * deck, aggregate over the subtree's ids client-side (aggregateCountSet).
  */
-export function useDeckCounts(deckIds: string[]): Record<string, DeckCountSet> {
-  const key = `deckCounts:${[...deckIds].sort().join(',')}`;
-  return useQuery(
-    key,
-    () => (deckIds.length ? repo.deckListCounts(deckIds, Date.now()) : Promise.resolve(EMPTY_COUNTS)),
-    EMPTY_COUNTS,
-  ).data;
+export function useDeckCounts(): Record<string, DeckCountSet> {
+  return useQuery('deckCounts', () => repo.deckCounts(), EMPTY_COUNTS).data;
 }
 
 /** All-time review total via a HEAD count (no log rows). */

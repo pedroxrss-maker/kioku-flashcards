@@ -34,9 +34,9 @@ export function DeckDetail() {
   const cards = useCards(id);
   const decks = useDecks();
   const settings = useSettings();
-  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
-  // Subdeck counts via server-side HEAD counts (no card rows for the subdeck list).
-  const deckCounts = useDeckCounts(deckIds);
+  // Subdeck counts in ONE request (deck_counts RPC; no card rows). We aggregate the
+  // subtree client-side, so all decks' counts are fine to receive.
+  const deckCounts = useDeckCounts();
   // Reviews of THIS deck for its heatmap — bounded recent window (no full log pull).
   const deckLogs = useDeckRecentLogs(id, DECK_LOG_DAYS);
 

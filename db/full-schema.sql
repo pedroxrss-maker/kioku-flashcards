@@ -466,4 +466,48 @@ create policy "kioku media delete own"
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+
+-- ----------------------------------------------------------------------------
+-- deck_counts(): per-deck card counts for the signed-in user in ONE round trip
+-- (replaces the old N x 5 per-deck HEAD count requests on the deck list / Home).
+-- Returns one row per deck that HAS cards; a deck with zero cards is simply
+-- absent (the client treats a missing deck id as all-zeros).
+--
+--   new_count        = cards in state 'new'
+--   learning_count   = cards in 'learning' or 'relearning' (any due time)
+--   due_review_count = 'review' cards whose due has arrived (due <= now())
+--   due_any_count    = ALL cards whose due has arrived (any state)
+--   total_count      = all cards in the deck
+--
+-- "due" is an ABSOLUTE-INSTANT comparison (due <= now()) — identical to the old
+-- per-deck HEAD counts and to the review queue. It is timezone-agnostic, since
+-- due and now() are both timestamptz (the America/Sao_Paulo boundary only matters
+-- for DATE-bucketed metrics like the streak, never for due <= now()).
+--
+-- security invoker + RLS on public.cards scopes rows to the caller; the explicit
+-- user_id = auth.uid() is belt-and-suspenders and lets it use the cards indexes.
+-- ----------------------------------------------------------------------------
+create or replace function public.deck_counts()
+returns table(
+  deck_id uuid,
+  new_count bigint,
+  learning_count bigint,
+  due_review_count bigint,
+  due_any_count bigint,
+  total_count bigint
+) language sql stable security invoker set search_path = public as $$
+  select
+    c.deck_id,
+    count(*) filter (where c.state = 'new'),
+    count(*) filter (where c.state in ('learning', 'relearning')),
+    count(*) filter (where c.state = 'review' and c.due <= now()),
+    count(*) filter (where c.due <= now()),
+    count(*)
+  from public.cards c
+  where c.user_id = auth.uid()
+  group by c.deck_id;
+$$;
+revoke all on function public.deck_counts() from public, anon;
+grant execute on function public.deck_counts() to authenticated, service_role;
+
 -- Fim do schema consolidado.

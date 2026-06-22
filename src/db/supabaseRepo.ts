@@ -353,30 +353,30 @@ export class SupabaseRepository implements KiokuRepository {
    * / total), all in parallel, so the deck list & dashboard render without ever
    * downloading cards. `nowMs` is the "due" cutoff (caller passes local now).
    */
-  async deckListCounts(deckIds: string[], nowMs: number): Promise<Record<string, DeckCountSet>> {
-    const nowIso = toIso(nowMs);
-    // Resolve a HEAD count query (head:true → no rows, just the number).
-    const countOf = async (
-      builder: PromiseLike<{ count: number | null; error: unknown }>,
-    ): Promise<number> => {
-      const { count, error } = await builder;
-      if (error) readFail(error);
-      return count ?? 0;
-    };
-    const head = () => supabase.from('cards').select('id', { count: 'exact', head: true });
+  async deckCounts(): Promise<Record<string, DeckCountSet>> {
+    // ONE round trip: the deck_counts() RPC returns a row per deck (for auth.uid())
+    // with every count computed server-side. No card rows, no N×5 fan-out. Decks
+    // with zero cards are absent → the client treats a missing id as all-zeros.
+    const { data, error } = await supabase.rpc('deck_counts');
+    if (error) readFail(error);
+    const rows = (data ?? []) as Array<{
+      deck_id: string;
+      new_count: number | string;
+      learning_count: number | string;
+      due_review_count: number | string;
+      due_any_count: number | string;
+      total_count: number | string;
+    }>;
     const out: Record<string, DeckCountSet> = {};
-    await Promise.all(
-      deckIds.map(async (id) => {
-        const [newCount, learning, reviewDue, due, total] = await Promise.all([
-          countOf(head().eq('deck_id', id).eq('state', 'new')),
-          countOf(head().eq('deck_id', id).in('state', ['learning', 'relearning'])),
-          countOf(head().eq('deck_id', id).eq('state', 'review').lte('due', nowIso)),
-          countOf(head().eq('deck_id', id).lte('due', nowIso)),
-          countOf(head().eq('deck_id', id)),
-        ]);
-        out[id] = { newCount, learning, reviewDue, due, total };
-      }),
-    );
+    for (const r of rows) {
+      out[r.deck_id] = {
+        newCount: Number(r.new_count),
+        learning: Number(r.learning_count),
+        reviewDue: Number(r.due_review_count),
+        due: Number(r.due_any_count),
+        total: Number(r.total_count),
+      };
+    }
     return out;
   }
   /**

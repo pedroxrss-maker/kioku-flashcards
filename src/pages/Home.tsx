@@ -220,8 +220,7 @@ export function Home() {
   const { displayName, signOut } = useAuth();
   const settings = useSettings();
   const decks = useDecks();
-  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
-  const counts = useDeckCounts(deckIds);
+  const counts = useDeckCounts();
   // Bounded recent-activity window (no full review-log download). Streak/best are
   // computed from this window; all-time total comes from a HEAD count.
   const logs = useRecentLogs(RECENT_LOG_DAYS);

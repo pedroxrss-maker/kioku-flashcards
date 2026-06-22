@@ -43,8 +43,9 @@ export interface KiokuRepository {
   putCard(card: Card): Promise<void>;
   deleteCard(id: string): Promise<void>;
   countCards(deckId: string): Promise<number>;
-  /** Per-deck counts via server-side HEAD counts — no card rows transferred. */
-  deckListCounts(deckIds: string[], nowMs: number): Promise<Record<string, DeckCountSet>>;
+  /** Per-deck counts for the user in ONE request (the deck_counts() RPC). No card
+   *  rows; decks with zero cards are absent (treat a missing id as all-zeros). */
+  deckCounts(): Promise<Record<string, DeckCountSet>>;
   /** The due/new cards a review session needs from one deck (never the whole deck). */
   dueQueueCards(
     deckId: string,

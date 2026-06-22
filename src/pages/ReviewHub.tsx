@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Zap } from 'lucide-react';
 import { useDeckCounts, useDecks, useSettings } from '../db/hooks';
@@ -10,8 +9,7 @@ import { DeckTree } from '../features/decks/DeckTree';
 export function ReviewHub() {
   const decks = useDecks();
   const settings = useSettings();
-  const deckIds = useMemo(() => decks.map((d) => d.id), [decks]);
-  const counts = useDeckCounts(deckIds);
+  const counts = useDeckCounts();
 
   const tree = hasHierarchy(decks, settings?.deckPaths);
 
