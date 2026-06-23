@@ -4,6 +4,7 @@ import { useReducedMotion } from '../../lib/useReducedMotion';
 import { KiokuMark } from './brand';
 import { scrollToId } from './anim';
 import { SIGNUPS_ENABLED } from '../../config';
+import { ThemeToggle } from './theme';
 
 const ANCHORS: Array<[string, string]> = [
   ['Recursos', 'recursos'],
@@ -61,6 +62,7 @@ export function LandingNav() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <ThemeToggle />
           <button
             type="button"
             onClick={() => nav('/entrar')}

@@ -14,6 +14,7 @@ function Wordmark() {
         src={brandLogo}
         alt=""
         draggable={false}
+        className="brand-logo-mark"
         style={{ height: 26, width: 'auto' }}
       />
       <span className="display" style={{ fontSize: 22 }}>
@@ -29,7 +30,7 @@ function navItemClass({ isActive }: { isActive: boolean }) {
     // its own color/background transitions, so transition-colors is dropped).
     'nav-jump flex items-center gap-3 px-3 py-2.5 text-sm font-semibold rounded-[var(--r-sm)]',
     isActive
-      ? 'text-fg bg-[color:var(--accent-soft)]'
+      ? 'nav-active'
       : 'text-muted hover:text-fg hover:bg-[color:var(--surface-2)]',
   );
 }
@@ -58,7 +59,7 @@ function DailyGoalMini() {
             cy={size / 2}
             r={r}
             fill="none"
-            stroke="rgba(255,255,255,0.14)"
+            stroke="var(--ring-track)"
             strokeWidth={stroke}
           />
           <circle
@@ -106,7 +107,7 @@ export function Sidebar() {
   return (
     <aside
       className="hidden md:flex md:flex-col shrink-0 border-r sticky top-0 h-screen"
-      style={{ width: 210, borderColor: 'var(--line)', background: 'var(--bg)' }}
+      style={{ width: 210, borderColor: 'var(--line)', background: 'var(--sidebar-bg)' }}
     >
       <div className="px-4 py-5">
         <Wordmark />
@@ -156,7 +157,7 @@ export function Sidebar() {
           aria-label="NeuroFluency"
           style={{ display: 'block', width: '100%', height: 'auto' }}
         >
-          <image href={brandLogo} x="0" y="1" width="22" height="22" />
+          <image href={brandLogo} x="0" y="1" width="22" height="22" className="brand-logo-mark" />
           <text
             x="27"
             y="18"
@@ -166,7 +167,7 @@ export function Sidebar() {
             fontWeight={800}
             fontSize="17"
           >
-            <tspan fill="#ffffff">neuro</tspan><tspan fill="#ff3b1f">fluency</tspan>
+            <tspan className="brand-neuro">neuro</tspan><tspan className="brand-fluency">fluency</tspan>
           </text>
         </svg>
       </div>
@@ -184,7 +185,7 @@ export function MobileTopBar() {
   return (
     <header
       className="md:hidden sticky top-0 z-40 border-b"
-      style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}
+      style={{ borderColor: 'var(--line)', background: 'var(--sidebar-bg)' }}
     >
       <div className="flex items-center justify-between px-4 h-14">
         <Wordmark />

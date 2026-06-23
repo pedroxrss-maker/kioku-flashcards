@@ -28,6 +28,7 @@ import { DeckAvatar } from '../features/decks/deckIcons';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
+import { ThemeToggle } from '../theme/theme';
 import { PlanUsageBadge } from '../features/usage/PlanUsageBadge';
 import { FriendsHeaderButton } from '../features/friends/FriendsHeaderButton';
 import { emptyCountSet, hasHierarchy } from '../lib/deckTree';
@@ -356,6 +357,7 @@ export function Home() {
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{ pointerEvents: isMobile && searchOpen ? 'none' : undefined }}
           >
+            <ThemeToggle />
             <FriendsHeaderButton />
             <PlanUsageBadge />
           <div className="relative shrink-0">
@@ -435,8 +437,9 @@ export function Home() {
         </div>
       </div>
 
-      {/* Greeting hero — illustrated time-of-day backdrop behind the welcome + CTA */}
-      <Panel className="relative overflow-hidden">
+      {/* Greeting hero — illustrated time-of-day backdrop behind the welcome + CTA.
+          `dark-panel` keeps its text light on the dark image scrim in BOTH themes. */}
+      <Panel className="dark-panel relative overflow-hidden">
         <HeroBackdrop part={dayPart} />
         {/* Contrast scrim: darker on the left where the text sits. */}
         <div
@@ -474,10 +477,10 @@ export function Home() {
 
       {/* Stat cards */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <StatCard icon={Layers} label="Decks criados" value={stats.totalDecks} sub={`+${stats.decksMonth} este mês`} color="var(--accent-blue)" />
-        <StatCard icon={CheckCircle2} label="Cards estudados" value={stats.totalReviews} sub={`+${stats.reviews7d} esta semana`} color="var(--accent-green)" />
-        <StatCard icon={Flame} label="Sequência atual" value={`${stats.streak} ${stats.streak === 1 ? 'dia' : 'dias'}`} sub={`Melhor: ${stats.best} dias`} color="var(--accent)" iconClassName="flame-anim" />
-        <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="#b14cff" />
+        <StatCard icon={Layers} label="Decks criados" value={stats.totalDecks} sub={`+${stats.decksMonth} este mês`} color="var(--stat-blue)" />
+        <StatCard icon={CheckCircle2} label="Cards estudados" value={stats.totalReviews} sub={`+${stats.reviews7d} esta semana`} color="var(--stat-green)" />
+        <StatCard icon={Flame} label="Sequência atual" value={`${stats.streak} ${stats.streak === 1 ? 'dia' : 'dias'}`} sub={`Melhor: ${stats.best} dias`} color="var(--stat-orange)" iconClassName="flame-anim" />
+        <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="var(--stat-purple)" />
       </section>
 
       {/* Continue studying — full width */}

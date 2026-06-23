@@ -22,6 +22,7 @@ import { PrivacyPolicy } from '../pages/legal/PrivacyPolicy';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
 import { AuthLoading, AuthPage, ResetPasswordPage, SupabaseConfigNotice } from '../features/auth/AuthPage';
+import { ThemeProvider } from '../theme/theme';
 
 export function App() {
   return (
@@ -70,6 +71,7 @@ function AuthedApp() {
   }, []);
 
   return (
+    <ThemeProvider>
     <UpgradeModalProvider>
       <Routes>
         {/* Full-screen review session (no sidebar). */}
@@ -101,5 +103,6 @@ function AuthedApp() {
           checkout da Kiwify do plano escolhido na landing (se houver intent). */}
       <CheckoutIntentRedirect />
     </UpgradeModalProvider>
+    </ThemeProvider>
   );
 }

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Gauge } from 'lucide-react';
 import { useReducedMotion } from '../../lib/useReducedMotion';
+import { useTheme } from '../../theme/theme';
 
 /**
  * Settings panel that explains what each of the four review answer buttons means.
@@ -74,13 +75,14 @@ const GRADES: GradeInfo[] = [
   },
 ];
 
-/** Render a description, brightening the [bracketed] phrases (brackets removed). */
-function renderDesc(text: string): ReactNode[] {
+/** Render a description, emphasizing the [bracketed] phrases (brackets removed)
+ *  with the theme-aware `emphColor`. */
+function renderDesc(text: string, emphColor: string): ReactNode[] {
   return text.split(/(\[[^\]]+\])/g).map((part, i) => {
     const m = /^\[([^\]]+)\]$/.exec(part);
     if (m) {
       return (
-        <span key={i} style={{ color: '#e8e8e8' }}>
+        <span key={i} style={{ color: emphColor }}>
           {m[1]}
         </span>
       );
@@ -91,6 +93,15 @@ function renderDesc(text: string): ReactNode[] {
 
 export function AnswerButtonsGuide() {
   const reduce = useReducedMotion();
+  const { theme } = useTheme();
+  const light = theme === 'light';
+  // The explanation rows mirror the review screen: dark chips in dark mode, light
+  // chips in light mode. Colors are concrete (not CSS vars) so Framer can tween
+  // the active/inactive background.
+  const rowInactive = light ? '#f2e6d7' : '#141414';
+  const rowActive = light ? '#ecdecb' : '#1c1c1c';
+  const descColor = light ? 'var(--muted)' : '#bdbdbd';
+  const emphColor = light ? 'var(--fg)' : '#e8e8e8';
   const [hovered, setHovered] = useState<Grade | null>(null);
   const [locked, setLocked] = useState<Grade | null>(null);
 
@@ -158,7 +169,8 @@ export function AnswerButtonsGuide() {
         })}
       </div>
 
-      {/* Explanation rows — one per grade. */}
+      {/* Explanation rows — one per grade. Theme-aware chips (dark in dark mode,
+          light in light mode), mirroring the review screen. */}
       <div className="flex flex-col mt-4" style={{ gap: 10 }}>
         {GRADES.map((g) => {
           const isActive = active === g.key;
@@ -167,7 +179,7 @@ export function AnswerButtonsGuide() {
             <motion.div
               key={g.key}
               animate={{
-                backgroundColor: isActive ? '#1c1c1c' : '#141414',
+                backgroundColor: isActive ? rowActive : rowInactive,
                 opacity: dimmed ? 0.4 : 1,
                 x: isActive ? 2 : 0,
               }}
@@ -185,8 +197,8 @@ export function AnswerButtonsGuide() {
                   {g.tag}
                 </span>
               </p>
-              <p style={{ fontSize: 13, lineHeight: 1.55, color: '#bdbdbd' }}>
-                {renderDesc(g.desc)}
+              <p style={{ fontSize: 13, lineHeight: 1.55, color: descColor }}>
+                {renderDesc(g.desc, emphColor)}
               </p>
             </motion.div>
           );

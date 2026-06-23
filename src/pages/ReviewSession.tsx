@@ -449,7 +449,7 @@ export function ReviewSession() {
             {deck.name}
           </p>
           <p className="mono text-[10px] text-muted">
-            {settings?.showRemainingCount !== false
+            {settings?.showRemainingCount === true
               ? `Card ${session.position} de ${session.total}`
               : `Card ${session.position}`}
           </p>

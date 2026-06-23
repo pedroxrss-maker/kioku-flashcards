@@ -31,6 +31,9 @@ export function Toggle({ checked, onChange, label, description }: ToggleProps) {
           height: 18,
           borderRadius: 999,
           background: '#fff',
+          // Shadow defines the white knob on a light off-track (light theme); it
+          // is invisible on the dark off-track, so dark mode is unchanged.
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
           transition: 'left 0.15s ease',
         }}
       />

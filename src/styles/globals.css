@@ -41,6 +41,30 @@
   --accent-amber: #ff9d00;
   --accent-soft: rgba(255, 59, 31, 0.14);
 
+  /* App-shell surfaces & accents. Dark defaults mirror the values these used to
+     be hardcoded to, so dark is byte-identical; the app light theme recolors
+     them under .app-shell[data-theme='light']. */
+  --sidebar-bg: var(--bg); /* sidebar / mobile top bar background */
+  --nav-active-bg: var(--accent-soft); /* active sidebar item background */
+  --nav-active-fg: var(--fg); /* active sidebar item text/icon */
+  --ring-track: rgba(255, 255, 255, 0.14); /* progress-ring track (daily goal) */
+  /* Home stat-card icon tints (kept distinct from the deck-counter colors). */
+  --stat-blue: #1f6dff; /* Decks criados */
+  --stat-green: #00b569; /* Cards estudados */
+  --stat-orange: #ff3b1f; /* Sequência atual */
+  --stat-purple: #b14cff; /* Taxa de acertos */
+  /* Deck-counter numbers (CardCounts): novas / aprender / revisar. */
+  --count-blue: #1f6dff;
+  --count-red: #ff3b1f;
+  --count-green: #00b569;
+
+  /* Self-rating tag colors (review answer chips on the landing hero). Dark
+     defaults mirror the accent palette; the landing light theme recolors them. */
+  --ans-again: #ff3b1f;
+  --ans-hard: #ff9d00;
+  --ans-good: #00b569;
+  --ans-easy: #1f6dff;
+
   --display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --body: 'Manrope', system-ui, sans-serif;
   --mono: 'DM Mono', ui-monospace, monospace;
@@ -54,6 +78,216 @@
   --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.45);
 
   color-scheme: dark;
+}
+
+/* ===================================================================
+   LANDING-ONLY light theme. Scoped to the marketing landing wrapper via
+   data-theme; the app (never under .landing-root[data-theme='light'])
+   keeps the dark :root values. Only color variables change here — layout,
+   spacing and components are shared between the two themes.
+   Exact palette extracted from the reference design (do not approximate).
+   =================================================================== */
+.landing-root[data-theme='light'] {
+  --bg: #ebe1d4; /* page background */
+  --surface: #faf1e8; /* card / panel surface */
+  --surface-2: #faf1e8; /* chips, inputs (near-white on the page) */
+  --fg: #020001; /* primary heading text */
+  --muted: #393735; /* secondary / body text */
+  --line: rgba(2, 0, 1, 0.1);
+  --line-strong: rgba(2, 0, 1, 0.16);
+  --accent: #fd4e28; /* CTA fill, "neurofluency", links, icons, highlights */
+  --accent-blue: #007cdb;
+  --accent-green: #31a063;
+  --accent-amber: #f79900;
+  --accent-soft: rgba(253, 78, 40, 0.12);
+
+  /* Tailwind's @theme palette (what `text-muted`/`text-fg`/`text-accent`/
+     `bg-surface` compile against). Override it so utility-class text flips with
+     the theme — otherwise muted body/subtitle text stays the dark-theme #a1a1aa,
+     nearly invisible on the cream background. */
+  --color-bg: #ebe1d4;
+  --color-surface: #faf1e8;
+  --color-surface-2: #faf1e8;
+  --color-fg: #020001;
+  --color-muted: #393735;
+  --color-line: rgba(2, 0, 1, 0.1);
+  --color-accent: #fd4e28;
+  --color-accent-blue: #007cdb;
+  --color-accent-green: #31a063;
+  --color-accent-amber: #f79900;
+
+  /* Answer tags render as light, outlined chips: the exact reference colors as
+     text + border, on the near-white surface (handled by .answer-chip). */
+  --ans-again: #f82f07;
+  --ans-hard: #f79900;
+  --ans-good: #31a063;
+  --ans-easy: #007cdb;
+
+  --shadow-card: 0 8px 24px rgba(2, 0, 1, 0.12);
+  --shadow-pop: 0 16px 40px rgba(2, 0, 1, 0.18);
+
+  color-scheme: light;
+}
+
+/* ===================================================================
+   APP light theme. Shares the SAME mechanism as the landing (a data-theme
+   attribute flipping CSS variables) but its OWN palette, scoped to the app
+   shell. Currently the Home ("/"), Biblioteca ("/decks"), Estatísticas
+   ("/stats"), Conquistas ("/conquistas"), Configurações ("/settings") and Amigos
+   ("/amigos") screens set data-theme='light' (see the gate in AppLayout); every
+   other screen keeps the dark :root values until it is themed later — at which
+   point it just inherits these variables.
+   Exact palette extracted from the reference design (do not approximate).
+   =================================================================== */
+.app-shell[data-theme='light'] {
+  --bg: #f5ece2; /* content area background */
+  --surface: #f9f1e9; /* sidebar + card / panel surface */
+  --surface-2: #f5e5da; /* hovers, inputs, secondary surfaces */
+  --fg: #302d2c; /* primary heading text */
+  --muted: #64645f; /* secondary / muted text */
+  --line: rgba(48, 45, 44, 0.1);
+  --line-strong: rgba(48, 45, 44, 0.16);
+  --accent: #fd2a08; /* primary buttons, active nav, brand */
+  --accent-blue: #2755a3;
+  --accent-green: #0c9c5d; /* deck-counter "revisar" */
+  --accent-amber: #ffa703;
+  --accent-soft: rgba(253, 42, 8, 0.1);
+
+  /* Tailwind's @theme palette (the static set the `text-muted`/`text-fg`/
+     `text-accent`/`bg-surface` utilities compile against). Override it here so
+     every Tailwind color utility flips with the theme, not just inline var()s. */
+  --color-bg: #f5ece2;
+  --color-surface: #f9f1e9;
+  --color-surface-2: #f5e5da;
+  --color-fg: #302d2c;
+  --color-muted: #64645f;
+  --color-line: rgba(48, 45, 44, 0.1);
+  --color-accent: #fd2a08;
+  --color-accent-blue: #2755a3;
+  --color-accent-green: #0c9c5d;
+  --color-accent-amber: #ffa703;
+
+  --sidebar-bg: #f9f1e9;
+  --nav-active-bg: #f5e5da;
+  --nav-active-fg: var(--accent);
+  --ring-track: rgba(48, 45, 44, 0.14);
+
+  --stat-blue: #2755a3;
+  --stat-green: #08e884;
+  --stat-orange: #ffa703;
+  --stat-purple: #4f1f79;
+
+  --count-blue: #2755a3;
+  --count-red: #fb3312;
+  --count-green: #0c9c5d;
+
+  --shadow-card: 0 8px 24px rgba(48, 45, 44, 0.1);
+  --shadow-pop: 0 16px 40px rgba(48, 45, 44, 0.16);
+
+  color-scheme: light;
+}
+
+/* The app shell always paints its own background so the light content area
+   (#f5ece2) shows even though <body> keeps the dark :root --bg. It also re-anchors
+   `color` to var(--fg): text WITHOUT an explicit color otherwise inherits the
+   computed white from <body> (which lives outside the shell and keeps the dark
+   --fg), turning invisible on the light surfaces. In dark this is a no-op. */
+.app-shell {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Sidebar nav (inactive) + "Recentes" deck names are secondary text via Tailwind
+   `text-muted`. In light mode render them as the near-black ink so they read as
+   solid sidebar items; dark mode is untouched (rule is light-scoped). */
+.app-shell[data-theme='light'] .nav-jump.text-muted,
+.app-shell[data-theme='light'] .recent-deck {
+  color: var(--fg);
+}
+
+/* Active sidebar item — variables reproduce the dark look exactly (fg text on
+   accent-soft) and flip to accent-on-#f5e5da in light. */
+.nav-active {
+  color: var(--nav-active-fg);
+  background: var(--nav-active-bg);
+}
+
+/* Brand wordmark SVG fills (sidebar neuro/fluency lockup). Driven by vars so
+   "neuro" follows the text color and "fluency" the accent in either theme. */
+.brand-neuro {
+  fill: var(--fg);
+}
+.brand-fluency {
+  fill: var(--accent);
+}
+
+/* A deliberately dark card (e.g. the landing final CTA / dark image cards, and
+   the Home greeting hero whose illustrated backdrop + scrim need light text).
+   It pins the neutral variables to their dark values so the card stays dark
+   with legible light text in BOTH themes; the accent keeps flowing from the
+   active theme. In dark mode these values are already active (no-op). */
+.dark-panel {
+  --bg: #0e0e11;
+  --surface: #17171b;
+  --surface-2: #1f1f24;
+  --fg: #f5f5f4;
+  --muted: #a1a1aa;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.1);
+  /* Pin Tailwind's palette to dark too, so utilities like `text-muted` inside the
+     panel (e.g. the Home hero subtitle) stay light on the dark scrim. */
+  --color-bg: #0e0e11;
+  --color-surface: #17171b;
+  --color-surface-2: #1f1f24;
+  --color-fg: #f5f5f4;
+  --color-muted: #a1a1aa;
+  --color-line: rgba(255, 255, 255, 0.06);
+  /* Re-anchor the inherited text color so headings WITHOUT an explicit color
+     (which would otherwise inherit the page's dark ink) read light on the dark
+     card. Elements using var(--fg)/var(--muted) explicitly already follow above. */
+  color: var(--fg);
+}
+
+/* The brand brain mark ships as a white PNG (…-branca.png). On a light surface
+   it would vanish, so invert it to a dark mark there (landing + app shell). */
+.landing-root[data-theme='light'] .brand-logo-mark,
+.app-shell[data-theme='light'] .brand-logo-mark {
+  filter: invert(1);
+}
+
+/* Sun/moon theme switch (shared by the landing nav and the app). */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Landing theme switch: a slow circular "wave" reveal of the new theme out from
+   the toggle (driven by ThemeToggle via the View Transitions API). Disable the
+   default cross-fade so ONLY the JS-driven clip-path plays; the new snapshot
+   grows over the old one. No-op on browsers without view transitions. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 9999;
+}
+::view-transition-old(root) {
+  z-index: 1;
 }
 
 *,
@@ -1174,12 +1408,13 @@ button.pill.pill-active:hover {
   }
 }
 
-/* --------------------------------------------- hero answer chips (hover) -- */
-/* On hover: fill with the role color (--bc), flip text to a readable tone
-   (--tc) and pop forward in 3D (translateZ works inside the tilt frame). */
+/* --------------------------------------------- hero answer chips ---------- */
+/* Always 100% filled with the role color (--bc), text in a readable tone (--tc),
+   in BOTH themes. On hover it just pops forward in 3D (translateZ works inside
+   the tilt frame). */
 .answer-chip {
-  background: var(--surface-2);
-  border: 1.5px solid var(--bc);
+  background: var(--bc);
+  border: 1.5px solid #fff;
   border-radius: 10px;
   padding: 7px 6px;
   text-align: center;
@@ -1196,19 +1431,15 @@ button.pill.pill-active:hover {
     opacity 0.25s ease;
 }
 .answer-chip .chip-sub {
-  color: var(--muted);
+  color: var(--tc);
+  opacity: 0.82;
 }
 .answer-chip .chip-rating {
-  color: var(--bc);
+  color: var(--tc);
 }
 .answer-chip:hover {
-  background: var(--bc);
   transform: translateZ(34px);
   box-shadow: 0 12px 26px color-mix(in srgb, var(--bc) 40%, transparent);
-}
-.answer-chip:hover .chip-sub,
-.answer-chip:hover .chip-rating {
-  color: var(--tc);
 }
 
 /* A simple accent outline that fades in on hover (deck-overview card rows). */

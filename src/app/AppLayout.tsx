@@ -6,6 +6,7 @@ import { useReducedMotion } from '../lib/useReducedMotion';
 import { MobileTopBar, Sidebar } from './Sidebar';
 import { NAV_ITEMS } from './nav';
 import { useInitialLoad } from '../db/hooks';
+import { useTheme } from '../theme/theme';
 
 /** Index of the NAV_ITEMS entry that owns the given path (longest prefix). */
 function currentNavIndex(pathname: string): number {
@@ -29,7 +30,14 @@ export function AppLayout() {
   const loc = useLocation();
   const outlet = useOutlet();
   const reduce = useReducedMotion();
+  const { theme } = useTheme();
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  // Screens that have been themed for light mode; every other route forces dark
+  // until it is themed later. To extend the light theme to a new screen, add its
+  // path here (or drop the gate entirely for an app-wide theme). Note: only the
+  // Biblioteca LIST ("/decks") is themed — "/decks/:id" (DeckDetail) is not yet.
+  const THEMED_PATHS = new Set(['/', '/decks', '/stats', '/conquistas', '/settings', '/amigos']);
+  const themeable = THEMED_PATHS.has(loc.pathname);
 
   // Every page change starts at the top — without this the new route inherits
   // the previous page's scroll position (e.g. tapping a deck from a scrolled-down
@@ -60,7 +68,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen md:flex">
+    <div className="app-shell min-h-screen md:flex" data-theme={themeable ? theme : 'dark'}>
       <Sidebar />
       <div
         className="flex-1 min-w-0 flex flex-col"

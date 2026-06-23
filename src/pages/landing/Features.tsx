@@ -473,7 +473,7 @@ export function Features() {
           </p>
           <motion.p
             className="mt-2"
-            style={{ lineHeight: 1.6, color: '#fff', fontWeight: 700 }}
+            style={{ lineHeight: 1.6, color: 'var(--fg)', fontWeight: 700 }}
             animate={reduce ? undefined : { opacity: [1, 0.55, 1] }}
             transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
           >

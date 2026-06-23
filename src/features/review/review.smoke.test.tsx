@@ -88,6 +88,9 @@ describe('Review session (integration)', () => {
     const child = await repo.createDeck({ name: 'Gramática', color: '#1f6dff', algorithm: 'sm2', buttonCount: 4 });
     await repo.saveSettings({
       deckPaths: { [parent.id]: 'Inglês', [child.id]: 'Inglês::Gramática' },
+      // The remaining-count is off by default now; enable it so the header shows
+      // the "de 2" total this test asserts on (the union of parent + descendant).
+      showRemainingCount: true,
     });
     await repo.createCard({ deckId: parent.id, front: 'PAI', back: 'a' });
     await repo.createCard({ deckId: child.id, front: 'FILHO', back: 'b' });

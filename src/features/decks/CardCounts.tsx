@@ -18,9 +18,9 @@ export function CardCounts({
 }) {
   return (
     <div className={cn('flex items-center gap-1 sm:gap-2.5 shrink-0 mono', className)}>
-      <CountCell value={newCount} color="var(--accent-blue)" label="novos" />
-      <CountCell value={learning} color="var(--accent)" label="aprendendo / errados" />
-      <CountCell value={reviewDue} color="var(--accent-green)" label="a revisar" />
+      <CountCell value={newCount} color="var(--count-blue)" label="novos" />
+      <CountCell value={learning} color="var(--count-red)" label="aprendendo / errados" />
+      <CountCell value={reviewDue} color="var(--count-green)" label="a revisar" />
     </div>
   );
 }

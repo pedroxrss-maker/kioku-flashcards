@@ -39,12 +39,16 @@ export interface GenerateRequest {
 export function buildGeneratePrompt(req: GenerateRequest): { system: string; userText: string } {
   const RULES: Record<CardType, string> = {
     basic:
-      '"basic": a question/answer (or term/definition) card. "front" is the question, "back" ' +
-      'is the answer.',
+      '"basic": a PURE question/answer (or term/definition) card. "front" is the question, "back" ' +
+      'is the answer. A basic card must contain NO blank of any kind: no underscores ("___"), no ' +
+      'empty gaps, and NEVER a {{c1::...}} marker. Only cloze cards may contain a blank.',
     cloze:
-      '"cloze": a fill-in-the-blank. Put the hidden term in "front" using the syntax ' +
-      '{{c1::term}} (exactly one cloze deletion per card, always numbered c1). "back" may hold ' +
-      'a short extra note or be an empty string.',
+      '"cloze": a fill-in-the-blank whose "front" MUST contain the hidden word wrapped in the literal ' +
+      'marker {{c1::answer}} — curly braces, the letters c1, a double colon "::", then the answer, ' +
+      'then closing braces. Example: "front": "The capital of France is {{c1::Paris}}." Use exactly ' +
+      'one {{c1::...}} marker per card, always numbered c1. A cloze card is INVALID if its "front" has ' +
+      'no {{c1::...}} marker. NEVER blank a word with underscores or plain gaps — the ONLY allowed ' +
+      'blank mechanism is the {{c1::...}} marker. "back" may hold a short extra note or be empty.',
     typein:
       '"typein": the learner types the answer. "front" is the prompt/question, "back" is the ' +
       'EXACT short expected answer.',
@@ -61,6 +65,19 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
       `if they are written in another language. User instructions: ${req.instructions.trim()} `
     : '';
 
+  // With more than one type selected, REQUIRE every type to appear (the model
+  // otherwise tends to skip cloze, the hardest to format). With one type, just
+  // make that type. Explicit per-type distribution in the user instructions wins
+  // (see instrLine), so this defers to it.
+  const mixLine =
+    types.length > 1
+      ? 'TYPE COVERAGE (mandatory): you MUST produce cards of EACH of the following types, distributed ' +
+        `roughly evenly across the deck: ${typesList}. Every selected type must be represented by at ` +
+        'least a fair share of the cards. Do NOT omit any selected type — a deck missing one of the ' +
+        'selected types is INVALID. If the user instructions below specify a per-type distribution, ' +
+        'follow that split instead of an even one (but still include every selected type). '
+      : `Produce only "${typesList}" cards. `;
+
   const cardWord = req.count === 1 ? 'card' : 'cards';
   const system =
     'You generate study flashcards. ' +
@@ -73,7 +90,8 @@ export function buildGeneratePrompt(req: GenerateRequest): { system: string; use
     `Use ONLY these card types: ${typesList}. ` +
     'Each card is a JSON object with string fields "type", "front" and "back", where "type" is ' +
     `one of: ${typesList}. Rules per type:\n${typeRules}\n` +
-    'Make the cards high-quality and non-redundant, in a balanced mix of the allowed types. ' +
+    'Make the cards high-quality and non-redundant. ' +
+    mixLine +
     instrLine +
     `Keep each side concise and self-contained, written in ${req.language}. Use plain text only ` +
     '(no markdown, no HTML), except the {{c1::...}} cloze syntax when the type is cloze. ' +

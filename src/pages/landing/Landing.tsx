@@ -5,12 +5,12 @@
  * body. All copy in Brazilian Portuguese, no em-dashes. Animations always play:
  * Kioku forces them on, intentionally ignoring the prefers-reduced-motion setting.
  */
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BarChart3, Lock, Rocket, ShieldCheck, Trophy, User } from 'lucide-react';
 import { SIGNUPS_ENABLED } from '../../config';
 import { Reveal } from './anim';
 import { NeuroLockup } from './brand';
-import ctaLogo from '../../../kioku logo.png';
 import { LandingNav } from './LandingNav';
 import { Hero } from './Hero';
 import { ForgettingCurve } from './ForgettingCurve';
@@ -20,6 +20,7 @@ import { Science } from './Science';
 import { Pricing } from './Pricing';
 import { ComingSoon } from './ComingSoon';
 import { LandingFooter } from './LandingFooter';
+import { LandingThemeProvider, useLandingTheme } from './theme';
 
 function NeuroBand() {
   return (
@@ -56,20 +57,30 @@ function NeuroBand() {
 
 function FinalCta() {
   const nav = useNavigate();
+  const { theme } = useLandingTheme();
+  const light = theme === 'light';
   return (
     <section className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28">
       <Reveal>
+        {/* Light mode: a white card with the light share banner (which has a white
+            background) so it blends; dark mode keeps the black card + square logo. */}
         <div
-          className="flex flex-col items-center text-center overflow-hidden px-5 md:px-8 pt-9 md:pt-11 pb-8 md:pb-10"
+          className={`flex flex-col items-center text-center overflow-hidden px-5 md:px-8 pt-9 md:pt-11 pb-8 md:pb-10${light ? '' : ' dark-panel'}`}
           style={{
             borderRadius: 'var(--r-lg)',
             border: '1px solid var(--line)',
-            background: '#000',
+            background: light ? '#ffffff' : '#000',
             boxShadow: 'var(--shadow-card)',
           }}
         >
-          {/* Logo do Kioku, mantida. */}
-          <img src={ctaLogo} alt="Kioku" draggable={false} style={{ height: 173, width: 'auto', maxWidth: '64vw', display: 'block', marginBottom: 16 }} />
+          {/* Banner do Kioku: versão escura (fundo preto) no tema escuro e clara
+              (fundo branco) no tema claro — cada uma combina com o fundo do card. */}
+          <img
+            src={light ? '/kioku-share-light.png' : '/kioku-share.png'}
+            alt="Kioku — Memorize de verdade"
+            draggable={false}
+            style={{ width: '100%', maxWidth: 430, height: 'auto', display: 'block', marginBottom: 20, borderRadius: 'var(--r-md)' }}
+          />
 
           {/* Selo */}
           <div
@@ -143,9 +154,41 @@ function FinalCta() {
   );
 }
 
-export function Landing() {
+// The light-theme illustration variants, preloaded so the first dark->light
+// toggle doesn't hitch decoding them mid-transition (keeps the wave smooth).
+const LIGHT_VARIANTS = [
+  '/mitochondria-atp-light.png',
+  '/card1-light.png',
+  '/card2-light.png',
+  '/card3-light.png',
+  '/flashcard1-light.png',
+  '/flashcard2-light.png',
+  '/flashcard3-light.png',
+  '/kioku-share-light.png',
+];
+
+function LandingInner() {
+  const { theme } = useLandingTheme();
+
+  useEffect(() => {
+    const imgs = LIGHT_VARIANTS.map((src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    });
+    return () => {
+      imgs.forEach((img) => {
+        img.src = '';
+      });
+    };
+  }, []);
+
   return (
-    <div className="landing-root" style={{ background: 'var(--bg)', color: 'var(--fg)', minHeight: '100vh', overflowX: 'clip' }}>
+    <div
+      className="landing-root"
+      data-theme={theme}
+      style={{ background: 'var(--bg)', color: 'var(--fg)', minHeight: '100vh', overflowX: 'clip' }}
+    >
       <LandingNav />
       <main>
         <Hero />
@@ -160,5 +203,13 @@ export function Landing() {
       </main>
       <LandingFooter />
     </div>
+  );
+}
+
+export function Landing() {
+  return (
+    <LandingThemeProvider>
+      <LandingInner />
+    </LandingThemeProvider>
   );
 }

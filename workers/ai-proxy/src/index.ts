@@ -342,14 +342,20 @@ export function capDeckCardsResponse(data: unknown, maxCards: number): unknown {
   return d;
 }
 
-// ── Retry com backoff para falhas transitórias do Gemini ─────────────────────
+// ── Retry + fallback de modelos para falhas transitórias do Gemini ───────────
 // O Gemini pode responder 503 (UNAVAILABLE / sobrecarga) ou 429 (rate limit por
 // minuto na NOSSA chave compartilhada). Ambos são transitórios e de
-// INFRAESTRUTURA — nada a ver com a cota do plano do usuário. Tentamos de novo
-// algumas vezes com backoff exponencial + jitter; ao esgotar, devolvemos um
-// error_code estruturado NOSSO (nunca o texto cru do Google).
-const MAX_GEMINI_ATTEMPTS = 3;
-const GEMINI_BACKOFFS_MS = [400, 1000, 2000]; // espera após a 1ª, 2ª (3ª) falha
+// INFRAESTRUTURA — nada a ver com a cota do plano do usuário. Em vez de só
+// retentar UM modelo, percorremos uma CADEIA ordenada de modelos: esgotadas as
+// retentativas do modelo atual por 503/429 (ou rede), caímos para o próximo
+// modelo da cadeia. Só quando a cadeia INTEIRA se esgota devolvemos um
+// error_code estruturado NOSSO (ai_overloaded) — nunca o texto cru do Google.
+//
+// A cota do plano (429 nosso, quota_exceeded) é tratada ANTES disto, no handler,
+// e NUNCA passa por aqui: o fallback se aplica só à sobrecarga do lado do Google.
+const MODEL_FALLBACK_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+const MAX_GEMINI_ATTEMPTS = 4; // por modelo
+const GEMINI_BACKOFFS_MS = [300, 800, 1500]; // espera após a 1ª, 2ª, 3ª falha (4 tentativas)
 // Teto para o retryDelay sugerido pelo Google: respeitamos a dica, mas limitada,
 // para nunca pendurar a requisição do usuário por dezenas de segundos.
 const MAX_RETRY_DELAY_MS = 8000;
@@ -357,6 +363,20 @@ const MAX_RETRY_DELAY_MS = 8000;
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 /** Jitter aleatório (0–250ms) para não sincronizar as retentativas. */
 const withJitter = (ms: number): number => ms + Math.floor(Math.random() * 250);
+
+/**
+ * Constrói a cadeia ordenada de modelos a tentar: o modelo PREFERIDO do cliente
+ * primeiro, seguido dos fallbacks padrão (sem duplicar). Se o modelo do cliente
+ * já estiver na cadeia, ele só é promovido para a frente; se não estiver, vira o
+ * primário e a cadeia inteira é anexada depois dele.
+ */
+export function buildModelChain(primary: string): string[] {
+  const chain: string[] = [primary];
+  for (const m of MODEL_FALLBACK_CHAIN) {
+    if (!chain.includes(m)) chain.push(m);
+  }
+  return chain;
+}
 
 /** Lê o RetryInfo.retryDelay ("57s", "1.5s") do corpo de um 429 do Google, em ms. */
 async function googleRetryDelayMs(res: Response): Promise<number | null> {
@@ -381,34 +401,46 @@ async function googleRetryDelayMs(res: Response): Promise<number | null> {
 
 type GeminiOutcome =
   | { kind: 'ok'; data: unknown }
-  | { kind: 'overloaded' } // 503 / 429 do Google após esgotar as retentativas
+  | { kind: 'overloaded' } // 503 / 429 do Google após esgotar a CADEIA inteira
   | { kind: 'error' } // erro real do Google (400/401/403/...): falha rápida
-  | { kind: 'network' }; // o fetch lançou (rede/timeout)
+  | { kind: 'network' }; // o fetch lançou (rede/timeout) em todos os modelos
+
+/** Dependências injetáveis (testes passam um fetch falso e um sleep instantâneo);
+ *  em produção, usam o fetch e o sleep reais. */
+interface GeminiCallDeps {
+  fetchImpl?: typeof fetch;
+  sleepImpl?: (ms: number) => Promise<void>;
+}
 
 /**
- * Chama o Gemini generateContent com retry-com-backoff. Repete SOMENTE em 503 e
- * 429 (sobrecarga / rate limit do Google na chave compartilhada), até
+ * Chama UM modelo via generateContent com retry-com-backoff. Repete SOMENTE em
+ * 503 e 429 (sobrecarga / rate limit do Google na chave compartilhada), até
  * MAX_GEMINI_ATTEMPTS. NUNCA repete 400/401/403/404 — são erros reais, falha
  * rápida. Em 429 respeita o retryDelay sugerido pelo Google quando presente.
+ * Devolve 'overloaded' (503/429 esgotados) ou 'network' (fetch lançou em todas
+ * as tentativas) para o orquestrador decidir cair para o próximo modelo.
  */
 async function callGeminiWithRetry(
   model: string,
   geminiBody: unknown,
   apiKey: string,
+  deps: GeminiCallDeps = {},
 ): Promise<GeminiOutcome> {
+  const doFetch = deps.fetchImpl ?? fetch;
+  const doSleep = deps.sleepImpl ?? sleep;
   const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`;
   for (let attempt = 0; attempt < MAX_GEMINI_ATTEMPTS; attempt += 1) {
     const last = attempt === MAX_GEMINI_ATTEMPTS - 1;
     let res: Response;
     try {
-      res = await fetch(endpoint, {
+      res = await doFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(geminiBody),
       });
     } catch {
       if (last) return { kind: 'network' };
-      await sleep(withJitter(GEMINI_BACKOFFS_MS[attempt]));
+      await doSleep(withJitter(GEMINI_BACKOFFS_MS[attempt]));
       continue;
     }
 
@@ -431,9 +463,38 @@ async function callGeminiWithRetry(
       const hinted = await googleRetryDelayMs(res);
       if (hinted != null) delay = Math.min(hinted, MAX_RETRY_DELAY_MS);
     }
-    await sleep(withJitter(delay));
+    await doSleep(withJitter(delay));
   }
   return { kind: 'overloaded' };
+}
+
+/**
+ * Percorre a cadeia de modelos: tenta cada um (com retry). Em sobrecarga do
+ * Google (503/429 esgotados) ou falha de rede, cai para o PRÓXIMO modelo. Volta
+ * no primeiro 200 (ok) ou num erro REAL do Google (falha rápida — 400/4xx falha
+ * igual em todos os modelos, não adianta insistir). Só quando a cadeia INTEIRA
+ * se esgota é que devolvemos 'overloaded' (ou 'network', se nunca falamos com o
+ * Google em nenhum modelo).
+ */
+export async function callGeminiWithFallback(
+  models: string[],
+  geminiBody: unknown,
+  apiKey: string,
+  deps: GeminiCallDeps = {},
+): Promise<GeminiOutcome> {
+  let sawOverloaded = false;
+  let sawNetwork = false;
+  for (const model of models) {
+    const outcome = await callGeminiWithRetry(model, geminiBody, apiKey, deps);
+    if (outcome.kind === 'ok' || outcome.kind === 'error') return outcome;
+    if (outcome.kind === 'overloaded') sawOverloaded = true;
+    else sawNetwork = true;
+    // 'overloaded' | 'network': cai para o próximo modelo da cadeia.
+  }
+  // Cadeia esgotada: preferimos 'overloaded' (caso esperado) sobre 'network'.
+  if (sawOverloaded) return { kind: 'overloaded' };
+  if (sawNetwork) return { kind: 'network' };
+  return { kind: 'overloaded' }; // defensivo (cadeia vazia)
 }
 
 export default {
@@ -551,10 +612,12 @@ export default {
         geminiBody.systemInstruction = withCardCapInstruction(geminiBody.systemInstruction, deckMaxCards);
       }
 
-      // Chama o Gemini com retry-com-backoff em falhas transitórias (503/429 do
-      // Google). NUNCA repassa o texto cru do Google: ao falhar, devolve só o
-      // nosso error_code estruturado.
-      const outcome = await callGeminiWithRetry(model, geminiBody, env.GOOGLE_GEMINI_API_KEY);
+      // Chama o Gemini com retry-com-backoff E fallback de modelos em falhas
+      // transitórias (503/429 do Google). O `model` do cliente é o PREFERIDO
+      // (primeiro da cadeia); o Worker é dono da cadeia de fallback. NUNCA
+      // repassa o texto cru do Google: ao falhar, devolve só o nosso error_code.
+      const models = buildModelChain(model);
+      const outcome = await callGeminiWithFallback(models, geminiBody, env.GOOGLE_GEMINI_API_KEY);
 
       if (outcome.kind === 'network') {
         // Nem chegamos a falar com o Google (rede/timeout).

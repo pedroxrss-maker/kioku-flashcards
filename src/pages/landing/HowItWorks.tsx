@@ -1,4 +1,5 @@
 import { FloatCard, Reveal, StaggerCard, StaggerGroup } from './anim';
+import { themedImage, useLandingTheme } from './theme';
 
 // bg matches each illustration's background so the image blends into the card.
 const STEPS: Array<{ n: string; title: string; desc: string; img: string; bg: string }> = [
@@ -26,6 +27,8 @@ const STEPS: Array<{ n: string; title: string; desc: string; img: string; bg: st
 ];
 
 export function HowItWorks() {
+  const { theme } = useLandingTheme();
+  const light = theme === 'light';
   return (
     <section id="como-funciona" className="mx-auto max-w-[1180px] px-5 md:px-8 py-20 md:py-28" style={{ scrollMarginTop: 76 }}>
       <Reveal>
@@ -37,14 +40,20 @@ export function HowItWorks() {
         {STEPS.map((s, i) => (
           <StaggerCard key={s.n} className="h-full">
             <FloatCard className="h-full" dur={5 + i * 0.7} delay={i * 0.5}>
-              <div className="surface p-5 md:p-8 flex flex-col h-full" style={{ borderRadius: 'var(--r-lg)', background: s.bg }}>
+              {/* Light mode uses the -light illustration (white background), so the
+                  card turns white to blend it; dark mode keeps the dark image + bg.
+                  Text follows the page theme, which matches the card either way. */}
+              <div
+                className="surface p-5 md:p-8 flex flex-col h-full"
+                style={{ borderRadius: 'var(--r-lg)', background: light ? '#ffffff' : s.bg }}
+              >
                 <span className="display" style={{ fontSize: 'clamp(34px, 9vw, 46px)', fontWeight: 600, color: 'var(--accent)', lineHeight: 1 }}>
                   {s.n}
                 </span>
                 <h3 className="display mt-3" style={{ fontSize: 20, fontWeight: 600 }}>{s.title}</h3>
                 <p className="text-muted mt-2" style={{ fontSize: 15, lineHeight: 1.6 }}>{s.desc}</p>
                 <div className="mt-auto pt-5 md:pt-8">
-                  <img src={s.img} alt="" draggable={false} className="block w-full h-auto max-h-[190px] md:max-h-none object-contain mx-auto" style={{ borderRadius: 12 }} />
+                  <img src={themedImage(s.img, theme)} alt="" draggable={false} className="block w-full h-auto max-h-[190px] md:max-h-none object-contain mx-auto" style={{ borderRadius: 12 }} />
                 </div>
               </div>
             </FloatCard>

@@ -111,7 +111,8 @@ export interface AppSettings {
   profilePhoto?: string;
   /** Show the interval preview (e.g. "1 min", "6 d") under each answer button. */
   showAnswerIntervals?: boolean;
-  /** Show how many reviews remain ("Card X de Y") during a study session. */
+  /** Show how many reviews remain ("Card X de Y") during a study session. Unset =
+   *  disabled (default-off); only an explicit true shows the total. */
   showRemainingCount?: boolean;
   /** Play a sound + confetti when leveling up and finishing a session. Unset =
    *  enabled (default-on); set false to mute the celebration sound/confetti. */

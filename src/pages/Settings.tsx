@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../lib/useReducedMotion';
-import { AlertTriangle, Brain, Camera, Check, Database, Eye, Palette, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { AlertTriangle, Brain, Camera, Check, Database, Eye, Moon, Palette, SlidersHorizontal, Sun, Trash2, User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -13,6 +13,7 @@ import { AnswerButtonsGuide } from '../components/settings/AnswerButtonsGuide';
 import { TtsSettings } from '../features/tts/TtsSettings';
 import { DeleteAccountModal } from '../features/account/DeleteAccountModal';
 import { useSettings } from '../db/hooks';
+import { useTheme } from '../theme/theme';
 import { repo } from '../db/repositories';
 import { seedForUserIfEmpty } from '../db/seedSupabase';
 import { UNLIMITED_PER_DAY } from '../db/types';
@@ -40,6 +41,7 @@ function Section({
 
 export function Settings() {
   const settings = useSettings();
+  const { theme, setTheme } = useTheme();
   const [confirmReset, setConfirmReset] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [editorSrc, setEditorSrc] = useState<string | null>(null);
@@ -398,7 +400,7 @@ export function Settings() {
             </p>
           </div>
           <Toggle
-            checked={settings.showRemainingCount !== false}
+            checked={settings.showRemainingCount === true}
             onChange={(v) => repo.saveSettings({ showRemainingCount: v })}
           />
         </div>
@@ -419,13 +421,49 @@ export function Settings() {
         </div>
       </Section>
 
-      {/* Appearance */}
-      <Section icon={<Palette size={16} />} title="Aparência">
-        <p className="text-sm text-muted">
-          O Kioku é <b className="text-fg">dark-first</b> por identidade de marca —
-          alto contraste, brutalista, com um único acento quente. Um tema claro
-          pode chegar em versões futuras.
+      {/* Appearance / theme */}
+      <Section icon={<Palette size={16} />} title="Tema do Kioku">
+        <p className="text-sm text-muted mb-4" style={{ lineHeight: 1.55 }}>
+          O Kioku é <b className="text-fg">dark-first</b> por identidade de marca, mas você pode
+          trocar para o tema claro. A escolha vale para esta sessão.
         </p>
+        <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Tema do Kioku">
+          {([
+            { val: 'dark', label: 'Escuro', Icon: Moon, hint: 'Padrão' },
+            { val: 'light', label: 'Claro', Icon: Sun, hint: 'Novo' },
+          ] as const).map(({ val, label, Icon, hint }) => {
+            const selected = theme === val;
+            return (
+              <button
+                key={val}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setTheme(val)}
+                className="algo-option relative rounded-[var(--r-sm)] px-4 py-3 text-left cursor-pointer"
+              >
+                {selected && (
+                  <motion.span
+                    layoutId="theme-highlight"
+                    className="absolute inset-0 rounded-[var(--r-sm)]"
+                    style={{ boxShadow: 'inset 0 0 0 2px var(--accent)', background: 'var(--accent-soft)', pointerEvents: 'none' }}
+                    transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <span className="relative z-[1] flex items-center justify-between gap-2 mb-0.5">
+                  <span className="inline-flex items-center gap-2">
+                    <Icon size={16} style={{ color: selected ? 'var(--accent)' : 'var(--muted)' }} />
+                    <span className="mono text-sm" style={{ color: selected ? 'var(--accent)' : 'var(--fg)' }}>
+                      {label}
+                    </span>
+                  </span>
+                  {selected && <Check size={15} style={{ color: 'var(--accent)' }} />}
+                </span>
+                <span className="relative z-[1] block text-xs text-muted">{hint}</span>
+              </button>
+            );
+          })}
+        </div>
       </Section>
 
       {/* Data / danger zone */}
@@ -444,7 +482,7 @@ export function Settings() {
               type="button"
               onClick={resetAll}
               className="btn btn-sm"
-              style={{ borderColor: 'var(--accent)', background: 'var(--accent)', color: 'var(--fg)' }}
+              style={{ borderColor: 'var(--accent)', background: 'var(--accent)', color: '#fff' }}
             >
               Apagar tudo
             </button>

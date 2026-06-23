@@ -87,7 +87,7 @@ export function defaultSettings(): AppSettings {
     seededAt: null,
     deckIcons: {},
     showAnswerIntervals: true,
-    showRemainingCount: true,
+    showRemainingCount: false,
     mutedCards: {},
     deckAudio: {},
     deckPaths: {},

@@ -9,6 +9,7 @@ export function KiokuMark({ size = 26 }: { size?: number }) {
         src={brandLogo}
         alt=""
         draggable={false}
+        className="brand-logo-mark"
         style={{ height: size, width: size }}
       />
       <span className="display" style={{ fontSize: size * 0.85, fontWeight: 600, lineHeight: 1 }}>

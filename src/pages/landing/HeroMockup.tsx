@@ -18,6 +18,7 @@ import { ArrowRight, Flame, MoreVertical, Star } from 'lucide-react';
 import { makeSm2Scheduler } from '../../features/scheduling/sm2-adapter';
 import type { Card, Rating } from '../../db/types';
 import { useCountUp } from './anim';
+import { themedImage, useLandingTheme } from './theme';
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const HAIRLINE = '1px solid rgba(255,255,255,0.08)';
@@ -47,11 +48,14 @@ const pill: CSSProperties = {
   fontFamily: 'var(--body)',
 };
 
+// Self-rating tag colors come from dedicated CSS vars so the light theme can
+// recolor them exactly (see --ans-* in globals.css). `text` is the readable tone
+// used only when a chip is filled on hover.
 const ANSWERS: Array<{ rating: Rating; color: string; text: string }> = [
-  { rating: 'again', color: 'var(--accent)', text: '#ffffff' },
-  { rating: 'hard', color: 'var(--accent-amber)', text: '#1a1205' },
-  { rating: 'good', color: 'var(--accent-green)', text: '#04130c' },
-  { rating: 'easy', color: 'var(--accent-blue)', text: '#ffffff' },
+  { rating: 'again', color: 'var(--ans-again)', text: '#ffffff' },
+  { rating: 'hard', color: 'var(--ans-hard)', text: '#1a1205' },
+  { rating: 'good', color: 'var(--ans-good)', text: '#04130c' },
+  { rating: 'easy', color: 'var(--ans-easy)', text: '#ffffff' },
 ];
 
 /* ----------------------------------------- live SM-2 demo (deck + ratings) */
@@ -229,11 +233,12 @@ function Draggable({ width, pct = 0.1, children }: { width: number; pct?: number
 /* ----------------------------------------------- main flashcard (deck) ---- */
 function CardBack({ meta }: { meta: DemoMeta }) {
   const [imgOk, setImgOk] = useState(true);
+  const { theme } = useLandingTheme();
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {imgOk ? (
         <img
-          src={meta.img}
+          src={themedImage(meta.img, theme)}
           alt=""
           onError={() => setImgOk(false)}
           style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
@@ -270,6 +275,13 @@ const SIL: CSSProperties = {
 function MainCard() {
   const reduce = useReducedMotion();
   const { meta, index, flipped, flip } = useDemo();
+  const { theme } = useLandingTheme();
+  // The -light card illustrations have a white background, so the back face turns
+  // white in light mode to blend them; dark mode keeps the image-matched dark bg.
+  const backBg = theme === 'light' ? '#ffffff' : meta.bg;
+  // Front face (and the peeking cards behind it) share that exact white in light
+  // mode so the whole flashcard reads as one tone; dark mode keeps the surface.
+  const frontBg = theme === 'light' ? '#ffffff' : 'var(--surface)';
   const W = 300;
   const H = 252;
 
@@ -288,7 +300,7 @@ function MainCard() {
           return (
             <div
               key={off}
-              style={{ ...SIL, opacity: t.op, padding: '20px', overflow: 'hidden', transform: `translate(${t.x}px, ${t.y}px) translateZ(${t.z}px) rotate(${t.rot}deg)` }}
+              style={{ ...SIL, background: frontBg, opacity: t.op, padding: '20px', overflow: 'hidden', transform: `translate(${t.x}px, ${t.y}px) translateZ(${t.z}px) rotate(${t.rot}deg)` }}
             >
               <span style={pill}>Frente</span>
               <p style={{ color: 'var(--muted)', fontSize: 14.5, fontWeight: 600, lineHeight: 1.35, fontFamily: 'var(--body)', marginTop: 14 }}>{m.q}</p>
@@ -312,7 +324,7 @@ function MainCard() {
               transition={reduce ? { duration: 0 } : { duration: 0.5, ease: EASE }}
             >
               {/* FRONT */}
-              <div style={FACE}>
+              <div style={{ ...FACE, background: frontBg }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={pill}>Frente</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
@@ -358,7 +370,7 @@ function MainCard() {
               </div>
 
               {/* BACK — answer text above the illustration; bg matches the image */}
-              <div style={{ ...FACE, background: meta.bg, transform: 'rotateY(180deg)', padding: '16px 16px 14px' }}>
+              <div style={{ ...FACE, background: backBg, transform: 'rotateY(180deg)', padding: '16px 16px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <span style={pill}>Verso</span>
                   <Star size={17} color="var(--accent-amber)" fill="var(--accent-amber)" />
@@ -392,7 +404,7 @@ function AnswerButtons() {
             <div
               className="answer-chip"
               data-hand-target={`ans-${a.rating}`}
-              style={{ '--bc': a.color, '--tc': a.text, height: '100%', opacity: active ? 1 : 0.4 } as CSSProperties}
+              style={{ '--bc': a.color, '--tc': a.text, height: '100%', opacity: active ? 1 : 0.72 } as CSSProperties}
               onClick={() => rate(a.rating)}
             >
               <span className="chip-sub" style={{ display: 'block', fontSize: 9.5, lineHeight: 1.2 }}>

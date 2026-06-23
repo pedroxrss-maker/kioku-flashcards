@@ -193,19 +193,19 @@ export function DeckBrowser() {
               <div className={DECK_TABLE.countGroup}>
                 <span
                   className={cn(DECK_TABLE.countCell, 'text-[11px] font-semibold')}
-                  style={{ color: 'var(--accent-blue)' }}
+                  style={{ color: 'var(--count-blue)' }}
                 >
                   Novas
                 </span>
                 <span
                   className={cn(DECK_TABLE.countCell, 'text-[11px] font-semibold')}
-                  style={{ color: 'var(--accent)' }}
+                  style={{ color: 'var(--count-red)' }}
                 >
                   Aprender
                 </span>
                 <span
                   className={cn(DECK_TABLE.countCell, 'text-[11px] font-semibold')}
-                  style={{ color: 'var(--accent-green)' }}
+                  style={{ color: 'var(--count-green)' }}
                 >
                   Revisar
                 </span>
