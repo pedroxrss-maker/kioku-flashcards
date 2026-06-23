@@ -245,7 +245,13 @@ per-deck `ttsLang`, auto-pronounce-on-reveal wired in ReviewSession.
   (wasm loaded through Vite `?url`), read `notes.flds` (split on 0x1f), create one
   Kioku deck of `new` cards, deck name from `col.decks` JSON (fallback filename),
   rewrite `<img>` media → imported MediaBlobs (lazy, cached). Clear errors for the
-  new compressed `anki21b` format. Scheduling reset to `new` (not translated).
+  new compressed `anki21b` format. **Scheduling is translated** (`mapScheduling`):
+  reads `cards.{type,due,ivl,factor,reps,lapses,data}` + `col.crt`, mapping state
+  by Anki type (0/1/2/3 → new/learning/review/relearning), `ivl`→intervalDays
+  (days as-is; negative seconds→days for review only), `factor`→ease (÷1000, default
+  2.5), reps/lapses direct, due via crt+day-number (review) / epoch-seconds
+  (learning/relearning) / now (new), clamped to now if before `crt`. FSRS `{s,d}`
+  carried over when present. Suspended/buried map by type (Kioku has no suspend).
 - `features/importer/apkg-export.ts` + `anki-schema.ts`: best-effort Anki2
   writer — standard schema (col/notes/cards/revlog/graves + indexes), Basic
   model, decks/conf/dconf JSON, sha1 field checksums, media files + map. **node

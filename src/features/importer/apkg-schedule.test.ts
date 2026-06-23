@@ -39,9 +39,38 @@ describe('mapScheduling (Anki -> Kioku card scheduling)', () => {
     expect(s.fsrs?.lastReview).toBe(colCrt + 110 * DAY - 30 * DAY);
   });
 
-  it('treats suspended/buried (queue < 0) cards as inactive new', () => {
+  it('preserves the real PAST due of an overdue review card (kept, not clamped)', () => {
+    // type 2, due = day 50 (now is day 100) -> 50 days overdue. ivl 30, factor 2500.
+    const s = mapScheduling(2, 2, 50, 30, 2500, 9, 0, '', colCrt, now);
+    expect(s.state).toBe('review');
+    expect(s.sm2.intervalDays).toBe(30);
+    expect(s.sm2.ease).toBeCloseTo(2.5);
+    expect(s.sm2.reps).toBe(9);
+    expect(s.due).toBe(colCrt + 50 * DAY); // the real date is kept...
+    expect(s.due).toBeLessThanOrEqual(now); // ...and it's overdue, so it surfaces.
+  });
+
+  it('maps suspended/buried (queue < 0) cards by their TYPE (no suspend concept)', () => {
+    // Kioku has no suspend/bury: a suspended REVIEW card imports as a review card,
+    // with its real interval/ease/due intact — not zeroed to new.
     const s = mapScheduling(2, -1, 110, 30, 2500, 5, 0, '', colCrt, now);
-    expect(s.state).toBe('new');
+    expect(s.state).toBe('review');
+    expect(s.sm2.intervalDays).toBe(30);
+    expect(s.sm2.ease).toBeCloseTo(2.5);
+    expect(s.due).toBe(colCrt + 110 * DAY);
+  });
+
+  it('converts a review card negative ivl (seconds) to days', () => {
+    // ivl < 0 is negative seconds; -86400s = 1 day. Only review cards convert it.
+    const s = mapScheduling(2, 2, 110, -86_400, 2000, 3, 0, '', colCrt, now);
+    expect(s.state).toBe('review');
+    expect(s.sm2.intervalDays).toBe(1);
+  });
+
+  it('keeps a learning card negative ivl (a seconds step) at intervalDays 0', () => {
+    const s = mapScheduling(1, 1, Math.floor((now + 60_000) / 1000), -600, 0, 1, 0, '', colCrt, now);
+    expect(s.state).toBe('learning');
+    expect(s.sm2.intervalDays).toBe(0); // stays in the learning flow
   });
 
   it('maps a brand-new card to due-now with no FSRS state', () => {
@@ -56,5 +85,13 @@ describe('mapScheduling (Anki -> Kioku card scheduling)', () => {
     const s = mapScheduling(1, 1, dueEpochSec, 0, 0, 1, 0, '', colCrt, now);
     expect(s.state).toBe('learning');
     expect(s.due).toBe(dueEpochSec * 1000);
+  });
+
+  it('clamps an absurd due before the collection existed to now', () => {
+    // A learning card whose `due` is mistakenly a small day-number (not epoch
+    // seconds) converts to ~1970 -> before crt -> clamped to now so it surfaces.
+    const s = mapScheduling(1, 3, 12, 0, 0, 0, 0, '', colCrt, now);
+    expect(s.state).toBe('learning');
+    expect(s.due).toBe(now);
   });
 });

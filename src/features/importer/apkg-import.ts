@@ -191,7 +191,7 @@ interface MappedScheduling {
  */
 export function mapScheduling(
   type: number,
-  queue: number,
+  _queue: number, // suspended/buried (negative) — kept for call-site parity; Kioku has no suspend
   due: number,
   ivl: number,
   factor: number,
@@ -201,26 +201,44 @@ export function mapScheduling(
   colCrtMs: number,
   nowMs: number,
 ): MappedScheduling {
-  // state: type 0=new, 1=learning, 2=review, 3=relearning. queue<0 = suspended/
-  // buried -> treat as new (inactive).
+  // State follows Anki's card TYPE (0=new, 1=learning, 2=review, 3=relearning).
+  // Suspended/buried cards have a negative `queue`, but Kioku has NO suspend/bury
+  // concept — so we map them by their type and let them stay due like any other
+  // card (nothing is hidden or zeroed on import).
   let state: CardState;
-  if (queue < 0) state = 'new';
+  if (type === 2) state = 'review';
   else if (type === 1) state = 'learning';
-  else if (type === 2) state = 'review';
   else if (type === 3) state = 'relearning';
   else state = 'new';
 
-  // Real due datetime. Review due is a day number relative to col.crt; learning
-  // due is an epoch timestamp (seconds); new cards are due now.
+  // Interval (days). Anki `ivl` > 0 is already in DAYS (use as-is). `ivl` < 0 is a
+  // negative SECONDS value (an intraday learning step): convert seconds -> days
+  // ONLY for review cards; learning/relearning keep intervalDays 0 so they
+  // continue in the learning flow.
+  let intervalDays = 0;
+  if (ivl > 0) intervalDays = ivl;
+  else if (ivl < 0 && type === 2) intervalDays = Math.max(1, Math.ceil(-ivl / 86_400));
+
+  // Due datetime:
+  //   - review (type 2): Anki `due` is a DAY NUMBER since col.crt.
+  //   - learning/relearning (type 1/3): Anki `due` is a unix timestamp (seconds).
+  //   - new (type 0): `due` is only an ordering position, not a date -> due now
+  //     (new cards are introduced by the daily new limit, not by their due).
   let dueMs: number;
   if (type === 2) dueMs = colCrtMs + due * DAY;
-  else if (type === 1 || type === 3) dueMs = due > 1e9 ? due * 1000 : colCrtMs + due * DAY;
+  else if (type === 1 || type === 3) dueMs = due * 1000;
   else dueMs = nowMs;
+  // A card cannot legitimately be due before its collection existed; such a value
+  // is a broken/edge conversion (e.g. a day-learning `due` read as epoch seconds)
+  // -> make it due now so it still surfaces immediately. Genuinely-overdue dates
+  // (after crt) are kept exactly, preserving the real due date.
+  if (dueMs < colCrtMs) dueMs = nowMs;
 
-  // SM-2 fields (Anki factor is e.g. 2500 -> ease 2.5; ivl in days, <0 = seconds).
+  // SM-2 fields. Anki `factor` is ease×1000 (2500 -> 2.5); new cards (factor 0)
+  // get Kioku's default starting ease. `step` 0 keeps (re)learning cards in flow.
   const sm2: Sm2Fields = {
     ease: factor > 0 ? factor / 1000 : 2.5,
-    intervalDays: Math.max(0, ivl),
+    intervalDays,
     reps,
     lapses,
     step: 0,
@@ -232,12 +250,11 @@ export function mapScheduling(
   try {
     const d = JSON.parse(data || '{}') as { s?: number; d?: number };
     if (typeof d.s === 'number' && typeof d.d === 'number') {
-      const ivlDays = Math.max(0, ivl);
       fsrs = {
         stability: d.s,
         difficulty: d.d,
-        elapsedDays: ivlDays,
-        scheduledDays: ivlDays,
+        elapsedDays: intervalDays,
+        scheduledDays: intervalDays,
         learningSteps: 0,
         reps,
         lapses,
@@ -245,7 +262,7 @@ export function mapScheduling(
         // (due − interval) so FSRS derives the correct elapsed time on the next
         // review. Using "now" would make every imported card look freshly
         // reviewed and shrink its next interval.
-        lastReview: state === 'new' ? null : dueMs - ivlDays * DAY,
+        lastReview: state === 'new' ? null : dueMs - intervalDays * DAY,
       };
     }
   } catch {
