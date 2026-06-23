@@ -473,19 +473,24 @@ create policy "kioku media delete own"
 -- Returns one row per deck that HAS cards; a deck with zero cards is simply
 -- absent (the client treats a missing deck id as all-zeros).
 --
---   new_count        = cards in state 'new'
+--   new_count        = Anki "new cards to show today" (see below) — NOT the raw
+--                      count of state='new'
 --   learning_count   = cards in 'learning' or 'relearning' (any due time)
 --   due_review_count = 'review' cards whose due has arrived (due <= now())
 --   due_any_count    = ALL cards whose due has arrived (any state)
 --   total_count      = all cards in the deck
 --
--- "due" is an ABSOLUTE-INSTANT comparison (due <= now()) — identical to the old
--- per-deck HEAD counts and to the review queue. It is timezone-agnostic, since
--- due and now() are both timestamptz (the America/Sao_Paulo boundary only matters
--- for DATE-bucketed metrics like the streak, never for due <= now()).
+-- new_count = greatest(0, least(new_per_day - new_studied_today, total_new)),
+-- the per-deck daily new-card limit (decks.new_per_day; 0 = show no new cards),
+-- where new_studied_today = review_logs for this deck/user with prev_state='new'
+-- whose reviewed_at falls on "today" in America/Sao_Paulo (same boundary as the
+-- streak AND the review queue, so the badge and the session never diverge).
+-- "Unlimited" new_per_day (the 1e9 sentinel) naturally yields total_new.
 --
--- security invoker + RLS on public.cards scopes rows to the caller; the explicit
--- user_id = auth.uid() is belt-and-suspenders and lets it use the cards indexes.
+-- "due" is an ABSOLUTE-INSTANT comparison (due <= now()) — timezone-agnostic,
+-- since due and now() are both timestamptz. security invoker + RLS on
+-- public.cards scopes rows to the caller; the explicit user_id = auth.uid() is
+-- belt-and-suspenders and lets it use the cards indexes.
 -- ----------------------------------------------------------------------------
 create or replace function public.deck_counts()
 returns table(
@@ -496,16 +501,46 @@ returns table(
   due_any_count bigint,
   total_count bigint
 ) language sql stable security invoker set search_path = public as $$
+  with card_counts as (
+    select
+      c.deck_id,
+      count(*) filter (where c.state = 'new')                        as total_new,
+      count(*) filter (where c.state in ('learning', 'relearning'))  as learning_count,
+      count(*) filter (where c.state = 'review' and c.due <= now())  as due_review_count,
+      count(*) filter (where c.due <= now())                         as due_any_count,
+      count(*)                                                       as total_count
+    from public.cards c
+    where c.user_id = auth.uid()
+    group by c.deck_id
+  ),
+  new_studied_today as (
+    select rl.deck_id, count(*) as studied
+    from public.review_logs rl
+    where rl.user_id = auth.uid()
+      and rl.prev_state = 'new'
+      and (rl.reviewed_at at time zone 'America/Sao_Paulo')::date
+          = (now() at time zone 'America/Sao_Paulo')::date
+    group by rl.deck_id
+  )
   select
-    c.deck_id,
-    count(*) filter (where c.state = 'new'),
-    count(*) filter (where c.state in ('learning', 'relearning')),
-    count(*) filter (where c.state = 'review' and c.due <= now()),
-    count(*) filter (where c.due <= now()),
-    count(*)
-  from public.cards c
-  where c.user_id = auth.uid()
-  group by c.deck_id;
+    cc.deck_id,
+    case
+      -- UNLIMITED new (the >= 1e9 sentinel): show ALL remaining new cards, like
+      -- Anki, even past the client's session cap. total_new = count(state='new'),
+      -- which already EXCLUDES today's studied new cards (they left the 'new'
+      -- state), so it is the true "total minus studied today" remaining — no
+      -- second subtraction (that would under-count).
+      when d.new_per_day >= 1000000000 then cc.total_new
+      -- Finite limit: Anki "new to show today" = clamp(new_per_day - studied, 0, total_new).
+      else greatest(0, least(d.new_per_day - coalesce(nt.studied, 0), cc.total_new))
+    end::bigint as new_count,
+    cc.learning_count,
+    cc.due_review_count,
+    cc.due_any_count,
+    cc.total_count
+  from card_counts cc
+  join public.decks d on d.id = cc.deck_id
+  left join new_studied_today nt on nt.deck_id = cc.deck_id;
 $$;
 revoke all on function public.deck_counts() from public, anon;
 grant execute on function public.deck_counts() to authenticated, service_role;

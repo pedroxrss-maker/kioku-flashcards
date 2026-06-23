@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { repo } from '../../db/repositories';
 import { schedulerForDeck } from '../scheduling';
 import type { Scheduler, RatingPreview } from '../scheduling';
-import { startOfLocalDay } from '../../lib/date';
+import { startOfSaoPauloDay } from '../../lib/date';
 import {
   PATH_SEP,
   deckPathOf,
@@ -153,7 +153,9 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
       }
 
       const now = Date.now();
-      const dayStart = startOfLocalDay();
+      // America/Sao_Paulo midnight — the SAME boundary deck_counts() uses for
+      // "new studied today", so the served new cards match the dashboard count.
+      const dayStart = startOfSaoPauloDay();
       const schedulers = new Map<string, Scheduler>();
       const decksMap = new Map<string, Deck>();
       const perDeckQueues: Card[][] = [];
