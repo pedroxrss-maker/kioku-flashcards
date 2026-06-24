@@ -37,6 +37,7 @@ import { clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
 import { useDraft } from '../../lib/useDraft';
 import { cardTypeOf, markTypeIn, stripTypeInMark } from '../../lib/cardType';
 import { pushToast } from '../../lib/toast';
+import { beginAppBusy } from '../../lib/appBusy';
 import { recordFeatureUse, scheduleAchievementCheck } from '../gamification/achievements';
 import type { CardType } from '../../lib/cardType';
 import type { Card } from '../../db/types';
@@ -352,6 +353,9 @@ export function CardEditorModal({
   async function genImage() {
     if (imgBusy || atImageCap(settings)) return;
     setImgBusy(true);
+    // Hold the busy guard so a mobile/PWA service-worker update can't reload the
+    // app mid-generation (image gen takes several seconds). Released in finally.
+    const releaseBusy = beginAppBusy();
     try {
       const img = await generateCardImage({ front, back, deckId });
       const targetRef = imageSideForType(type) === 'front' ? frontRef : backRef;
@@ -363,8 +367,10 @@ export function CardEditorModal({
     } catch (e) {
       // Free user without image quota → upsell modal instead of an error toast.
       if (e instanceof QuotaError && openUpgrade(e.info.metric)) return;
-      pushToast('error', e instanceof Error ? e.message : 'Falha ao gerar a imagem.');
+      // Never fail silently: always show a friendly pt-BR message (no raw API text).
+      pushToast('error', 'Não foi possível gerar a imagem agora. Tente novamente.');
     } finally {
+      releaseBusy();
       setImgBusy(false);
     }
   }

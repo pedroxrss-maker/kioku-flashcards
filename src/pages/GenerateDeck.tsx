@@ -33,6 +33,7 @@ import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { pushToast } from '../lib/toast';
 import { useDraft } from '../lib/useDraft';
+import { beginAppBusy } from '../lib/appBusy';
 import type { GeneratedCard, GenerateSource, GenerationMode } from '../features/ai/cards';
 import type { CardType } from '../lib/cardType';
 
@@ -330,6 +331,12 @@ export function GenerateDeck() {
     setBusy(true);
     setCreating(true);
     setError(null);
+    // Hold the busy guard across the WHOLE creation run (deck + audio + images) so
+    // a mobile/PWA service-worker update can't reload the app mid-generation and
+    // silently drop the work. Image gen is several seconds per image — the most
+    // exposed step. Released in finally so it always clears. Each finished image is
+    // still persisted per-card below, so even a hard OS kill keeps what completed.
+    const releaseBusy = beginAppBusy();
     try {
       const { deck, cards: createdCards } = await createDeckFromGenerated(deckName, cards, { language });
 
@@ -448,10 +455,15 @@ export function GenerateDeck() {
         // feat_image, event-driven (counter in settings) → instant, no card scan.
         if (made > 0) void recordFeatureUse('image');
         if (made > 0 || failed > 0) {
+          // Never silent: total failure → a clear friendly message; partial →
+          // a count so the user knows some landed and some didn't; all good →
+          // success. No raw API/error text is ever shown.
           pushToast(
             failed > 0 ? 'error' : 'success',
             failed > 0
-              ? `${made} ${made === 1 ? 'imagem gerada' : 'imagens geradas'}, ${failed} falharam.`
+              ? made === 0
+                ? 'Não foi possível gerar as imagens agora. Tente novamente.'
+                : `${made} ${made === 1 ? 'imagem gerada' : 'imagens geradas'}, ${failed} falharam.`
               : `${made} ${made === 1 ? 'imagem gerada' : 'imagens geradas'} para os cards.`,
           );
         }
@@ -466,6 +478,9 @@ export function GenerateDeck() {
       setCreating(false);
       setAudioProgress(null);
       setImageProgress(null);
+    } finally {
+      // Always release the SW-update guard — success (after nav), error AND cancel.
+      releaseBusy();
     }
   }
 
