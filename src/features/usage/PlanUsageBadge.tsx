@@ -16,6 +16,7 @@ import { ChevronDown, Sparkles } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useQuery } from '../../db/store';
 import { useAuth } from '../auth/AuthContext';
+import { useTheme } from '../../theme/theme';
 import { isBlocked, isUnlimited, quotaRule } from './limits';
 import type { Plan, UsageMetric } from './limits';
 
@@ -68,15 +69,26 @@ const METRICS: Array<{ metric: UsageMetric; label: string }> = [
   { metric: 'image', label: 'Imagens' },
 ];
 
+/** On the LIGHT theme the airy amber tint washes out on the cream surface, so the
+ *  Avançado badge gets a richer, higher-contrast gold (deep-gold text/icon, a
+ *  fuller fill and a solid amber border) so it stands out. */
+const ADVANCED_LIGHT_STYLE = {
+  color: '#8a5600',
+  bg: 'color-mix(in srgb, var(--accent-amber) 30%, #ffffff)',
+  border: 'color-mix(in srgb, var(--accent-amber) 80%, transparent)',
+};
+
 export function PlanUsageBadge() {
   const { user, plan } = useAuth();
+  const { theme } = useTheme();
   const [open, setOpen] = useState(false);
   const usage = useQuery<UsageRow[]>(`usage:${user?.id ?? 'none'}`, fetchUsage, []);
 
   const usedByMetric = new Map<string, number>();
   for (const r of usage.data) usedByMetric.set(r.metric, r.used);
 
-  const style = PLAN_STYLE[plan];
+  const style =
+    plan === 'advanced' && theme === 'light' ? ADVANCED_LIGHT_STYLE : PLAN_STYLE[plan];
 
   function toggle() {
     setOpen((o) => {

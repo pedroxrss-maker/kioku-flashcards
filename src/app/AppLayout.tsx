@@ -34,10 +34,19 @@ export function AppLayout() {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   // Screens that have been themed for light mode; every other route forces dark
   // until it is themed later. To extend the light theme to a new screen, add its
-  // path here (or drop the gate entirely for an app-wide theme). Note: only the
-  // Biblioteca LIST ("/decks") is themed — "/decks/:id" (DeckDetail) is not yet.
-  const THEMED_PATHS = new Set(['/', '/decks', '/stats', '/conquistas', '/settings', '/amigos']);
-  const themeable = THEMED_PATHS.has(loc.pathname);
+  // path here (or drop the gate entirely for an app-wide theme).
+  const THEMED_PATHS = new Set([
+    '/',
+    '/decks',
+    '/stats',
+    '/conquistas',
+    '/settings',
+    '/amigos',
+    '/generate',
+  ]);
+  // DeckDetail ("/decks/:id") is themed too (prefix match — "/decks" itself is the
+  // Biblioteca list, already in the set).
+  const themeable = THEMED_PATHS.has(loc.pathname) || loc.pathname.startsWith('/decks/');
 
   // Every page change starts at the top — without this the new route inherits
   // the previous page's scroll position (e.g. tapping a deck from a scrolled-down

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
-import { Cloud, Eye, Image as ImageIcon, LayoutGrid, Loader2, Pencil, Trash2, Volume2 } from 'lucide-react';
+import { ArrowLeft, Cloud, Eye, Image as ImageIcon, LayoutGrid, Loader2, Pencil, Trash2, Volume2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
@@ -34,6 +34,7 @@ import { uuid } from '../../lib/uuid';
 import { useSettings } from '../../db/hooks';
 import { deckAudioEnabled } from '../../lib/deckAudio';
 import { clozeKeepActive, clozeNumbers, isClozeHtml } from '../../lib/cloze';
+import { useDraft } from '../../lib/useDraft';
 import { cardTypeOf, markTypeIn, stripTypeInMark } from '../../lib/cardType';
 import { pushToast } from '../../lib/toast';
 import { recordFeatureUse, scheduleAchievementCheck } from '../gamification/achievements';
@@ -111,6 +112,37 @@ export function CardEditorModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, card]);
+
+  // Persist the card being TYPED (only in "add" mode — editing an existing card
+  // isn't a draft) so navigating away / closing the browser keeps it; restored
+  // when the add-card editor reopens for this deck. Only the text content is
+  // persisted (not generated-audio drafts). A nonce bump remounts the rich-text
+  // fields with the restored HTML.
+  const draft = useDraft({
+    key: `draft:add-cards:${deckId}`,
+    active: open && !editing,
+    value: { type, front, back, pronounce },
+    hasContent: (v) =>
+      v.front.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, '').trim() !== '' ||
+      v.back.replace(/<[^>]*>/g, '').trim() !== '',
+    onRestore: (v) => {
+      if (v.type) setType(v.type);
+      setFront(v.front ?? '');
+      setBack(v.back ?? '');
+      if (typeof v.pronounce === 'boolean') setPronounce(v.pronounce);
+      setNonce((n) => n + 1);
+    },
+  });
+
+  function discardDraft() {
+    draft.clear();
+    setFront('');
+    setBack('');
+    setType('basic');
+    setPronounce(true);
+    setPreviewing(false);
+    setNonce((n) => n + 1);
+  }
 
   // Each face has audio when it has a generated track (per-side map / legacy) OR
   // the side's (edited) HTML carries an attached chip OR (new card) a pending
@@ -262,6 +294,7 @@ export function CardEditorModal({
         cards.length > 1 ? `${cards.length} cards adicionados.` : 'Card adicionado.',
       );
       scheduleAchievementCheck(); // cards_1 / feat_image / feat_audio
+      draft.clear(); // the typed card was committed — drop its draft
       setFront('');
       setBack('');
       setNonce((n) => n + 1);
@@ -382,9 +415,21 @@ export function CardEditorModal({
                 )}
               </>
             )}
+            {!editing &&
+              (!isEmptyHtml(front) || back.replace(/<[^>]*>/g, '').trim() !== '') && (
+                <Button variant="ghost" onClick={discardDraft}>
+                  Descartar
+                </Button>
+              )}
           </div>
-          <Button variant="ghost" onClick={onClose}>
-            {editing ? 'Cancelar' : 'Fechar'}
+          {/* In "add" mode the typed card is kept as a draft, so leaving is safe:
+              it's "Voltar". Editing keeps the plain "Cancelar". */}
+          <Button
+            variant="ghost"
+            icon={editing ? undefined : <ArrowLeft size={15} />}
+            onClick={onClose}
+          >
+            {editing ? 'Cancelar' : 'Voltar'}
           </Button>
           <Button variant="accent" onClick={save} disabled={!canSave}>
             {editing ? 'Salvar' : 'Adicionar'}

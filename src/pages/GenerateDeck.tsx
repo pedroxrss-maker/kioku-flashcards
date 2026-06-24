@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Type, Volume2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Trash2, Type, Volume2, Wand2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
@@ -10,7 +10,7 @@ import { NumberRoller } from '../components/NumberRoller';
 import { Select } from '../components/Select';
 import { GeneratedCardsEditor } from '../features/ai/GeneratedCardsEditor';
 import { generateCards, isAiConfigured, QuotaError } from '../features/ai/client';
-import { createDeckFromGenerated } from '../features/ai/cards';
+import { composeInstructions, createDeckFromGenerated } from '../features/ai/cards';
 import { useAuth } from '../features/auth/AuthContext';
 import { aiDeckMaxCards } from '../features/usage/limits';
 import { fileToBase64 } from '../features/ai/readFile';
@@ -20,23 +20,42 @@ import { recordFeatureUse } from '../features/gamification/achievements';
 import { useUpgradeModal } from '../features/billing/UpgradeModalProvider';
 import {
   appendImageHtml,
-  atImageCap,
   generateCardImage,
   imageSideForType,
-  imagesRemaining,
   isImageGenConfigured,
   recordImageGeneration,
 } from '../features/ai/image';
+import { useImageQuota } from '../features/usage/useImageQuota';
 import type { AudioSide } from '../features/tts/audioGen';
 import type { Card } from '../db/types';
 import { GOOGLE_VOICES, groupGoogleVoices, isTtsConfigured } from '../features/tts/googleProvider';
 import { useSettings } from '../db/hooks';
 import { repo } from '../db/repositories';
 import { pushToast } from '../lib/toast';
-import type { GeneratedCard, GenerateSource } from '../features/ai/cards';
+import { useDraft } from '../lib/useDraft';
+import type { GeneratedCard, GenerateSource, GenerationMode } from '../features/ai/cards';
 import type { CardType } from '../lib/cardType';
 
 type Mode = 'topic' | 'notes' | 'pdf' | 'url';
+
+/** Persisted snapshot of the in-progress AI generation (IndexedDB draft). The
+ *  PDF file is intentionally omitted — a File can't be serialized — but the
+ *  expensive part (the generated cards with the user's edits) is preserved. */
+interface AiGenerateDraft {
+  mode: Mode;
+  genMode: GenerationMode;
+  notes: string;
+  url: string;
+  instructions: string;
+  types: CardType[];
+  count: number;
+  language: string;
+  deckName: string;
+  cards: GeneratedCard[] | null;
+  imageSelection: number[];
+}
+
+const AI_DRAFT_KEY = 'draft:ai-generate';
 
 const MODES: Array<{ id: Mode; label: string; icon: typeof Type }> = [
   { id: 'topic', label: 'Tema', icon: Type },
@@ -49,6 +68,24 @@ const CARD_TYPES: Array<{ id: CardType; label: string; hint?: string }> = [
   { id: 'basic', label: 'Básico', hint: 'frente e verso' },
   { id: 'cloze', label: 'Cloze', hint: 'ocultar palavra' },
   { id: 'typein', label: 'Escreva a resposta' },
+];
+
+/** One-click generation presets so users don't need to write a prompt. `qa` is
+ *  the default (today's Q&A behavior); `transcription` injects a literal
+ *  sentence-by-sentence preset and forces the basic card type. */
+const GEN_MODES: Array<{ id: GenerationMode; label: string; subtitle: string; isDefault?: boolean }> = [
+  {
+    id: 'qa',
+    label: 'Perguntas e respostas',
+    subtitle: 'A IA cria perguntas sobre o conteúdo, com a resposta no verso. Bom para estudar matéria.',
+    isDefault: true,
+  },
+  {
+    id: 'transcription',
+    label: 'Transcrição frase a frase',
+    subtitle:
+      'Cada frase do material vira um card, copiada literal, na ordem. Frente e verso, sem reformular. Ideal para idiomas.',
+  },
 ];
 
 const LANGS: Array<[string, string]> = [
@@ -77,8 +114,12 @@ export function GenerateDeck() {
   // O plano do usuário limita o tamanho do deck gerado por IA (gratuito = 20).
   const { plan } = useAuth();
   const maxCards = aiDeckMaxCards(plan);
+  // Cota REAL de imagens (cap do plano - usadas), mesma fonte do popover de uso.
+  const imageQuota = useImageQuota();
 
   const [mode, setMode] = useState<Mode>('topic');
+  // Generation mode (preset): Q&A by default, or literal sentence transcription.
+  const [genMode, setGenMode] = useState<GenerationMode>('qa');
   const [sourceDir, setSourceDir] = useState(0);
   const [notes, setNotes] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
@@ -111,8 +152,61 @@ export function GenerateDeck() {
   const [imageProgress, setImageProgress] = useState<{ done: number; total: number } | null>(null);
   // Bumped on each (re)generation so the cards editor clears its image selection.
   const [genNonce, setGenNonce] = useState(0);
+  // Mirror of the editor's per-card image selection, kept here so it can be
+  // persisted in (and restored from) the draft.
+  const [imageSelection, setImageSelection] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pdfDragOver, setPdfDragOver] = useState(false);
+  // Seeds the editor's image selection from a restored draft exactly once, so
+  // the editor mounts (when `cards` first appears) with the saved checkboxes.
+  const restoredImageSelRef = useRef<number[]>([]);
+
+  // IndexedDB draft: persist the whole review-stage state (generated cards with
+  // edits, deck name, options, image picks) so a refresh / accidental navigation
+  // doesn't throw away an expensive AI generation. Reuses the shared draft hook.
+  const draftValue: AiGenerateDraft = {
+    mode,
+    genMode,
+    notes,
+    url,
+    instructions,
+    types,
+    count,
+    language,
+    deckName,
+    cards,
+    imageSelection,
+  };
+  const { clear: clearDraft } = useDraft<AiGenerateDraft>({
+    key: AI_DRAFT_KEY,
+    value: draftValue,
+    active: true,
+    // Only worth keeping once cards exist — that's the costly, hard-to-redo part.
+    hasContent: (v) => !!(v.cards && v.cards.length > 0),
+    onRestore: (v) => {
+      setMode(v.mode);
+      setGenMode(v.genMode);
+      setNotes(v.notes);
+      setUrl(v.url);
+      setInstructions(v.instructions);
+      setTypes(v.types);
+      setCount(v.count);
+      setLanguage(v.language);
+      setDeckName(v.deckName);
+      restoredImageSelRef.current = v.imageSelection ?? [];
+      setImageSelection(v.imageSelection ?? []);
+      setCards(v.cards);
+    },
+  });
+
+  /** Discard the restored/in-progress generation and start fresh. */
+  function discardDraft() {
+    clearDraft();
+    setCards(null);
+    setImageSelection([]);
+    restoredImageSelRef.current = [];
+    setError(null);
+  }
 
   /** Validate + accept a PDF from the picker OR a drag-and-drop. */
   function acceptPdf(file: File) {
@@ -140,7 +234,10 @@ export function GenerateDeck() {
 
   async function generate() {
     setError(null);
-    if (types.length === 0) {
+    // Transcription always produces basic front/back cards, so the type selector
+    // is overridden and a missing selection doesn't block it.
+    const effTypes: CardType[] = genMode === 'transcription' ? ['basic'] : types;
+    if (genMode !== 'transcription' && types.length === 0) {
       setError('Selecione ao menos um tipo de card.');
       return;
     }
@@ -193,11 +290,13 @@ export function GenerateDeck() {
     }
 
     try {
-      const aiInstructions = instructions.trim() || undefined;
+      // The generation mode's preset (e.g. literal transcription) is injected as
+      // the instruction; the user's free-text field, if any, is appended after it.
+      const aiInstructions = composeInstructions(genMode, instructions);
       // O plano limita as cartas por deck: pede no máximo `maxCards` e ainda
       // corta o resultado, então instruções como "faça 50 cards" não furam o teto.
       const result = await generateCards({
-        types,
+        types: effTypes,
         count: Math.min(count, maxCards),
         language,
         source,
@@ -270,7 +369,7 @@ export function GenerateDeck() {
         );
       }
 
-      // AI images for the cards the user picked, respecting the provisional cap.
+      // AI images for the cards the user picked, respecting the plan quota.
       // Sequential (one at a time) to avoid hammering the API; failures are
       // counted and skipped, never aborting the rest or crashing.
       if (isImageGenConfigured() && imageIndices.length > 0) {
@@ -284,11 +383,14 @@ export function GenerateDeck() {
             j += 1;
           }
         });
-        const s = await repo.getSettings();
         const targets = imageIndices
           .map((i) => ({ card: indexToCard.get(i), type: cards[i]?.type }))
           .filter((t): t is { card: Card; type: GeneratedCard['type'] } => !!t.card && !!t.type);
-        const total = Math.min(targets.length, imagesRemaining(s));
+        // Cap by the plan's remaining images (server also enforces); the proxy
+        // returns a QuotaError that the per-task catch turns into an upsell.
+        const total = imageQuota.unlimited
+          ? targets.length
+          : Math.min(targets.length, imageQuota.remaining);
         // Respect the remaining cap up front: never start more than allowed.
         const batch = targets.slice(0, total);
         let made = 0;
@@ -355,6 +457,8 @@ export function GenerateDeck() {
         }
       }
 
+      // The deck now lives in the DB, so the draft is no longer needed.
+      clearDraft();
       nav(`/decks/${deck.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao criar o deck.');
@@ -373,15 +477,24 @@ export function GenerateDeck() {
       ? { label: audioProgress.label, done: audioProgress.done, total: audioProgress.total }
       : null;
 
+  // Transcription always makes basic front/back cards, so the type selector is
+  // overridden (disabled) while it's active.
+  const typesLocked = genMode === 'transcription';
+
   return (
-    <div className="rise flex flex-col gap-6 max-w-3xl mx-auto">
+    <div className="rise flex flex-col gap-6">
       <PageHeader
         title="Gerar deck com IA"
         subtitle="Crie cards a partir de um tema, suas anotações ou um PDF."
+        action={
+          <Link to="/decks" className="btn btn-ghost btn-sm">
+            <ArrowLeft size={15} /> Voltar
+          </Link>
+        }
       />
 
       {!configured ? (
-        <Panel className="p-5">
+        <Panel className="p-5 max-w-2xl">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles size={16} className="text-accent" />
             <h2 className="mono text-sm text-muted">IA não configurada</h2>
@@ -397,7 +510,17 @@ export function GenerateDeck() {
           </Link>
         </Panel>
       ) : (
-        <>
+        // Before any deck is generated the form sits CENTERED (justify-center on a
+        // single, width-capped item). When cards arrive the form animates into its
+        // column (sliding to the left via Framer `layout`) and the preview emerges
+        // from it on the right. DOM order (form first) gives form-left / preview-
+        // right on desktop and form-top / preview-below on mobile.
+        <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
+          <motion.div
+            layout
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className={`w-full ${cards ? 'lg:flex-1 lg:min-w-0' : 'lg:max-w-2xl'}`}
+          >
           <Panel className="p-5 flex flex-col gap-4">
             {/* Source mode */}
             <div>
@@ -541,9 +664,53 @@ export function GenerateDeck() {
               </motion.div>
             </AnimatePresence>
 
+            {/* Generation mode preset: a one-click choice so students don't have to
+                write a prompt. Q&A is the default; transcription injects a literal
+                sentence-by-sentence preset (and forces the basic type). */}
+            <div>
+              <span className="field-label">Modo de geração</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {GEN_MODES.map((gm) => {
+                  const active = genMode === gm.id;
+                  return (
+                    <button
+                      key={gm.id}
+                      type="button"
+                      onClick={() => setGenMode(gm.id)}
+                      aria-pressed={active}
+                      className="text-left px-3.5 py-3 rounded-[var(--r-sm)] transition-colors"
+                      style={{
+                        background: 'var(--surface-2)',
+                        border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`,
+                      }}
+                    >
+                      <span className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold">{gm.label}</span>
+                        {gm.isDefault && (
+                          <span
+                            className="mono text-[10px] px-1.5 py-0.5 rounded-full"
+                            style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+                          >
+                            Padrão
+                          </span>
+                        )}
+                        {active && (
+                          <Check size={15} className="ml-auto shrink-0" style={{ color: 'var(--accent)' }} />
+                        )}
+                      </span>
+                      <span className="block text-xs text-muted" style={{ lineHeight: 1.45 }}>
+                        {gm.subtitle}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Instructions. In Tema mode this is the primary (required) input; in
                 other modes it is optional guidance. It also overrides the default
-                per-type mix: asking for an exact number of each card type is obeyed. */}
+                per-type mix: asking for an exact number of each card type is obeyed.
+                The generation mode's preset is applied on top automatically. */}
             <div>
               <label className="field-label" htmlFor="g-instructions">
                 {mode === 'topic'
@@ -568,7 +735,11 @@ export function GenerateDeck() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="field-label">Tipo de card</span>
-                <div className="flex flex-col gap-1.5">
+                <div
+                  className="flex flex-col gap-1.5"
+                  style={typesLocked ? { opacity: 0.5, pointerEvents: 'none' } : undefined}
+                  aria-disabled={typesLocked}
+                >
                   {CARD_TYPES.map((ct) => {
                     const checked = types.includes(ct.id);
                     return (
@@ -577,6 +748,7 @@ export function GenerateDeck() {
                         type="button"
                         onClick={() => toggleType(ct.id)}
                         aria-pressed={checked}
+                        disabled={typesLocked}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-[var(--r-sm)] text-left transition-colors"
                         style={{
                           background: 'var(--surface-2)',
@@ -603,6 +775,11 @@ export function GenerateDeck() {
                     );
                   })}
                 </div>
+                {typesLocked && (
+                  <p className="text-[11px] text-muted mt-1.5" style={{ lineHeight: 1.4 }}>
+                    A transcrição cria apenas cards básicos (frente e verso).
+                  </p>
+                )}
               </div>
               <div>
                 <span className="field-label">Quantidade</span>
@@ -700,12 +877,34 @@ export function GenerateDeck() {
               )}
             </AnimatePresence>
           </Panel>
+          </motion.div>
 
+          {/* Preview: emerges from the generation block (slides in from its side)
+              and takes the left column on desktop. */}
+          <AnimatePresence>
           {cards && (
+            <motion.div
+              key="preview"
+              layout
+              initial={{ opacity: 0, x: -40, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -40, scale: 0.96 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full lg:flex-1 lg:min-w-0"
+            >
             <Panel className="p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Sparkles size={16} className="text-accent" />
                 <h2 className="mono text-sm text-muted">Revise antes de criar</h2>
+                {/* Discards the (possibly restored) generation and clears the draft. */}
+                <button
+                  type="button"
+                  onClick={discardDraft}
+                  disabled={busy}
+                  className="ml-auto inline-flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={13} /> Descartar
+                </button>
               </div>
 
               {isTtsConfigured() && (
@@ -810,9 +1009,12 @@ export function GenerateDeck() {
                 busy={busy}
                 confirmLabel="Criar deck"
                 imagesEnabled={isImageGenConfigured()}
-                imagesRemaining={imagesRemaining(settings)}
-                atImageCap={atImageCap(settings)}
+                imagesRemaining={imageQuota.remaining}
+                imagesUnlimited={imageQuota.unlimited}
+                atImageCap={imageQuota.atCap}
                 resetKey={genNonce}
+                initialImageSelection={restoredImageSelRef.current}
+                onImageSelectionChange={setImageSelection}
               />
 
               {/* Creation progress: the same filling bar shown before the review.
@@ -866,8 +1068,10 @@ export function GenerateDeck() {
                 )}
               </AnimatePresence>
             </Panel>
+            </motion.div>
           )}
-        </>
+          </AnimatePresence>
+        </div>
       )}
     </div>
   );

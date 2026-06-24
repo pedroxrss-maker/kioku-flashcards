@@ -5,12 +5,13 @@
  * states used while gating the app.
  */
 import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { useTheme } from '../../theme/theme';
 import { SIGNUPS_ENABLED } from '../../config';
 import brandLogo from '../../../neurofluency-logo-branca.png';
 
@@ -18,10 +19,22 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 type Mode = 'signin' | 'signup';
 
+/** Root wrapper for the auth screens: carries `app-shell` + the current
+ *  data-theme so the light/dark variables apply (these screens live OUTSIDE the
+ *  app shell). Keeps the dark/light choice made on the landing consistent here. */
+function AuthShell({ children, className }: { children: ReactNode; className: string }) {
+  const { theme } = useTheme();
+  return (
+    <div className={`app-shell ${className}`} data-theme={theme} style={{ background: 'var(--bg)' }}>
+      {children}
+    </div>
+  );
+}
+
 function BrandLockup({ size = 30 }: { size?: number }) {
   return (
     <div className="flex items-center justify-center gap-2.5">
-      <img src={brandLogo} alt="" draggable={false} style={{ height: size, width: 'auto' }} />
+      <img src={brandLogo} alt="" draggable={false} className="brand-logo-mark" style={{ height: size, width: 'auto' }} />
       <span className="display" style={{ fontSize: size * 0.86, fontWeight: 600 }}>
         Kioku
       </span>
@@ -122,10 +135,7 @@ export function AuthPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-5 py-10"
-      style={{ background: 'var(--bg)' }}
-    >
+    <AuthShell className="min-h-screen flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-[420px] rise">
         <div className="text-center mb-6">
           <BrandLockup size={34} />
@@ -454,7 +464,7 @@ export function AuthPage() {
           </AnimatePresence>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 
@@ -484,10 +494,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-5 py-10"
-      style={{ background: 'var(--bg)' }}
-    >
+    <AuthShell className="min-h-screen flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-[420px] rise">
         <div className="text-center mb-6">
           <BrandLockup size={34} />
@@ -532,30 +539,24 @@ export function ResetPasswordPage() {
           </form>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 
 /** Branded full-screen loader shown while the session is resolving. */
 export function AuthLoading() {
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center gap-4"
-      style={{ background: 'var(--bg)' }}
-    >
+    <AuthShell className="min-h-screen flex flex-col items-center justify-center gap-4">
       <BrandLockup size={30} />
       <Loader2 size={22} className="animate-spin" style={{ color: 'var(--accent)' }} />
-    </div>
+    </AuthShell>
   );
 }
 
 /** Shown when the Supabase env vars are missing so login can't work. */
 export function SupabaseConfigNotice() {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-5"
-      style={{ background: 'var(--bg)' }}
-    >
+    <AuthShell className="min-h-screen flex items-center justify-center px-5">
       <div className="surface p-7 max-w-[460px] text-center rise">
         <div className="mb-4">
           <BrandLockup size={28} />
@@ -568,6 +569,6 @@ export function SupabaseConfigNotice() {
           <b>.env.local</b> e reinicie o servidor para ativar o login.
         </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }

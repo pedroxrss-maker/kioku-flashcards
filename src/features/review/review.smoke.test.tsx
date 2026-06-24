@@ -12,6 +12,7 @@ vi.mock('../../lib/supabase', async () => {
 
 import { repo } from '../../db/repositories';
 import { ReviewSession } from '../../pages/ReviewSession';
+import { ThemeProvider } from '../../theme/theme';
 
 describe('Review session (integration)', () => {
   it('renders a card, flips, shows interval previews, rates, and completes', async () => {
@@ -25,9 +26,11 @@ describe('Review session (integration)', () => {
 
     render(
       <MemoryRouter initialEntries={[`/review/${deck.id}`]}>
-        <Routes>
-          <Route path="/review/:deckId" element={<ReviewSession />} />
-        </Routes>
+        <ThemeProvider>
+          <Routes>
+            <Route path="/review/:deckId" element={<ReviewSession />} />
+          </Routes>
+        </ThemeProvider>
       </MemoryRouter>,
     );
 
@@ -61,9 +64,11 @@ describe('Review session (integration)', () => {
 
     const { container } = render(
       <MemoryRouter initialEntries={[`/review/${deck.id}`]}>
-        <Routes>
-          <Route path="/review/:deckId" element={<ReviewSession />} />
-        </Routes>
+        <ThemeProvider>
+          <Routes>
+            <Route path="/review/:deckId" element={<ReviewSession />} />
+          </Routes>
+        </ThemeProvider>
       </MemoryRouter>,
     );
 
@@ -97,9 +102,11 @@ describe('Review session (integration)', () => {
 
     render(
       <MemoryRouter initialEntries={[`/review/${parent.id}`]}>
-        <Routes>
-          <Route path="/review/:deckId" element={<ReviewSession />} />
-        </Routes>
+        <ThemeProvider>
+          <Routes>
+            <Route path="/review/:deckId" element={<ReviewSession />} />
+          </Routes>
+        </ThemeProvider>
       </MemoryRouter>,
     );
 

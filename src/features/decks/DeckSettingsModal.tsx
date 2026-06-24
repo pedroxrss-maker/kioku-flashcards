@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { RotateCcw, Trash2, VolumeX } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Trash2, VolumeX } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Button } from '../../components/Button';
 import { Toggle } from '../../components/Toggle';
 import { cn } from '../../lib/cn';
+import { useDraft } from '../../lib/useDraft';
 import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { DECK_COLORS } from '../../db/factories';
@@ -52,7 +53,21 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const audioOn = settings?.deckAudio?.[deck.id] !== false;
+  // Whether the form differs from the deck's saved values (drives the "Descartar"
+  // action and mirrors the draft's hasContent).
+  const changed =
+    name !== deck.name ||
+    (category ?? '') !== (deck.category ?? '') ||
+    color !== deck.color ||
+    icon !== settings?.deckIcons?.[deck.id] ||
+    algorithm !== deck.algorithm ||
+    newPerDay !== deck.newPerDay ||
+    reviewsPerDay !== deck.reviewsPerDay ||
+    retention !== deck.desiredRetention ||
+    ttsLang !== deck.ttsLang;
 
+  // Reset from the deck on OPEN / deck switch only — not on every `deck` object
+  // update, which would clobber a draft the useDraft hook restores.
   useEffect(() => {
     if (open) {
       setName(deck.name);
@@ -65,12 +80,56 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       setTtsLang(deck.ttsLang);
       setConfirmDelete(false);
     }
-  }, [open, deck]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, deck.id]);
 
   useEffect(() => {
     if (open) setIcon(settings?.deckIcons?.[deck.id]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, deck.id]);
+
+  // Persist the in-progress edits per deck, so leaving and returning restores
+  // them. `hasContent` = the form DIFFERS from the deck's saved values, so an
+  // untouched form never creates a draft.
+  const draft = useDraft({
+    key: `draft:edit-deck:${deck.id}`,
+    active: open,
+    value: { name, category, color, icon, algorithm, newPerDay, reviewsPerDay, retention, ttsLang },
+    hasContent: (v) =>
+      v.name !== deck.name ||
+      (v.category ?? '') !== (deck.category ?? '') ||
+      v.color !== deck.color ||
+      v.icon !== settings?.deckIcons?.[deck.id] ||
+      v.algorithm !== deck.algorithm ||
+      v.newPerDay !== deck.newPerDay ||
+      v.reviewsPerDay !== deck.reviewsPerDay ||
+      v.retention !== deck.desiredRetention ||
+      v.ttsLang !== deck.ttsLang,
+    onRestore: (v) => {
+      setName(v.name ?? deck.name);
+      setCategory(v.category ?? '');
+      if (v.color) setColor(v.color);
+      setIcon(v.icon);
+      if (v.algorithm) setAlgorithm(v.algorithm);
+      if (typeof v.newPerDay === 'number') setNewPerDay(v.newPerDay);
+      if (typeof v.reviewsPerDay === 'number') setReviewsPerDay(v.reviewsPerDay);
+      if (typeof v.retention === 'number') setRetention(v.retention);
+      setTtsLang(v.ttsLang);
+    },
+  });
+
+  function discardDraft() {
+    draft.clear();
+    setName(deck.name);
+    setCategory(deck.category ?? '');
+    setColor(deck.color);
+    setAlgorithm(deck.algorithm);
+    setNewPerDay(deck.newPerDay);
+    setReviewsPerDay(deck.reviewsPerDay);
+    setRetention(deck.desiredRetention);
+    setTtsLang(deck.ttsLang);
+    setIcon(settings?.deckIcons?.[deck.id]);
+  }
 
   async function save() {
     if (!name.trim()) return;
@@ -88,6 +147,7 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
     await repo.saveSettings({
       deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon ?? defaultIconFor(deck.id) },
     });
+    draft.clear(); // saved — drop the in-progress draft
     onClose();
   }
 
@@ -167,8 +227,9 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       onSubmit={() => void save()}
       footer={
         <>
-          <Button variant="ghost" className="hover-bounce" onClick={onClose}>
-            Cancelar
+          {/* Edits persist as a draft, so leaving is non-destructive — "Voltar". */}
+          <Button variant="ghost" className="hover-bounce" icon={<ArrowLeft size={15} />} onClick={onClose}>
+            Voltar
           </Button>
           <Button variant="accent" className="hover-bounce" onClick={save} disabled={!name.trim()}>
             Salvar
@@ -177,6 +238,18 @@ export function DeckSettingsModal({ open, onClose, deck }: DeckSettingsModalProp
       }
     >
       <div className="flex flex-col gap-4">
+        {changed && (
+          <div className="flex items-center justify-between gap-3 -mb-1">
+            <span className="text-xs text-muted">Alterações não salvas (guardadas como rascunho).</span>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="text-xs text-muted hover:text-accent transition-colors shrink-0"
+            >
+              Descartar
+            </button>
+          </div>
+        )}
         <div>
           <label className="field-label" htmlFor="ds-name">Nome</label>
           <input id="ds-name" className="field" value={name} onChange={(e) => setName(e.target.value)} />

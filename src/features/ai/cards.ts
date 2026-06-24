@@ -34,6 +34,38 @@ export interface GenerateRequest {
   instructions?: string;
 }
 
+/**
+ * Generation mode: a one-click preset so students don't have to write a prompt.
+ *  - 'qa': the default — Q&A cards ABOUT the content (no preset; today's behavior).
+ *  - 'transcription': literal sentence-by-sentence cards (front/back, verbatim),
+ *    forced to the "basic" type. Ideal for language study.
+ */
+export type GenerationMode = 'qa' | 'transcription';
+
+/** The literal-transcription instruction (pt-BR), injected as req.instructions so
+ *  the user doesn't have to type it. buildGeneratePrompt already prioritizes
+ *  req.instructions for the topic/focus and per-type distribution. */
+export const TRANSCRIPTION_PRESET =
+  'Use a seção de frases do material (cada par de frases em idiomas diferentes, ou cada frase do ' +
+  'texto). Para CADA frase, crie exatamente um flashcard básico: a FRENTE é a frase no idioma ' +
+  'original copiada literalmente, sem alterar nada; o VERSO é a tradução copiada literalmente, sem ' +
+  'alterar nada. Não faça perguntas sobre o conteúdo. Não crie lacunas nem espaços em branco. Não ' +
+  'resuma nem reformule. Mantenha a ordem exata em que as frases aparecem no material. Um flashcard ' +
+  'por frase.';
+
+/**
+ * Build the effective req.instructions for a mode + the user's optional free-text
+ * fine-tuning: the mode's preset comes FIRST, the user's text after it. 'qa' has
+ * no preset, so it returns just the user's text. Returns undefined when empty.
+ */
+export function composeInstructions(mode: GenerationMode, userText?: string): string | undefined {
+  const user = userText?.trim() ?? '';
+  if (mode === 'transcription') {
+    return user ? `${TRANSCRIPTION_PRESET} ${user}` : TRANSCRIPTION_PRESET;
+  }
+  return user || undefined;
+}
+
 /** System + user prompt for one generation call. The model is told to output a
  *  bare JSON array and nothing else. */
 export function buildGeneratePrompt(req: GenerateRequest): { system: string; userText: string } {

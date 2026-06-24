@@ -20,7 +20,7 @@ import { Science } from './Science';
 import { Pricing } from './Pricing';
 import { ComingSoon } from './ComingSoon';
 import { LandingFooter } from './LandingFooter';
-import { LandingThemeProvider, useLandingTheme } from './theme';
+import { useLandingTheme } from './theme';
 
 function NeuroBand() {
   return (
@@ -207,9 +207,7 @@ function LandingInner() {
 }
 
 export function Landing() {
-  return (
-    <LandingThemeProvider>
-      <LandingInner />
-    </LandingThemeProvider>
-  );
+  // Theme comes from the app-wide ThemeProvider (mounted at the router root), so
+  // the landing's dark/light choice carries into login and the app.
+  return <LandingInner />;
 }

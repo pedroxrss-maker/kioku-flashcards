@@ -23,6 +23,7 @@ import { stripHtml } from '../lib/text';
 import { prefetchMediaHtml } from '../features/media/media';
 import { deckAudioEnabled } from '../lib/deckAudio';
 import { faceAudioUrl, faceHasAudio, warmCardMedia } from '../features/tts/cardAudio';
+import { useTheme } from '../theme/theme';
 
 // All decks use 4 answer buttons (the King of Buttons option was removed).
 const REVIEW_BUTTONS = 4 as const;
@@ -37,6 +38,7 @@ function formatDuration(ms: number): string {
 export function ReviewSession() {
   const { deckId } = useParams();
   const nav = useNavigate();
+  const { theme } = useTheme();
   const settings = useSettings();
   const gamification = useGamification();
   const session = useReviewSession(deckId);
@@ -319,7 +321,7 @@ export function ReviewSession() {
 
   if (session.loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="app-shell min-h-screen flex items-center justify-center" data-theme={theme}>
         <p className="mono text-muted text-sm">Carregando…</p>
       </div>
     );
@@ -327,7 +329,7 @@ export function ReviewSession() {
 
   if (!deck) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+      <div className="app-shell min-h-screen flex flex-col items-center justify-center gap-4" data-theme={theme}>
         <p className="text-muted">Deck não encontrado.</p>
         <Link to="/" className="btn btn-ghost">
           <ArrowLeft size={16} /> Início
@@ -343,7 +345,7 @@ export function ReviewSession() {
       ? Math.round(((reviewed - counters.again) / reviewed) * 100)
       : 0;
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-5 rise">
+      <div className="app-shell min-h-screen flex flex-col items-center justify-center gap-6 px-5 rise" data-theme={theme}>
         {/* Confetti waits until XP is tallied (`award`) so a level-up can mute the
             pop — on a level-up the banner owns the chime instead. */}
         {award && reviewed > 0 && (
@@ -409,7 +411,8 @@ export function ReviewSession() {
 
   return (
     <motion.div
-      className="min-h-screen flex flex-col"
+      className="app-shell min-h-screen flex flex-col"
+      data-theme={theme}
       // Slow, modern page build-in when the session opens (first card no longer
       // appears abruptly).
       initial={reduce ? false : { opacity: 0, y: 10 }}

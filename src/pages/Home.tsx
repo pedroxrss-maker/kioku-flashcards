@@ -28,7 +28,6 @@ import { DeckAvatar } from '../features/decks/deckIcons';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
 import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
-import { ThemeToggle } from '../theme/theme';
 import { PlanUsageBadge } from '../features/usage/PlanUsageBadge';
 import { FriendsHeaderButton } from '../features/friends/FriendsHeaderButton';
 import { emptyCountSet, hasHierarchy } from '../lib/deckTree';
@@ -357,7 +356,6 @@ export function Home() {
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{ pointerEvents: isMobile && searchOpen ? 'none' : undefined }}
           >
-            <ThemeToggle />
             <FriendsHeaderButton />
             <PlanUsageBadge />
           <div className="relative shrink-0">

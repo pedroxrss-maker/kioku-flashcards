@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../../features/auth/AuthContext';
+import { ThemeProvider } from '../../theme/theme';
 import { Landing } from './Landing';
 
 // framer-motion needs these browser APIs, which jsdom does not implement.
@@ -37,9 +38,11 @@ describe('Landing page', () => {
     // in tests resolves to no session, i.e. the logged-out landing.
     render(
       <AuthProvider>
-        <MemoryRouter>
-          <Landing />
-        </MemoryRouter>
+        <ThemeProvider>
+          <MemoryRouter>
+            <Landing />
+          </MemoryRouter>
+        </ThemeProvider>
       </AuthProvider>,
     );
 

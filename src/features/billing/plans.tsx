@@ -238,9 +238,17 @@ export function PlanCardView({
   const savings = annualSavings(plan);
   const discountPct = annualDiscountPct(plan);
 
-  // Cores: cartoes claros (off-white) + o destacado com gradiente de accent escuro.
+  // Cores: cartoes claros (off-white) + o destacado com gradiente de accent. O
+  // card destacado usa as variaveis de tema para o texto (em vez de branco fixo),
+  // entao no tema CLARO (fundo rosa claro) o texto fica escuro e legivel, e no
+  // escuro continua claro sobre o fundo escuro.
   const c = hi
-    ? { title: 'var(--fg)', muted: 'rgba(245, 245, 244, 0.72)', body: 'var(--fg)', faded: 'rgba(245, 245, 244, 0.4)' }
+    ? {
+        title: 'var(--fg)',
+        muted: 'var(--muted)',
+        body: 'var(--fg)',
+        faded: 'color-mix(in srgb, var(--fg) 42%, transparent)',
+      }
     : { title: '#17171b', muted: '#5b5b63', body: '#17171b', faded: '#a8a7a2' };
 
   // Feature styling so the value gap reads at a glance: paid plans get COLORED

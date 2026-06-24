@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { cn } from '../../lib/cn';
+import { useDraft } from '../../lib/useDraft';
 import { pushToast } from '../../lib/toast';
 import { scheduleAchievementCheck } from '../gamification/achievements';
 import { repo } from '../../db/repositories';
@@ -31,6 +33,9 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
+  // Reset to defaults on OPEN only — never on a later `settings` change, which
+  // would clobber a draft the useDraft hook is about to restore (and could make
+  // it delete the draft as the form is reset to empty).
   useEffect(() => {
     if (open) {
       setName('');
@@ -40,7 +45,35 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       setAlgorithm(settings?.defaultAlgorithm ?? 'sm2');
       setRetention(settings?.defaultDesiredRetention ?? 0.9);
     }
-  }, [open, settings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Persist the in-progress deck to IndexedDB so navigating away (or closing the
+  // browser) doesn't lose it; restored when the modal reopens.
+  const draft = useDraft({
+    key: 'draft:create-deck',
+    active: open,
+    value: { name, category, color, icon, algorithm, retention },
+    hasContent: (v) => v.name.trim() !== '' || v.category.trim() !== '' || !!v.icon,
+    onRestore: (v) => {
+      setName(v.name ?? '');
+      setCategory(v.category ?? '');
+      if (v.color) setColor(v.color);
+      setIcon(v.icon);
+      if (v.algorithm) setAlgorithm(v.algorithm);
+      if (typeof v.retention === 'number') setRetention(v.retention);
+    },
+  });
+
+  function discardDraft() {
+    draft.clear();
+    setName('');
+    setCategory('');
+    setColor(DECK_COLORS[0]);
+    setIcon(undefined);
+    setAlgorithm(settings?.defaultAlgorithm ?? 'sm2');
+    setRetention(settings?.defaultDesiredRetention ?? 0.9);
+  }
 
   async function submit() {
     if (!name.trim() || saving) return;
@@ -65,6 +98,7 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
         ...(icon ? { deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: icon } } : {}),
       });
       scheduleAchievementCheck(); // decks_1 / decks_5
+      draft.clear(); // committed — drop the in-progress draft
       onClose();
       nav(`/decks/${deck.id}`);
     } catch (err) {
@@ -88,8 +122,10 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
       }}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
+          {/* Leaving keeps the draft (it's persisted), so this is "Voltar", not a
+              destructive "Cancelar" — no "you'll lose progress" warning needed. */}
+          <Button variant="ghost" icon={<ArrowLeft size={15} />} onClick={onClose}>
+            Voltar
           </Button>
           <Button variant="accent" onClick={submit} disabled={!name.trim() || saving}>
             Criar deck
@@ -230,6 +266,16 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
             </div>
           )}
         </div>
+
+        {(name.trim() || category.trim() || icon) && (
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="self-start text-xs text-muted hover:text-accent transition-colors"
+          >
+            Descartar rascunho
+          </button>
+        )}
       </div>
     </Modal>
   );

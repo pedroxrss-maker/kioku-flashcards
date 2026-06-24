@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { IMAGE_GEN_CAP } from './image';
+import { uuid } from '../../lib/uuid';
 import type { GeneratedCard } from './cards';
 import type { CardType } from '../../lib/cardType';
 
@@ -17,11 +18,19 @@ interface GeneratedCardsEditorProps {
   confirmLabel?: string;
   /** Show the per-card "gerar imagem" checkbox + select-all + cap note. */
   imagesEnabled?: boolean;
-  /** Remaining images under the provisional cap (for the count/cap message). */
+  /** Remaining images in the user's PLAN quota (limit - used), for the count/cap
+   *  message. Ignored when `imagesUnlimited`. */
   imagesRemaining?: number;
+  /** The plan grants unlimited images — show "ilimitadas" instead of a number. */
+  imagesUnlimited?: boolean;
   atImageCap?: boolean;
   /** Bump to clear the image selection (e.g. after the cards are regenerated). */
   resetKey?: number;
+  /** Seed the per-card image selection once on mount (for draft restore). */
+  initialImageSelection?: number[];
+  /** Report the current image selection (sorted indices) whenever it changes, so
+   *  the parent can persist it as part of a draft. */
+  onImageSelectionChange?: (indices: number[]) => void;
 }
 
 /**
@@ -37,18 +46,52 @@ export function GeneratedCardsEditor({
   confirmLabel = 'Criar deck',
   imagesEnabled = false,
   imagesRemaining = 0,
+  imagesUnlimited = false,
   atImageCap = false,
   resetKey = 0,
+  initialImageSelection,
+  onImageSelectionChange,
 }: GeneratedCardsEditorProps) {
-  const [imageSel, setImageSel] = useState<Set<number>>(new Set());
+  // Seeded from a restored draft (if any) on first mount, then internal.
+  const [imageSel, setImageSel] = useState<Set<number>>(() => new Set(initialImageSelection ?? []));
+  // A STABLE React key per card so AnimatePresence can animate the exact card
+  // being deleted (index keys would shift and animate the wrong/last one). Kept
+  // in lockstep with `cards` by the add/remove handlers; rebuilt on regeneration.
+  const [ids, setIds] = useState<string[]>(() => cards.map(() => uuid()));
 
-  // Regenerating replaces all cards, so the old index-based selection is stale.
-  useEffect(() => setImageSel(new Set()), [resetKey]);
+  // Report the selection up (sorted) so the parent can persist it in its draft.
+  const onSelChangeRef = useRef(onImageSelectionChange);
+  onSelChangeRef.current = onImageSelectionChange;
+  useEffect(() => {
+    onSelChangeRef.current?.([...imageSel].sort((a, b) => a - b));
+  }, [imageSel]);
+
+  // Regenerating replaces all cards, so the old index-based selection AND keys are
+  // stale: clear the selection and assign fresh keys. Skips the initial mount so a
+  // restored draft's selection (and the matching useState-seeded keys) survive.
+  const firstResetRef = useRef(true);
+  useEffect(() => {
+    if (firstResetRef.current) {
+      firstResetRef.current = false;
+      return;
+    }
+    setImageSel(new Set());
+    setIds(cards.map(() => uuid()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  // Safety net: if `cards` length ever changes outside add/remove, re-sync keys.
+  useEffect(() => {
+    setIds((prev) => (prev.length === cards.length ? prev : cards.map(() => uuid())));
+  }, [cards.length]);
 
   const update = (i: number, patch: Partial<GeneratedCard>) =>
     onChange(cards.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   const remove = (i: number) => {
     onChange(cards.filter((_, idx) => idx !== i));
+    // Keep the OTHER cards' keys stable (filter, don't regenerate) so only the
+    // removed card animates out.
+    setIds((prev) => prev.filter((_, idx) => idx !== i));
     // Drop i and shift higher indices down so the selection still lines up.
     setImageSel((prev) => {
       const next = new Set<number>();
@@ -59,7 +102,10 @@ export function GeneratedCardsEditor({
       return next;
     });
   };
-  const add = () => onChange([...cards, { type: 'basic', front: '', back: '' }]);
+  const add = () => {
+    onChange([...cards, { type: 'basic', front: '', back: '' }]);
+    setIds((prev) => [...prev, uuid()]);
+  };
 
   const toggleImage = (i: number) =>
     setImageSel((prev) => {
@@ -72,7 +118,7 @@ export function GeneratedCardsEditor({
   const toggleAll = () => setImageSel(allSelected ? new Set() : new Set(cards.map((_, i) => i)));
 
   const selCount = imageSel.size;
-  const willGenerate = Math.min(selCount, imagesRemaining);
+  const willGenerate = imagesUnlimited ? selCount : Math.min(selCount, imagesRemaining);
 
   return (
     <div className="flex flex-col gap-3">
@@ -110,8 +156,16 @@ export function GeneratedCardsEditor({
           <p className="text-[11px] text-muted" style={{ lineHeight: 1.45 }}>
             {atImageCap ? (
               <span style={{ color: 'var(--accent)' }}>
-                Limite de imagens atingido ({IMAGE_GEN_CAP}).
+                Limite de imagens do seu plano atingido.
               </span>
+            ) : imagesUnlimited ? (
+              selCount === 0 ? (
+                <>Marque os cards que receberão uma ilustração. Imagens ilimitadas no seu plano.</>
+              ) : (
+                <>
+                  {selCount} {selCount === 1 ? 'imagem será gerada' : 'imagens serão geradas'}.
+                </>
+              )
             ) : selCount === 0 ? (
               <>
                 Marque os cards que receberão uma ilustração. Restam {imagesRemaining} imagens no seu
@@ -133,8 +187,17 @@ export function GeneratedCardsEditor({
       )}
 
       <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
+        <AnimatePresence mode="popLayout" initial={false}>
         {cards.map((c, i) => (
-          <div key={i} className="surface p-3 flex gap-2 items-start">
+          <motion.div
+            key={ids[i] ?? `card-${i}`}
+            layout="position"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="surface p-3 flex gap-2 items-start"
+          >
             <div className="flex flex-col items-center gap-1 pt-2 shrink-0">
               <span className="mono text-[10px] text-muted">{i + 1}</span>
               <span
@@ -189,8 +252,9 @@ export function GeneratedCardsEditor({
             >
               <Trash2 size={15} />
             </button>
-          </div>
+          </motion.div>
         ))}
+        </AnimatePresence>
       </div>
 
       <div className="flex justify-end">

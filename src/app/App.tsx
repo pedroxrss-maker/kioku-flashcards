@@ -30,7 +30,12 @@ export function App() {
       <BrowserRouter
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
-        <RootGate />
+        {/* ONE theme provider for the whole product (landing, login AND app), so
+            the dark/light choice stays consistent across them — pick light on the
+            landing and it carries into login and into the app. */}
+        <ThemeProvider>
+          <RootGate />
+        </ThemeProvider>
       </BrowserRouter>
     </AuthProvider>
   );
@@ -71,7 +76,6 @@ function AuthedApp() {
   }, []);
 
   return (
-    <ThemeProvider>
     <UpgradeModalProvider>
       <Routes>
         {/* Full-screen review session (no sidebar). */}
@@ -103,6 +107,5 @@ function AuthedApp() {
           checkout da Kiwify do plano escolhido na landing (se houver intent). */}
       <CheckoutIntentRedirect />
     </UpgradeModalProvider>
-    </ThemeProvider>
   );
 }

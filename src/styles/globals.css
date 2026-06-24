@@ -1199,6 +1199,13 @@ button.pill.pill-active:hover {
 .review-face .card-content {
   color: #15151a;
 }
+/* In light mode the white "paper" card sits on a cream background, so the
+   shadow alone barely separates it — add a hairline border for a crisp edge.
+   (Dark mode keeps the borderless paper-on-charcoal look.) */
+.app-shell[data-theme='light'] .review-face,
+.app-shell[data-theme='light'] .cloze-card {
+  border: 1px solid rgba(15, 15, 15, 0.08);
+}
 
 /* ------------------------------------------------------------ cloze card -- */
 /* Static (non-flipping) cloze face: same look as .review-face but it grows to

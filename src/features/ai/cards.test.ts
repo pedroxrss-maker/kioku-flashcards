@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGeneratePrompt } from './cards';
+import { buildGeneratePrompt, composeInstructions, TRANSCRIPTION_PRESET } from './cards';
 import type { GenerateRequest } from './cards';
 import type { CardType } from '../../lib/cardType';
 
@@ -57,5 +57,33 @@ describe('buildGeneratePrompt', () => {
     expect(system).toContain('take PRIORITY');
     expect(system).toContain('follow that split instead of an even one');
     expect(system).toContain('50% cloze, 50% basic');
+  });
+});
+
+describe('composeInstructions (generation-mode presets)', () => {
+  it('Q&A mode injects no preset (returns just the user text, or undefined)', () => {
+    expect(composeInstructions('qa', undefined)).toBeUndefined();
+    expect(composeInstructions('qa', '   ')).toBeUndefined();
+    expect(composeInstructions('qa', 'foque no capítulo 3')).toBe('foque no capítulo 3');
+  });
+
+  it('transcription mode injects the literal-transcription preset with no user text', () => {
+    expect(composeInstructions('transcription', undefined)).toBe(TRANSCRIPTION_PRESET);
+    expect(composeInstructions('transcription', '')).toBe(TRANSCRIPTION_PRESET);
+  });
+
+  it('transcription mode puts the preset FIRST, then appends the user fine-tuning', () => {
+    const out = composeInstructions('transcription', 'foque no capítulo 2');
+    expect(out).toBe(`${TRANSCRIPTION_PRESET} foque no capítulo 2`);
+    expect(out?.startsWith(TRANSCRIPTION_PRESET)).toBe(true);
+    expect(out?.endsWith('foque no capítulo 2')).toBe(true);
+  });
+
+  it('the transcription preset carries the literal-copy, no-reformulation rules', () => {
+    expect(TRANSCRIPTION_PRESET).toContain('copiada literalmente');
+    expect(TRANSCRIPTION_PRESET).toContain('Não faça perguntas sobre o conteúdo');
+    expect(TRANSCRIPTION_PRESET).toContain('Não resuma nem reformule');
+    expect(TRANSCRIPTION_PRESET).toContain('Mantenha a ordem exata');
+    expect(TRANSCRIPTION_PRESET).toContain('Um flashcard por frase');
   });
 });
