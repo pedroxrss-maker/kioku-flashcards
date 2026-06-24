@@ -12,7 +12,13 @@ export function KiokuMark({ size = 26 }: { size?: number }) {
         className="brand-logo-mark"
         style={{ height: size, width: size }}
       />
-      <span className="display" style={{ fontSize: size * 0.85, fontWeight: 600, lineHeight: 1 }}>
+      {/* Explicit color: this wordmark lives inside a <button> in the landing nav,
+          and iOS Safari paints unstyled button text in the system blue tint.
+          Pinning it to var(--fg) keeps it on-theme (and flips with dark/light). */}
+      <span
+        className="display"
+        style={{ fontSize: size * 0.85, fontWeight: 600, lineHeight: 1, color: 'var(--fg)' }}
+      >
         Kioku
       </span>
     </span>
