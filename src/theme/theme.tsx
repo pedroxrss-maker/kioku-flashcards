@@ -13,8 +13,7 @@
  * shared CSS variables — no per-screen wiring.
  */
 import { createContext, useContext, useMemo, useState } from 'react';
-import type { MouseEvent, ReactNode } from 'react';
-import { flushSync } from 'react-dom';
+import type { ReactNode } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
 export type Theme = 'dark' | 'light';
@@ -52,73 +51,21 @@ export function themedImage(src: string, theme: Theme): string {
   return theme === 'light' ? src.replace(/\.png$/, '-light.png') : src;
 }
 
-type DocWithVT = Document & {
-  startViewTransition?: (cb: () => void) => { ready: Promise<void> };
-};
-
 /** Sun/moon switch. Shows the icon of the theme it switches TO (sun while dark,
  *  moon while light). `className` is appended to the shared `.theme-toggle` style.
  *
- *  On the landing page (where the toggle lives inside `.landing-root`) the theme
- *  swap plays a slow circular "wave" that reveals the new colors out from the
- *  button, via the View Transitions API. Elsewhere (and where the API is missing)
- *  it flips instantly. */
+ *  Toggling just flips `data-theme`; the page cross-fades because the themed roots
+ *  carry a CSS `transition` on their color properties (see `.theme-fade` /
+ *  `[data-theme]` rules in globals.css). Under prefers-reduced-motion that
+ *  transition is zeroed, so the flip is instant. There is no JS animation here. */
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme, toggle } = useTheme();
   const isDark = theme === 'dark';
 
-  function handleToggle(e: MouseEvent<HTMLButtonElement>) {
-    const btn = e.currentTarget;
-    const doc = document as DocWithVT;
-    const onLanding = !!btn.closest('.landing-root');
-    if (!onLanding || typeof doc.startViewTransition !== 'function') {
-      toggle();
-      return;
-    }
-    // Origin = the button's center; the reveal radius reaches the farthest corner.
-    const r = btn.getBoundingClientRect();
-    const x = r.left + r.width / 2;
-    const y = r.top + r.height / 2;
-    const endRadius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y),
-    );
-    // The theme change MUST happen inside the update callback (and synchronously,
-    // via flushSync) — mutating the DOM outside it makes the browser skip the
-    // transition, which is what dropped the wave entirely.
-    const vt = doc.startViewTransition(() => {
-      flushSync(() => toggle());
-    });
-    vt.ready
-      .then(() => {
-        document.documentElement.animate(
-          {
-            clipPath: [
-              `circle(0px at ${x}px ${y}px)`,
-              `circle(${endRadius}px at ${x}px ${y}px)`,
-            ],
-          },
-          {
-            duration: 550,
-            // Linear (constant radius growth) so the wave sweeps at an even pace
-            // and never "sticks". The old easeOutExpo curve front-loaded ~90% of
-            // the travel into the first frames, then crawled the far corner in —
-            // which read as stuck/janky.
-            easing: 'linear',
-            pseudoElement: '::view-transition-new(root)',
-            fill: 'forwards',
-          },
-        );
-      })
-      .catch(() => {
-        /* transition skipped/aborted — the theme already flipped */
-      });
-  }
-
   return (
     <button
       type="button"
-      onClick={handleToggle}
+      onClick={toggle}
       className={className ? `theme-toggle ${className}` : 'theme-toggle'}
       aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
       title={isDark ? 'Modo claro' : 'Modo escuro'}

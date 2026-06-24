@@ -197,6 +197,33 @@
   color: var(--fg);
 }
 
+/* Theme cross-fade. Toggling the switch only flips `data-theme`, which swaps the
+   CSS-variable palette; these rules let the color-bearing properties TWEEN over
+   ~500ms so the whole page (background, text, cards, tags, icons) cross-fades
+   between dark and light instead of snapping.
+
+   Scoped to the themed roots and their descendants (NOT a global `*`). Written
+   with `:where()` so the rule has ZERO specificity — any element that declares
+   its OWN transition (buttons, links, pills on hover) keeps it untouched, and
+   only elements without one pick up the cross-fade. Color properties ONLY, never
+   layout, so it stays paint-light and smooth on the live site and mobile. */
+:where(.landing-root, .app-shell),
+:where(.landing-root, .app-shell) :where(*) {
+  transition:
+    background-color 0.5s ease,
+    color 0.5s ease,
+    border-color 0.5s ease,
+    fill 0.5s ease,
+    stroke 0.5s ease;
+}
+/* Reduced motion: flip instantly, no fade. */
+@media (prefers-reduced-motion: reduce) {
+  :where(.landing-root, .app-shell),
+  :where(.landing-root, .app-shell) :where(*) {
+    transition-duration: 0s;
+  }
+}
+
 /* Sidebar nav (inactive) + "Recentes" deck names are secondary text via Tailwind
    `text-muted`. In light mode render them as the near-black ink so they read as
    solid sidebar items; dark mode is untouched (rule is light-scoped). */
@@ -272,22 +299,6 @@
 .theme-toggle:hover {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-/* Landing theme switch: a slow circular "wave" reveal of the new theme out from
-   the toggle (driven by ThemeToggle via the View Transitions API). Disable the
-   default cross-fade so ONLY the JS-driven clip-path plays; the new snapshot
-   grows over the old one. No-op on browsers without view transitions. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-::view-transition-new(root) {
-  z-index: 9999;
-}
-::view-transition-old(root) {
-  z-index: 1;
 }
 
 *,
