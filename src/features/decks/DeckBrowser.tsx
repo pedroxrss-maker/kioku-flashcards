@@ -68,8 +68,15 @@ export function DeckBrowser() {
 
   return (
     <div>
-      {/* Category filters: a horizontal scrollable carousel (no wrap). */}
-      <div className="flex flex-nowrap gap-2 overflow-x-auto hide-scrollbar mb-5">
+      {/* Category filters: a horizontal scrollable carousel (no wrap). Swiping it
+          must scroll the pills, NOT trigger the app-shell's swipe-between-tabs nav
+          (AppLayout listens for touch swipes on an ancestor) — so we stop the
+          touch from bubbling out of this carousel on mobile. */}
+      <div
+        className="flex flex-nowrap gap-2 overflow-x-auto hide-scrollbar mb-5"
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+      >
           {[null, ...categories].map((c) => {
             const active = category === c;
             return (
@@ -303,13 +310,13 @@ function HeroCard({
       />
       {/* Ink-drop fill that floods the surface on hover (see .hero-ink in globals.css). */}
       <span aria-hidden className="hero-ink" style={{ '--ink': color } as CSSProperties} />
-      {/* Empilhado e centrado (ícone em cima): cabe nas duas colunas estreitas do mobile. */}
-      <span className="relative flex flex-col items-center text-center gap-2 sm:gap-3">
+      {/* Empilhado e centrado (ícone em cima): cabe nas duas colunas estreitas do
+          mobile. No mobile o conjunto fica ~25% menor (ícone, texto e a própria
+          glifa) que no desktop; a partir de sm volta ao tamanho cheio. */}
+      <span className="relative flex flex-col items-center text-center gap-1.5 sm:gap-3">
         <span
-          className="flex items-center justify-center"
+          className="flex items-center justify-center w-[42px] h-[42px] sm:w-14 sm:h-14 [&>svg]:scale-[0.78] sm:[&>svg]:scale-100"
           style={{
-            width: 56,
-            height: 56,
             borderRadius: iconShape === 'circle' ? '50%' : 'var(--r-md)',
             background:
               iconShape === 'circle' ? color : `color-mix(in srgb, ${color} 22%, var(--surface-2))`,
@@ -324,10 +331,10 @@ function HeroCard({
           {icon}
         </span>
         <span>
-          <span className="block font-bold" style={{ fontSize: 18, color: 'var(--fg)' }}>
+          <span className="block font-bold text-sm sm:text-[18px]" style={{ color: 'var(--fg)' }}>
             {title}
           </span>
-          <span className="block text-sm mt-1" style={{ color: 'var(--muted)' }}>
+          <span className="block text-xs sm:text-sm mt-1" style={{ color: 'var(--muted)' }}>
             {subtitle}
           </span>
         </span>
@@ -342,9 +349,9 @@ function HeroCard({
     border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
     background: `linear-gradient(160deg, color-mix(in srgb, ${color} 12%, var(--surface)) 0%, var(--surface) 70%)`,
   };
-  // Half-height on mobile (compact padding, no min-height); full card on sm+.
+  // ~25% shorter on mobile (compact padding + lower min-height); full card on sm+.
   const className =
-    'hero-card hover-lift flex items-center justify-center px-4 py-4 sm:px-6 sm:py-[24px] min-h-[112px] sm:min-h-[128px]';
+    'hero-card hover-lift flex items-center justify-center px-3 py-3 sm:px-6 sm:py-[24px] min-h-[84px] sm:min-h-[128px]';
 
   return to ? (
     <Link to={to} className={className} style={style}>

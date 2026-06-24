@@ -121,7 +121,12 @@ export function PlanUsageBadge() {
         {open && (
           <motion.div
             key="usagemenu"
-            className="absolute right-0 z-50 mt-1.5 w-64 p-3"
+            // Mobile: the badge sits mid-header, so anchoring right-0 pushes the
+            // popover off the left edge. Center it on the viewport instead — fixed,
+            // just under the sticky header, centered via inset-x-0 + mx-auto + a
+            // fixed width (no transform, so it survives framer's scale/translate).
+            // sm+: revert to the badge-anchored dropdown.
+            className="fixed inset-x-0 mx-auto top-16 z-50 w-64 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mx-0 sm:mt-1.5"
             initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.97 }}

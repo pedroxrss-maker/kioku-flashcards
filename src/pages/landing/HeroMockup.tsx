@@ -8,7 +8,7 @@
  *
  * Animations always play: Kioku forces them on, ignoring prefers-reduced-motion.
  */
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { AnimatePresence, motion, useAnimationControls, useScroll, useTransform } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
@@ -555,6 +555,19 @@ export function HeroMockup() {
   const demoRef = useRef(demo);
   demoRef.current = demo;
 
+  // A mão guiada só existe para SUGERIR que dá pra interagir. Assim que o próprio
+  // usuário toca o flashcard (ou os botões), ela cumpriu o papel: a orquestração
+  // para e a mão some com um fade suave. `interruptedRef` é lido dentro do loop e
+  // dos passos de animação para que nada mais mexa na mão depois do toque.
+  const interruptedRef = useRef(false);
+  const interrupt = useCallback(() => {
+    if (interruptedRef.current) return;
+    interruptedRef.current = true;
+    void handControls
+      .start({ opacity: 0, transition: { duration: 0.45, ease: 'easeOut' } })
+      .then(() => setHandVisible(false));
+  }, [handControls]);
+
   useEffect(() => {
     if (reduce) return;
     let cancelled = false;
@@ -578,6 +591,7 @@ export function HeroMockup() {
       };
     };
     const moveTo = async (sel: string, dur: number) => {
+      if (interruptedRef.current) return;
       const p = targetXY(sel);
       if (!p) return;
       await handControls.start({
@@ -588,52 +602,59 @@ export function HeroMockup() {
       });
     };
     const tap = async () => {
+      if (interruptedRef.current) return;
       await handControls.start({ scale: 0.82, transition: { duration: 0.12, ease: 'easeOut' } });
       await handControls.start({ scale: 1, transition: { duration: 0.14, ease: 'easeOut' } });
     };
 
     void (async () => {
       await wait(700); // deixa o mockup assentar e medir certo
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
 
       // Card 1 → revela → avalia "good"
       await moveTo('[data-hand-target="cta"]', 1.3);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await tap();
+      if (interruptedRef.current) return;
       demoRef.current.flip();
       await wait(2000);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await moveTo('[data-hand-target="ans-good"]', 1.0);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await tap();
+      if (interruptedRef.current) return;
       demoRef.current.rate('good');
       await wait(3000);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
 
       // Card 2 → revela → avalia "again"
       await moveTo('[data-hand-target="cta"]', 1.0);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await tap();
+      if (interruptedRef.current) return;
       demoRef.current.flip();
       await wait(2000);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await moveTo('[data-hand-target="ans-again"]', 1.0);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await tap();
+      if (interruptedRef.current) return;
       demoRef.current.rate('again');
       await wait(3000);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
 
       // Card 3 → revela → avalia "easy"
       await moveTo('[data-hand-target="cta"]', 1.0);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await tap();
+      if (interruptedRef.current) return;
       demoRef.current.flip();
       await wait(2000);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await moveTo('[data-hand-target="ans-easy"]', 1.0);
-      if (cancelled) return;
+      if (cancelled || interruptedRef.current) return;
       await tap();
+      if (interruptedRef.current) return;
       demoRef.current.rate('easy');
 
       // Fim: some suavemente.
@@ -650,14 +671,22 @@ export function HeroMockup() {
   return (
     <DemoCtx.Provider value={demo}>
     <Scaler designWidth={520} designHeight={460} maxWidth={680}>
-      {/* MAIN card (3D-tilted) + its answer buttons — draggable within 5% of size */}
+      {/* MAIN card (3D-tilted) + its answer buttons — draggable within 5% of size.
+          Um toque do usuário no card (ou nos botões) interrompe a mão guiada: ela
+          já cumpriu o papel de sugerir a interação, então some com fade. O
+          pointerdown só dispara em toque real (a orquestração usa flip()/rate()
+          direto, sem evento de ponteiro). */}
       <FloatItem left={6} top={66} width={300} dur={6} delay={0} parallax={pMain} zIndex={3}>
         <Draggable width={300} pct={0.05}>
-          <MainCard />
+          <div onPointerDown={interrupt} style={{ display: 'contents' }}>
+            <MainCard />
+          </div>
         </Draggable>
       </FloatItem>
       <FloatItem left={30} top={352} width={300} dur={6} delay={0} parallax={pMain} zIndex={4}>
-        <AnswerButtons />
+        <div onPointerDown={interrupt} style={{ display: 'contents' }}>
+          <AnswerButtons />
+        </div>
       </FloatItem>
 
       {/* three satellites to the right, vertically spread, each floating + draggable */}
