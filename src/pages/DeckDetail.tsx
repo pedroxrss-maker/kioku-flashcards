@@ -78,12 +78,12 @@ export function DeckDetail() {
   // Direct subdecks of this deck (one level down), for parent decks.
   const subNodes = deckNode?.children ?? [];
 
-  // "Novos" in the header = the new cards to study TODAY, from deck_counts() —
-  // which respects the deck's new_per_day (0 means ZERO new today, NOT the Anki
-  // default). Aggregated over the subtree so a parent matches what "Estudar"
-  // pulls and the Home/Decks list. The raw `counts.newCount` (every new-state
-  // card) ignored new_per_day and showed e.g. 20 for a new_per_day=0 deck.
-  const newToday = deckNode ? aggregateCountSet(deckNode, deckCounts).newCount : 0;
+  // "Novos" in the header = THIS deck's own new_count from deck_counts(), which
+  // already respects its new_per_day (0 -> 0). Read the deck's own row directly,
+  // NOT a subtree aggregate: a parent deck with new_per_day=0 must read 0 even if
+  // a subdeck still has new cards. The raw countCards().newCount (every new-state
+  // card, no cap) is what showed e.g. "20 novos" for a new_per_day=0 deck.
+  const newToday = deck ? deckCounts[deck.id]?.newCount ?? 0 : 0;
 
   useEffect(() => {
     if (!focusCardId) return;

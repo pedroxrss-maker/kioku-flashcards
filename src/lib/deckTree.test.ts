@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { makeCard, makeDeck } from '../db/factories';
-import type { Card, Deck } from '../db/types';
+import type { Card, Deck, DeckCountSet } from '../db/types';
 import { groupCardsByDeck } from './deckStats';
 import {
   ROOT_DROP_TARGET,
   aggregateCards,
+  aggregateCountSet,
   aggregateCounts,
   buildDeckTree,
   deckPathOf,
@@ -127,6 +128,42 @@ describe('deckTree', () => {
     const d = deck('Solo');
     expect(deckPathOf(d, {})).toBe('Solo');
     expect(deckPathOf(d, { [d.id]: 'A::Solo' })).toBe('A::Solo');
+  });
+
+  it('aggregateCountSet: a parent DECK shows its OWN new_count, not the subtree sum', () => {
+    // Repro of the "20 novos" bug: parent deck new_per_day=0 (deck_counts new=0)
+    // with a subdeck that still has 20 new cards. The parent row must read 0 new
+    // (its own deck_counts value), while due/learning still SUM across the subtree.
+    const parent = deck('Geografia');
+    const child = deck('Bandeiras');
+    const paths = { [parent.id]: 'Geografia', [child.id]: 'Geografia::Bandeiras' };
+    const tree = buildDeckTree([parent, child], paths, groupCardsByDeck([]));
+    const parentNode = tree[0];
+    expect(parentNode.deck).toBe(parent);
+    const counts: Record<string, DeckCountSet> = {
+      [parent.id]: { newCount: 0, learning: 1, reviewDue: 1, due: 1, total: 5 },
+      [child.id]: { newCount: 20, learning: 2, reviewDue: 2, due: 2, total: 30 },
+    };
+    const agg = aggregateCountSet(parentNode, counts);
+    expect(agg.newCount).toBe(0); // OWN new (new_per_day=0), NOT 0 + 20
+    expect(agg.learning).toBe(3); // summed across the subtree
+    expect(agg.reviewDue).toBe(3);
+    expect(agg.due).toBe(3);
+    expect(agg.total).toBe(35);
+    // The subdeck still shows its own new count.
+    expect(aggregateCountSet(parentNode.children[0], counts).newCount).toBe(20);
+  });
+
+  it('aggregateCountSet: a pure FOLDER (no own deck) keeps the summed new_count', () => {
+    const sub = deck('Gramática');
+    const paths = { [sub.id]: 'Inglês::Gramática' }; // "Inglês" is a folder, no deck
+    const tree = buildDeckTree([sub], paths, groupCardsByDeck([]));
+    const folder = tree[0];
+    expect(folder.deck).toBeNull();
+    const counts: Record<string, DeckCountSet> = {
+      [sub.id]: { newCount: 7, learning: 0, reviewDue: 0, due: 0, total: 7 },
+    };
+    expect(aggregateCountSet(folder, counts).newCount).toBe(7); // summed (no own row)
   });
 });
 
