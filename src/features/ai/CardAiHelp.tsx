@@ -388,12 +388,17 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
             role="button"
             tabIndex={-1}
             aria-label="Voltar ao verso do card"
-            className="xl:hidden absolute inset-0 z-20 cursor-pointer overflow-y-auto"
+            className="xl:hidden absolute inset-x-0 top-0 z-20 cursor-pointer overflow-y-auto max-h-full"
             style={{
               background: '#fbfbfa',
               borderRadius: 'var(--r-lg)',
               padding: 'clamp(20px, 4vw, 40px)',
               fontWeight: 700,
+              // Cresce com o conteúdo (top-anchored, sem inset-0): respostas curtas
+              // ficam compactas, sem o vazio de meia-carta. min-height só evita que o
+              // estado "Pensando..." / respostas muito curtas fiquem apertados; o
+              // max-h-full + scroll mantém respostas longas dentro do card.
+              minHeight: '5rem',
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
