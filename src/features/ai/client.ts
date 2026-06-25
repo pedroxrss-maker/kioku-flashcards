@@ -253,9 +253,10 @@ async function createMessageStream(
   let buffer = '';
   let full = '';
   // One SSE `data:` payload = a partial GenerateContentResponse whose
-  // candidates[0].content.parts[].text is the NEW chunk (delta), so we accumulate.
-  const handleData = (payload: string): void => {
-    if (!payload || payload === '[DONE]') return;
+  // candidates[0].content.parts[].text is the NEW chunk (delta). Returns true when
+  // it emitted a token (so the loop knows to yield for a paint after a real chunk).
+  const handleData = (payload: string): boolean => {
+    if (!payload || payload === '[DONE]') return false;
     try {
       const obj = JSON.parse(payload) as {
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -266,11 +267,21 @@ async function createMessageStream(
       if (delta) {
         full += delta;
         onToken(delta);
+        return true;
       }
     } catch {
       /* a partial / non-JSON line: ignore (the buffer keeps the incomplete tail) */
     }
+    return false;
   };
+
+  // Yield to a MACROTASK between emitted chunks. onToken triggers a React state
+  // update (a commit), but the browser only PAINTS between macrotasks. When the
+  // browser hands us the buffered SSE back-to-back, the read loop is one long
+  // microtask chain with no paint — the UI froze on "Pensando..." then dumped the
+  // full text at the end. A 0-delay macrotask lets the pending render paint, so the
+  // bubble grows token-by-token. (No-op cost when chunks are already network-paced.)
+  const yieldToPaint = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
   try {
     for (;;) {
@@ -281,7 +292,9 @@ async function createMessageStream(
       while ((nl = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, nl).trim();
         buffer = buffer.slice(nl + 1);
-        if (line.startsWith('data:')) handleData(line.slice(5).trim());
+        if (line.startsWith('data:') && handleData(line.slice(5).trim())) {
+          await yieldToPaint();
+        }
       }
     }
     const tail = buffer.trim();
