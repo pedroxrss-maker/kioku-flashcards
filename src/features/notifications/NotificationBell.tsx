@@ -12,6 +12,7 @@
  * (persisted, so the read state follows the user across devices).
  */
 import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bell, Trophy, UserPlus } from 'lucide-react';
@@ -116,13 +117,19 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />}
+      {/* Portal to <body>: the desktop bell lives in the sticky sidebar, whose
+          `position: sticky` creates a stacking context that would trap this fixed
+          panel beneath the Home content (sticky search z-30, hero, etc.). Rendering
+          it at the document root frees its z-index to sit above everything. */}
+      {createPortal(
+        <>
+          {open && <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />}
 
-      <AnimatePresence>
-        {open && pos && (
-          <motion.div
-            role="menu"
-            className="fixed z-[61] flex flex-col"
+          <AnimatePresence>
+            {open && pos && (
+              <motion.div
+                role="menu"
+                className="fixed z-[61] flex flex-col"
             initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.97 }}
@@ -220,9 +227,12 @@ export function NotificationBell() {
                 })}
               </div>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>,
+        document.body,
+      )}
     </div>
   );
 }

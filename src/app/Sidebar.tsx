@@ -109,11 +109,8 @@ export function Sidebar() {
       className="hidden md:flex md:flex-col shrink-0 border-r sticky top-0 h-screen"
       style={{ width: 210, borderColor: 'var(--line)', background: 'var(--sidebar-bg)' }}
     >
-      <div className="px-4 py-5 flex items-center justify-between gap-2">
+      <div className="px-4 py-5">
         <Wordmark />
-        <div className="-mr-1.5 shrink-0">
-          <NotificationBell />
-        </div>
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2">

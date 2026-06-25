@@ -487,10 +487,13 @@ function ProgressCard() {
               strokeWidth={9}
               strokeLinecap="round"
               strokeDasharray={c}
+              // Animate on mount, NOT whileInView: the hero is above the fold, and
+              // on iOS Safari the IntersectionObserver can't measure these SVGs
+              // inside the scaled + 3D-tilted cards, so whileInView never fired —
+              // leaving the accent arc fully offset (invisible). Play it always.
               initial={{ strokeDashoffset: c }}
-              whileInView={{ strokeDashoffset: offset }}
-              viewport={{ once: true, amount: 0.6 }}
-              transition={{ duration: 1.4, ease: EASE }}
+              animate={{ strokeDashoffset: offset }}
+              transition={{ duration: 1.4, ease: EASE, delay: 0.3 }}
               transform="rotate(-90 42 42)"
             />
           )}
@@ -524,10 +527,12 @@ function EvolucaoCard() {
             strokeWidth={2.6}
             strokeLinecap="round"
             strokeLinejoin="round"
+            // Animate on mount, NOT whileInView — see ProgressCard: on iOS Safari
+            // whileInView never fired for the tilted/scaled hero SVGs, so the line
+            // stayed at pathLength 0 (no graph at all). Play it always.
             initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
-            viewport={{ once: true, amount: 0.6 }}
-            transition={{ duration: 1.2, ease: EASE }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 1.2, ease: EASE, delay: 0.3 }}
           />
         )}
       </svg>

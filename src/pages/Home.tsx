@@ -30,6 +30,7 @@ import { CardCounts } from '../features/decks/CardCounts';
 import { useAuth } from '../features/auth/AuthContext';
 import { PlanUsageBadge } from '../features/usage/PlanUsageBadge';
 import { FriendsHeaderButton } from '../features/friends/FriendsHeaderButton';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 import { emptyCountSet, hasHierarchy } from '../lib/deckTree';
 import { DeckTree } from '../features/decks/DeckTree';
 import { DeckGrid } from '../features/decks/DeckGrid';
@@ -296,8 +297,12 @@ export function Home() {
       {/* Top bar */}
       <div className="sticky top-0 z-30 -mx-5 md:-mx-8 px-5 md:px-8 py-3" style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', backdropFilter: 'blur(8px)' }}>
         <div className="relative flex items-center gap-3">
-          {/* Busca desktop: input completo, sempre visível. */}
-          <div className="relative min-w-0 flex-1 hidden sm:block">
+          {/* Busca desktop: input sempre visível, com largura limitada (não ocupa a
+              linha toda) para abrir espaço ao sino + ícones à direita. */}
+          <div
+            className="relative min-w-0 hidden sm:block"
+            style={{ flex: '0 1 42rem' }}
+          >
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
               className="field field-round"
@@ -307,6 +312,9 @@ export function Home() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          {/* Espaçador flexível (desktop): empurra os ícones para a borda direita
+              enquanto a busca fica curta à esquerda. */}
+          <div className="hidden sm:block" style={{ flex: '1 1 0%' }} aria-hidden />
           {/* Busca mobile: lupa (toca para expandir). */}
           {!searchOpen && (
             <button
@@ -356,6 +364,12 @@ export function Home() {
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{ pointerEvents: isMobile && searchOpen ? 'none' : undefined }}
           >
+            {/* Sino de notificações ao lado do ícone de amigos. Só no desktop: no
+                mobile o sino já vive na barra superior (MobileTopBar), então evita
+                duplicar. */}
+            <div className="hidden md:block">
+              <NotificationBell />
+            </div>
             <FriendsHeaderButton />
             <PlanUsageBadge />
           <div className="relative shrink-0">
