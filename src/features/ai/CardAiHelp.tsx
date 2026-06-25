@@ -204,64 +204,13 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
 
   return (
     <>
-      {/* Botões de IA — DESKTOP (xl+): coluna vertical À ESQUERDA do card. Só com
-          o verso revelado; surgem de DENTRO do card para a esquerda (slide-fade) e
-          somem igual. zIndex abaixo do card p/ a entrada parecer sair de dentro. */}
-      <AnimatePresence>
-        {flipped && (
-          <motion.div
-            key="ai-buttons-left"
-            className="hidden xl:flex xl:flex-col xl:justify-between xl:gap-2 xl:absolute xl:right-full xl:top-0 xl:bottom-0 xl:mr-4 xl:w-36"
-            style={{ zIndex: 0 }}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, x: 36 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, x: 36, transition: { duration: 0.2 } }}
-            transition={{ duration: reduce ? 0 : 0.34, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.1 }}
-          >
-            {ASSIST.map((a) => {
-              const on = active === a.id;
-              const Icon = a.icon;
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => pick(a.id)}
-                  disabled={loading && !on}
-                  className="flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-[var(--r-md)] text-center ai-hover-outline disabled:opacity-50"
-                  style={{
-                    background: on ? 'var(--accent-soft)' : 'var(--surface)',
-                    border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
-                    color: on ? 'var(--accent)' : 'var(--fg)',
-                  }}
-                >
-                  <Icon size={18} />
-                  <span className="text-xs leading-tight">{a.label}</span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => pick('tutor')}
-              className="px-3 py-2.5 rounded-[var(--r-md)] text-xs font-semibold text-center leading-tight ai-hover-outline"
-              style={{
-                background: isTutor ? `color-mix(in srgb, ${PURPLE} 14%, transparent)` : 'var(--surface)',
-                border: `1px solid ${isTutor ? PURPLE : 'var(--line)'}`,
-                color: PURPLE,
-              }}
-            >
-              Não entendeu? Me ensine isso →
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Botões — MOBILE/TABLET (< xl): grade abaixo do card; saem com fade. */}
+      {/* Botões de IA — grade empilhada abaixo do card, em TODAS as larguras. */}
       <AnimatePresence>
         {flipped && (
           <motion.div
             key="ai-buttons"
             data-ai-below
-            className="xl:hidden absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
+            className="absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
             style={{ top: '100%', zIndex: 0 }}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: -24 }}
             animate={{ opacity: 1, y: 12 }}
@@ -294,7 +243,7 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
         <button
           type="button"
           onClick={() => pick('tutor')}
-          className="hidden sm:block xl:hidden w-full px-3 py-1.5 text-xs rounded-[var(--r-sm)] font-semibold text-center ai-hover-outline"
+          className="hidden sm:block w-full px-3 py-1.5 text-xs rounded-[var(--r-sm)] font-semibold text-center ai-hover-outline"
           style={{
             background: isTutor ? `color-mix(in srgb, ${PURPLE} 14%, transparent)` : 'var(--surface)',
             border: `1px solid ${isTutor ? PURPLE : 'var(--line)'}`,
