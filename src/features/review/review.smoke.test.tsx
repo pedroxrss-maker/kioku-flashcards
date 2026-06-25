@@ -115,4 +115,72 @@ describe('Review session (integration)', () => {
     // Header still shows the launched parent deck's name.
     expect(screen.getAllByText('Inglês').length).toBeGreaterThan(0);
   });
+
+  it('a new_per_day=0 PARENT suppresses NEW cards from its subdecks during study', async () => {
+    // Geografia (new_per_day=0) with subdeck "Bandeiras" (default new_per_day>0)
+    // that has new cards. Studying the parent must introduce ZERO new cards.
+    const parent = await repo.createDeck({
+      name: 'Geografia',
+      color: '#fff',
+      algorithm: 'sm2',
+      newPerDay: 0,
+      buttonCount: 4,
+    });
+    const child = await repo.createDeck({ name: 'Bandeiras', color: '#fff', algorithm: 'sm2', buttonCount: 4 });
+    await repo.saveSettings({
+      deckPaths: { [parent.id]: 'Geografia', [child.id]: 'Geografia::Bandeiras' },
+    });
+    await repo.createCard({ deckId: child.id, front: 'BANDEIRA BRASIL', back: 'verde' });
+    await repo.createCard({ deckId: child.id, front: 'BANDEIRA ARGENTINA', back: 'azul' });
+
+    render(
+      <MemoryRouter initialEntries={[`/review/${parent.id}`]}>
+        <ThemeProvider>
+          <Routes>
+            <Route path="/review/:deckId" element={<ReviewSession />} />
+          </Routes>
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    // The parent's new_per_day=0 caps the whole subtree → no new cards anywhere,
+    // so the session is empty.
+    expect(await screen.findByText(/Nada para revisar/)).toBeTruthy();
+    expect(screen.queryByText('BANDEIRA BRASIL')).toBeNull();
+    expect(screen.queryByText('BANDEIRA ARGENTINA')).toBeNull();
+  });
+
+  it('a new_per_day=N PARENT caps total NEW across the subtree at N', async () => {
+    // Geo (new_per_day=1, no own cards) + subdeck with 3 new cards. Studying the
+    // parent introduces only 1 new card total (the parent ceiling), not 3.
+    const parent = await repo.createDeck({
+      name: 'Geo',
+      color: '#fff',
+      algorithm: 'sm2',
+      newPerDay: 1,
+      buttonCount: 4,
+    });
+    const child = await repo.createDeck({ name: 'Sub', color: '#fff', algorithm: 'sm2', buttonCount: 4 });
+    await repo.saveSettings({
+      deckPaths: { [parent.id]: 'Geo', [child.id]: 'Geo::Sub' },
+      showRemainingCount: true,
+    });
+    await repo.createCard({ deckId: child.id, front: 'NOVO 1', back: 'a' });
+    await repo.createCard({ deckId: child.id, front: 'NOVO 2', back: 'b' });
+    await repo.createCard({ deckId: child.id, front: 'NOVO 3', back: 'c' });
+
+    render(
+      <MemoryRouter initialEntries={[`/review/${parent.id}`]}>
+        <ThemeProvider>
+          <Routes>
+            <Route path="/review/:deckId" element={<ReviewSession />} />
+          </Routes>
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    // Only ONE new card is introduced across the subtree (parent ceiling = 1),
+    // despite the subdeck having 3 and its own limit allowing all 3 → "de 1".
+    expect(await screen.findByText(/de 1/)).toBeTruthy();
+  });
 });

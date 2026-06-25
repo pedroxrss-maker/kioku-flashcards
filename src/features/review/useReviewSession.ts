@@ -13,7 +13,7 @@ import {
 } from '../../lib/deckTree';
 import { buildInitialQueue, reinsertLearning } from './queue';
 import { UNLIMITED_PER_DAY } from '../../db/types';
-import type { Card, Deck, Rating } from '../../db/types';
+import type { Card, DailyProgress, Deck, Rating } from '../../db/types';
 
 export interface SessionCounters {
   again: number;
@@ -159,20 +159,50 @@ export function useReviewSession(deckId: string | undefined): ReviewSession {
       const schedulers = new Map<string, Scheduler>();
       const decksMap = new Map<string, Deck>();
       const perDeckQueues: Card[][] = [];
-      // Build each member deck's queue with its OWN settings + daily progress,
-      // so per-deck caps and scheduling are preserved exactly as today.
+
+      // Daily progress for every member first — needed both for each deck's own
+      // caps AND to compute the parent's subtree-wide new ceiling below.
+      const progress = new Map<string, DailyProgress>();
+      for (const m of members) progress.set(m.id, await repo.dailyProgress(m.id, dayStart));
+
+      // Parent new-card ceiling: a study session started from a real PARENT deck
+      // (it has descendants) caps the TOTAL new cards across the WHOLE subtree at
+      // the PARENT's remaining new_per_day — a subdeck's own new_per_day can never
+      // exceed it, and new_per_day=0 admits ZERO new from anywhere. new-studied-
+      // today is summed across the subtree (same São Paulo boundary + prev_state
+      // accounting as deck_counts()). A leaf, or a pure grouping folder (group
+      // token: no own deck/limit), keeps each deck's own limit unchanged.
+      const parentCapped =
+        !isGroupToken(deckId) && members.length > 1 && display.newPerDay < UNLIMITED_PER_DAY;
+      let remainingNewBudget = Infinity;
+      if (parentCapped) {
+        const newDoneSubtree = members.reduce((n, m) => n + (progress.get(m.id)?.newDone ?? 0), 0);
+        remainingNewBudget = Math.max(0, display.newPerDay - newDoneSubtree);
+      }
+
+      // Build each member deck's queue with its OWN settings + daily progress, but
+      // never exceeding the parent's remaining subtree budget for NEW cards.
       for (const m of members) {
         decksMap.set(m.id, m);
         schedulers.set(m.id, schedulerForDeck(m));
-        const dp = await repo.dailyProgress(m.id, dayStart);
+        const dp = progress.get(m.id) ?? { newDone: 0, reviewsDone: 0 };
         // Pull ONLY this deck's due/new cards (capped to today's remaining limits),
         // never the whole deck. buildInitialQueue then orders/shuffles them exactly
         // as before. Unlimited decks pass Infinity; the repo clamps to a sane cap.
         const reviewLimit =
           m.reviewsPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, m.reviewsPerDay - dp.reviewsDone);
-        const newLimit =
+        const ownNewLimit =
           m.newPerDay >= UNLIMITED_PER_DAY ? Infinity : Math.max(0, m.newPerDay - dp.newDone);
+        // The parent ceiling only ever LOWERS a member's new limit (Infinity when
+        // not a capped parent session), so studying a child directly is unchanged.
+        const newLimit = Math.min(ownNewLimit, remainingNewBudget);
         const cards = await repo.dueQueueCards(m.id, { reviewLimit, newLimit, nowMs: now });
+        // Spend the parent budget by the new cards this member actually pulled, so
+        // later subdecks see the reduced remainder (total subtree new ≤ parent's).
+        if (Number.isFinite(remainingNewBudget)) {
+          const newPulled = cards.reduce((n, c) => (c.state === 'new' ? n + 1 : n), 0);
+          remainingNewBudget = Math.max(0, remainingNewBudget - newPulled);
+        }
         perDeckQueues.push(
           buildInitialQueue({ deck: m, cards, newDone: dp.newDone, reviewsDone: dp.reviewsDone, now }),
         );
