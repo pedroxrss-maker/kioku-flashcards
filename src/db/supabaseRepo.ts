@@ -387,6 +387,16 @@ export class SupabaseRepository implements KiokuRepository {
         total: Number(r.total_count),
       };
     }
+    // A deck with new_per_day = 0 shows ZERO new cards today — never the raw
+    // count of new-state cards. The current deck_counts() already clamps this, but
+    // enforce it client-side too so a stale/older deployed deck_counts() (which
+    // returned the unclamped new-state count) can't surface e.g. "20 new" on a
+    // new_per_day=0 deck. 0 is an intentional value, NOT "unset" → default. This
+    // is the single source for every deck-list count (Home, Decks, DeckDetail).
+    const decks = getQueryData<Deck[]>('decks') ?? (await this.listDecks());
+    for (const d of decks) {
+      if (d.newPerDay === 0 && out[d.id]) out[d.id].newCount = 0;
+    }
     return out;
   }
   /**
