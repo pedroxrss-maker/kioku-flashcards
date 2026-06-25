@@ -73,7 +73,7 @@ export const PLANS_DATA: PlanCard[] = [
       { ok: true, label: 'Decks de IA ilimitados' },
       { ok: true, label: 'Usos de IA ilimitados' },
       { ok: true, label: 'Áudios ilimitados' },
-      { ok: true, label: 'Geração de 300 imagens por mês' },
+      { ok: true, label: 'Geração de 200 imagens por mês' },
       { ok: true, label: 'Funções exclusivas de IA', badge: 'Em breve' },
     ],
   },

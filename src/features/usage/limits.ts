@@ -46,7 +46,7 @@ export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
   advanced: {
     deckGen: { period: 'month', limit: -1 }, // ilimitado
     tutor: { period: 'month', limit: -1 }, // ilimitado
-    image: { period: 'month', limit: 300 }, // hidden cap behind "ilimitado"
+    image: { period: 'month', limit: 200 }, // hidden cap behind "ilimitado"
     audio: { period: 'month', limit: -1 },
   },
 };

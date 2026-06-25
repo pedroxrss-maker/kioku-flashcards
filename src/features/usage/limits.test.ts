@@ -7,10 +7,10 @@ import { isUnlimited, quotaRule, remaining } from './limits';
  * pins the math the bug was about: REMAINING = limit - used, not the used count.
  */
 describe('image quota = limit - used (same source as the usage popover)', () => {
-  it('Avançado: 300 cap, 7 used -> 293 remaining (the reported bug)', () => {
+  it('Avançado: 200 cap, 7 used -> 193 remaining (the reported bug)', () => {
     const rule = quotaRule('advanced', 'image');
-    expect(rule.limit).toBe(300);
-    expect(remaining(rule, 7)).toBe(293); // NOT 7 (the used count)
+    expect(rule.limit).toBe(200);
+    expect(remaining(rule, 7)).toBe(193); // NOT 7 (the used count)
   });
 
   it('clamps at 0 (never negative) when used meets/exceeds the cap', () => {

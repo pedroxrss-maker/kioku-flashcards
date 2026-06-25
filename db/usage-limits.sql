@@ -103,7 +103,7 @@ as $$
     ('basic',    'audio',    'month',   500),
     ('advanced', 'deckGen',  'month',    -1),
     ('advanced', 'tutor',    'month',    -1),
-    ('advanced', 'image',    'month',   300),
+    ('advanced', 'image',    'month',   200),
     ('advanced', 'audio',    'month',    -1)
   ) as r(plan, metric, period, max_count)
   where r.plan = p_plan;
