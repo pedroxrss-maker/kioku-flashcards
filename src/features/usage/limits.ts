@@ -39,7 +39,7 @@ export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
   },
   basic: {
     deckGen: { period: 'day', limit: 5 }, // basic: 5 decks com IA por dia
-    tutor: { period: 'day', limit: 100 }, // basic: 100 usos/dia
+    tutor: { period: 'day', limit: 150 }, // basic: 150 usos/dia
     image: { period: 'month', limit: 100 },
     audio: { period: 'month', limit: 500 },
   },

@@ -50,14 +50,14 @@ export const PLANS_DATA: PlanCard[] = [
   {
     key: 'basic',
     tagline: 'Para estudar sem limites no dia a dia',
-    monthly: 'R$ 19,90',
-    annual: 'R$ 9,90',
+    monthly: 'R$ 14,90',
+    annual: 'R$ 6,90', // por mês, cobrado uma vez/ano (R$ 82,80) no Kiwify
     cta: 'Assinar Básico',
     highlighted: true,
     badge: 'Mais popular',
     features: [
       { ok: true, label: '5 decks de IA por dia' },
-      { ok: true, label: '100 usos de IA por dia' },
+      { ok: true, label: '150 usos de IA por dia' },
       { ok: true, label: '500 áudios por mês' },
       { ok: true, label: 'Geração de 100 imagens por mês' },
       { ok: false, label: 'Funções exclusivas de IA' },
@@ -66,8 +66,8 @@ export const PLANS_DATA: PlanCard[] = [
   {
     key: 'advanced',
     tagline: 'Para quem não aceita esquecer nada',
-    monthly: 'R$ 29,90',
-    annual: 'R$ 19,90',
+    monthly: 'R$ 19,90',
+    annual: 'R$ 12,90', // por mês, cobrado uma vez/ano (R$ 154,80) no Kiwify
     cta: 'Assinar Avançado',
     features: [
       { ok: true, label: 'Decks de IA ilimitados' },
