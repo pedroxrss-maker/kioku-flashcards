@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kioku — Margens v4 (preços novos)</title>
+<style>
+  :root{--bg:#0e0f13;--card:#171922;--line:#262a36;--fg:#e8e8ee;--muted:#9aa0b0;--accent:#ff4a2f;--green:#34d27b;--red:#ff5a5a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:24px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+  .toggle{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;margin-bottom:20px}
+  .toggle button{background:none;border:none;color:var(--muted);padding:8px 18px;border-radius:999px;cursor:pointer;font-size:14px;font-weight:600}
+  .toggle button.active{background:var(--accent);color:#fff}
+  .globals{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
+  .globals h2{font-size:15px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:12px;color:var(--muted)}
+  .field input{background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:8px;font-size:14px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .plan{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .plan h3{margin:0 0 2px;font-size:17px}
+  .plan .price{color:var(--muted);font-size:13px;margin-bottom:14px}
+  .row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line)}
+  .row span:last-child{font-variant-numeric:tabular-nums}
+  .net{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline}
+  .net .v{font-size:24px;font-weight:700}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .note{color:var(--muted);font-size:12px;margin-top:8px}
+  .legend{color:var(--muted);font-size:12px;margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<h1>Kioku — Margens (v4, preços novos)</h1>
+<div class="sub">Lucro líquido por mês, depois de Kiwify e custos de uso. Edite as premissas e veja recalcular.</div>
+
+<div class="toggle" id="scenario">
+  <button data-f="1.0" class="active">Pior caso (100% do teto)</button>
+  <button data-f="0.2">Uso médio (20%)</button>
+</div>
+
+<div class="globals">
+  <h2>Premissas globais (editável)</h2>
+  <div class="grid">
+    <div class="field"><label>Câmbio R$/US$</label><input id="usd" type="number" step="0.01" value="5.50"></div>
+    <div class="field"><label>Custo imagem (US$)</label><input id="cimg" type="number" step="0.0001" value="0.005"></div>
+    <div class="field"><label>Custo deck IA (US$)</label><input id="cdeck" type="number" step="0.0001" value="0.0002"></div>
+    <div class="field"><label>Custo tutor (US$)</label><input id="ctutor" type="number" step="0.0001" value="0.0001"></div>
+    <div class="field"><label>Custo áudio (US$)</label><input id="caudio" type="number" step="0.0001" value="0"></div>
+    <div class="field"><label>Kiwify taxa (%)</label><input id="feepct" type="number" step="0.01" value="8.99"></div>
+    <div class="field"><label>Kiwify fixo (R$)</label><input id="feefix" type="number" step="0.01" value="2.49"></div>
+  </div>
+</div>
+
+<div class="cards" id="cards"></div>
+
+<div class="legend">
+  Tetos usados — Básico: 5 decks/dia (150/mês), 150 tutor/dia (4500/mês), 500 áudios/mês, 100 imagens/mês.
+  Avançado: decks/tutor/áudios ilimitados (uso estimado), teto real de 200 imagens/mês.
+  Anual = 1 transação/ano (Básico R$82,80, Avançado R$154,80), exibido como /mês na landing (6,90 e 12,90).
+  Áudio = R$0 enquanto couber no free tier do Google. A imagem é o único custo que realmente pesa.
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let frac=1.0;
+
+// tetos mensais
+const PLANS=[
+  {key:'bm', nome:'Básico mensal', cobrar:14.90, trans:'mensal', decks:150, tutor:4500, audio:500, img:100, exib:'R$14,90/mês'},
+  {key:'ba', nome:'Básico anual', cobrar:82.80, trans:'anual', decks:150, tutor:4500, audio:500, img:100, exib:'6,90/mês (R$82,80/ano)'},
+  {key:'am', nome:'Avançado mensal', cobrar:19.90, trans:'mensal', decks:300, tutor:4500, audio:2000, img:200, exib:'R$19,90/mês'},
+  {key:'aa', nome:'Avançado anual', cobrar:154.80, trans:'anual', decks:300, tutor:4500, audio:2000, img:200, exib:'12,90/mês (R$154,80/ano)'},
+];
+
+function render(){
+  const USD=+$('usd').value, ci=+$('cimg').value*USD, cd=+$('cdeck').value*USD, ct=+$('ctutor').value*USD, ca=+$('caudio').value*USD;
+  const fp=+$('feepct').value/100, ff=+$('feefix').value;
+  const box=$('cards'); box.innerHTML='';
+  for(const p of PLANS){
+    const custo = p.decks*frac*cd + p.tutor*frac*ct + p.audio*frac*ca + p.img*frac*ci;
+    let liqM;
+    if(p.trans==='mensal'){ liqM = p.cobrar*(1-fp)-ff; }
+    else { liqM = (p.cobrar*(1-fp)-ff)/12; }
+    const net = liqM - custo;
+    const cls = net>=0?'pos':'neg';
+    box.insertAdjacentHTML('beforeend',`
+      <div class="plan">
+        <h3>${p.nome}</h3>
+        <div class="price">${p.exib}</div>
+        <div class="row"><span>Receita líq. (após Kiwify)</span><span>R$ ${liqM.toFixed(2)}</span></div>
+        <div class="row"><span>Custo de uso/mês</span><span>R$ ${custo.toFixed(2)}</span></div>
+        <div class="net"><span>Lucro líquido/mês</span><span class="v ${cls}">R$ ${net.toFixed(2)}</span></div>
+        <div class="note">${net>=0?'Lucrativo neste cenário':'PREJUÍZO neste cenário'}</div>
+      </div>`);
+  }
+}
+document.querySelectorAll('#scenario button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#scenario button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); frac=+b.dataset.f; render();
+}));
+document.querySelectorAll('input').forEach(i=>i.addEventListener('input',render));
+render();
+</script>
+</body>
+</html>

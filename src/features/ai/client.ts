@@ -134,6 +134,167 @@ function toGeminiContent(m: AiMessage): { role: 'user' | 'model'; parts: GeminiP
   return { role, parts };
 }
 
+/**
+ * Map a non-OK proxy/Gemini response to the right thrown error. Shared by the
+ * non-streaming and streaming paths so behavior is IDENTICAL: quota_exceeded →
+ * QuotaError (drives the UpgradeModal), ai_overloaded / 503 → friendly AiError
+ * that never opens the paywall, etc. Always throws (return type `never`).
+ */
+async function throwForErrorResponse(res: Response, metric: AiMetric): Promise<never> {
+  let payload:
+    | {
+        error?: unknown;
+        /** New canonical field; `code` kept for backward compatibility. */
+        error_code?: string;
+        code?: string;
+        metric?: string;
+        period?: string;
+        used?: number;
+        max_count?: number;
+      }
+    | null = null;
+  try {
+    payload = await res.json();
+  } catch {
+    /* non-JSON error body */
+  }
+  const detail =
+    typeof payload?.error === 'string'
+      ? payload.error
+      : (payload?.error as { message?: string } | undefined)?.message ?? '';
+  const code = payload?.error_code ?? payload?.code;
+
+  // Plan usage limit hit (429 from OUR OWN quota check). This is a real quota
+  // error → keep the UpgradeModal behavior (callers open it on QuotaError).
+  if (res.status === 429 && code === 'quota_exceeded') {
+    throw new QuotaError(quotaMessage(payload ?? {}), {
+      metric: payload?.metric ?? metric,
+      used: payload?.used ?? 0,
+      limit: payload?.max_count ?? 0,
+      period: payload?.period ?? 'day',
+    });
+  }
+  // AI INFRASTRUCTURE overload (proxy retried 503/429-from-Google and gave up).
+  // NOT a plan limit: plain AiError with a friendly message, so it shows the
+  // notice and NEVER opens the UpgradeModal.
+  if (code === 'ai_overloaded') {
+    throw new AiError(AI_OVERLOADED_MSG);
+  }
+  if (res.status === 401) {
+    throw new AiError('Sua sessão expirou. Entre novamente para usar a IA.');
+  }
+  if (res.status === 403) {
+    throw new AiError(`Acesso à IA não autorizado${detail ? `: ${detail}` : ''}.`);
+  }
+  if (res.status === 503 && code === 'quota_unavailable') {
+    throw new AiError('Não foi possível verificar seu limite agora. Tente novamente em instantes.');
+  }
+  // Any other 503 from the proxy = AI overloaded (same friendly notice).
+  if (res.status === 503) {
+    throw new AiError(AI_OVERLOADED_MSG);
+  }
+  if (res.status === 429) {
+    throw new AiError('Limite de uso da IA atingido. Tente novamente em instantes.');
+  }
+  throw new AiError(`Erro da IA (HTTP ${res.status})${detail ? `: ${detail}` : ''}.`);
+}
+
+/** Build the Gemini request body shared by the streaming + non-streaming paths. */
+function buildGeminiBody(system: string | undefined, messages: AiMessage[], maxTokens: number): unknown {
+  return {
+    contents: messages.map(toGeminiContent),
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    generationConfig: { maxOutputTokens: maxTokens },
+  };
+}
+
+/**
+ * STREAMING variant of createMessage (SSE). Sends `stream: true` to the proxy and
+ * reads the Server-Sent Events, calling `onToken(delta)` as each chunk of text
+ * arrives, then returns the full text. Same metric/maxTokens/error handling as the
+ * non-streaming path (the SERVER still checks quota BEFORE streaming, so a
+ * quota_exceeded throws QuotaError before any token). Requires the proxy; in
+ * direct/local mode it falls back to ONE non-streaming call (emitting the whole
+ * text once) so local testing keeps working.
+ */
+async function createMessageStream(
+  opts: CreateOptions & { onToken: (delta: string) => void },
+): Promise<string> {
+  const { system, messages, maxTokens = 4096, model = AI_MODEL, metric, onToken } = opts;
+  if (!isAiConfigured()) throw new AiError(NOT_CONFIGURED);
+
+  // Streaming needs the proxy (SSE passthrough). Local direct-key mode falls back
+  // to a single non-streaming call, then emits the whole text in one go.
+  if (!PROXY_URL) {
+    const text = await createMessage({ system, messages, maxTokens, model, metric });
+    onToken(text);
+    return text;
+  }
+
+  const token = await getAccessToken();
+  if (!token) throw new AiError('Faça login para usar a IA.');
+
+  let res: Response;
+  try {
+    res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ model, metric, stream: true, ...(buildGeminiBody(system, messages, maxTokens) as object) }),
+    });
+  } catch {
+    throw new AiError('Falha de conexão com a IA. Verifique sua internet ou o proxy configurado.');
+  }
+
+  if (!res.ok) await throwForErrorResponse(res, metric);
+  if (!res.body) throw new AiError('A IA não retornou conteúdo. Tente novamente.');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let full = '';
+  // One SSE `data:` payload = a partial GenerateContentResponse whose
+  // candidates[0].content.parts[].text is the NEW chunk (delta), so we accumulate.
+  const handleData = (payload: string): void => {
+    if (!payload || payload === '[DONE]') return;
+    try {
+      const obj = JSON.parse(payload) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const delta = (obj.candidates?.[0]?.content?.parts ?? [])
+        .map((p) => (typeof p.text === 'string' ? p.text : ''))
+        .join('');
+      if (delta) {
+        full += delta;
+        onToken(delta);
+      }
+    } catch {
+      /* a partial / non-JSON line: ignore (the buffer keeps the incomplete tail) */
+    }
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (line.startsWith('data:')) handleData(line.slice(5).trim());
+      }
+    }
+    const tail = buffer.trim();
+    if (tail.startsWith('data:')) handleData(tail.slice(5).trim());
+  } catch {
+    /* mid-stream read failure: keep whatever streamed so far (best-effort) */
+  }
+
+  const out = full.trim();
+  if (!out) throw new AiError('A IA não retornou conteúdo. Tente novamente.');
+  return out;
+}
+
 /** Low-level Gemini generateContent call. Returns the concatenated model text.
  *  Keeps the same options shape callers used before; the translation to and from
  *  Gemini's request/response format lives entirely here. */
@@ -173,64 +334,7 @@ async function createMessage({ system, messages, maxTokens = 4096, model = AI_MO
     throw new AiError('Falha de conexão com a IA. Verifique sua internet ou o proxy configurado.');
   }
 
-  if (!res.ok) {
-    let payload:
-      | {
-          error?: unknown;
-          /** New canonical field; `code` kept for backward compatibility. */
-          error_code?: string;
-          code?: string;
-          metric?: string;
-          period?: string;
-          used?: number;
-          max_count?: number;
-        }
-      | null = null;
-    try {
-      payload = await res.json();
-    } catch {
-      /* non-JSON error body */
-    }
-    const detail =
-      typeof payload?.error === 'string'
-        ? payload.error
-        : (payload?.error as { message?: string } | undefined)?.message ?? '';
-    const code = payload?.error_code ?? payload?.code;
-
-    // Plan usage limit hit (429 from OUR OWN quota check). This is a real quota
-    // error → keep the UpgradeModal behavior (callers open it on QuotaError).
-    if (res.status === 429 && code === 'quota_exceeded') {
-      throw new QuotaError(quotaMessage(payload ?? {}), {
-        metric: payload?.metric ?? metric,
-        used: payload?.used ?? 0,
-        limit: payload?.max_count ?? 0,
-        period: payload?.period ?? 'day',
-      });
-    }
-    // AI INFRASTRUCTURE overload (proxy retried 503/429-from-Google and gave up).
-    // NOT a plan limit: plain AiError with a friendly message, so it shows the
-    // notice and NEVER opens the UpgradeModal.
-    if (code === 'ai_overloaded') {
-      throw new AiError(AI_OVERLOADED_MSG);
-    }
-    if (res.status === 401) {
-      throw new AiError('Sua sessão expirou. Entre novamente para usar a IA.');
-    }
-    if (res.status === 403) {
-      throw new AiError(`Acesso à IA não autorizado${detail ? `: ${detail}` : ''}.`);
-    }
-    if (res.status === 503 && code === 'quota_unavailable') {
-      throw new AiError('Não foi possível verificar seu limite agora. Tente novamente em instantes.');
-    }
-    // Any other 503 from the proxy = AI overloaded (same friendly notice).
-    if (res.status === 503) {
-      throw new AiError(AI_OVERLOADED_MSG);
-    }
-    if (res.status === 429) {
-      throw new AiError('Limite de uso da IA atingido. Tente novamente em instantes.');
-    }
-    throw new AiError(`Erro da IA (HTTP ${res.status})${detail ? `: ${detail}` : ''}.`);
-  }
+  if (!res.ok) await throwForErrorResponse(res, metric);
 
   const data = (await res.json()) as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -329,8 +433,14 @@ export async function tutorReply(req: TutorRequest): Promise<string> {
   return createMessage({ system, messages: req.history, maxTokens: 1024, metric: 'tutor' });
 }
 
-/** One-shot "teach me this" for a card the student did not understand. pt-BR. */
-export async function tutorTeach(front: string, back: string): Promise<string> {
+/** One-shot "teach me this" for a card the student did not understand. pt-BR.
+ *  Pass `onToken` to STREAM the reply token-by-token (the tutor uses this); without
+ *  it, returns the full text in one shot (unchanged for any other caller). */
+export async function tutorTeach(
+  front: string,
+  back: string,
+  onToken?: (delta: string) => void,
+): Promise<string> {
   const system =
     'You are a patient, encouraging tutor. The student did NOT understand this flashcard. ' +
     `Front: ${front}. Back: ${back}. ` +
@@ -339,12 +449,13 @@ export async function tutorTeach(front: string, back: string): Promise<string> {
     'read: break it into 1 to 3 short paragraphs separated by a BLANK LINE when it helps, and wrap ' +
     'a FEW key words or short phrases in **double asterisks** to highlight them (use sparingly — ' +
     'do not highlight whole sentences). No headings, no preamble, no other markdown.';
-  return createMessage({
+  const opts: CreateOptions = {
     system,
     messages: [{ role: 'user', content: 'Não entendi este card. Me ensine isso.' }],
     maxTokens: 700,
     metric: 'tutor',
-  });
+  };
+  return onToken ? createMessageStream({ ...opts, onToken }) : createMessage(opts);
 }
 
 export type CardAssistAction = 'example' | 'breakdown' | 'analogy' | 'mnemonic';
@@ -357,6 +468,7 @@ export async function cardAssist(
   front: string,
   back: string,
   action: CardAssistAction,
+  onToken?: (delta: string) => void,
 ): Promise<string> {
   const ASK: Record<CardAssistAction, string> = {
     example: 'Dê UM exemplo do mundo real, concreto e curto, que ilustre este card.',
@@ -370,7 +482,13 @@ export async function cardAssist(
     'Answer in Brazilian Portuguese, in at most 3 short sentences. Be concrete and concise. ' +
     'No headings and no preamble. You MAY wrap one or two KEY words or short phrases in ' +
     '**double asterisks** to highlight them — use sparingly, never a whole sentence.';
-  return createMessage({ system, messages: [{ role: 'user', content: ASK[action] }], maxTokens: 400, metric: 'tutor' });
+  const opts: CreateOptions = {
+    system,
+    messages: [{ role: 'user', content: ASK[action] }],
+    maxTokens: 400,
+    metric: 'tutor',
+  };
+  return onToken ? createMessageStream({ ...opts, onToken }) : createMessage(opts);
 }
 
 /**

@@ -162,8 +162,16 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
     setActive(action);
     if (cache[action] !== undefined) return; // already fetched
     try {
+      // Stream the reply: append each token chunk into this action's cache entry,
+      // so the bubble fills in progressively (the "Pensando..." state clears the
+      // moment the first chunk lands — cache[action] becomes a string).
+      const onToken = (delta: string) =>
+        setCache((c) => ({ ...c, [action]: (c[action] ?? '') + delta }));
       const reply =
-        action === 'tutor' ? await tutorTeach(front, back) : await cardAssist(front, back, action);
+        action === 'tutor'
+          ? await tutorTeach(front, back, onToken)
+          : await cardAssist(front, back, action, onToken);
+      // Settle on the final (trimmed) text once streaming finishes.
       setCache((c) => ({ ...c, [action]: reply }));
       void recordFeatureUse('tutor');
     } catch (e) {

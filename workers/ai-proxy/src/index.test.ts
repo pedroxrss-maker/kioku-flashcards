@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { capDeckCardsResponse, buildModelChain, callGeminiWithFallback } from './index';
+import {
+  capDeckCardsResponse,
+  buildModelChain,
+  callGeminiWithFallback,
+  streamGeminiWithFallback,
+} from './index';
 
 /**
  * Unit tests for the server-side per-deck card cap (capDeckCardsResponse). The
@@ -222,5 +227,72 @@ describe('callGeminiWithFallback', () => {
     const out = await callGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
     expect(out.kind).toBe('ok');
     expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(4); // retried, then fell through
+  });
+});
+
+/* ------------------------------------------- streaming (SSE) fallback ------- */
+// Streaming must use the SAME 3-model fallback: fall through only while a model
+// can't START the stream (503/429), return on the first 200 (relay), fail fast on
+// a real error. It hits :streamGenerateContent (vs :generateContent).
+
+/** Pull the model name out of a streamGenerateContent endpoint URL. */
+function streamCalls(byModel: Record<string, () => Promise<Response> | Response>) {
+  const calls: string[] = [];
+  const fetchImpl = (async (input: unknown) => {
+    const url = String(input);
+    expect(url).toContain(':streamGenerateContent'); // uses the SSE endpoint
+    const model = /\/models\/([^:]+):/.exec(url)?.[1] ?? '';
+    calls.push(model);
+    const handler = byModel[model];
+    if (!handler) return makeRes(404, { error: { message: 'unknown model' } });
+    return handler();
+  }) as unknown as typeof fetch;
+  return { fetchImpl, calls };
+}
+
+describe('streamGeminiWithFallback', () => {
+  it('returns ok (the started stream) on the first model that succeeds', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(200, { ok: true }),
+      'gemini-2.5-flash': () => makeRes(503),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    expect(out.kind).toBe('ok');
+    if (out.kind === 'ok') expect(out.response.status).toBe(200);
+    expect(calls).toEqual(['gemini-2.5-flash-lite']);
+  });
+
+  it('falls through to the next model on a 503 that fails to start, then relays', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(503),
+      'gemini-2.5-flash': () => makeRes(200, { ok: true }),
+      'gemini-2.0-flash': () => makeRes(503),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    expect(out.kind).toBe('ok');
+    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(4); // retried 4×
+    expect(calls).toContain('gemini-2.5-flash'); // fell through and started
+    expect(calls).not.toContain('gemini-2.0-flash');
+  });
+
+  it('reports overloaded only after the WHOLE chain fails to start (all 503)', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(503),
+      'gemini-2.5-flash': () => makeRes(503),
+      'gemini-2.0-flash': () => makeRes(503),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    expect(out.kind).toBe('overloaded');
+    expect(calls).toHaveLength(12); // 3 models × 4 attempts
+  });
+
+  it('fails fast on a real error (400) without retry or fallthrough', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(400, { error: { message: 'bad request' } }),
+      'gemini-2.5-flash': () => makeRes(200, { ok: true }),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    expect(out.kind).toBe('error');
+    expect(calls).toEqual(['gemini-2.5-flash-lite']);
   });
 });

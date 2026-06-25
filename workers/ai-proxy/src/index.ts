@@ -60,6 +60,9 @@ interface GenerateBody {
   contents?: unknown;
   systemInstruction?: unknown;
   generationConfig?: unknown;
+  /** Opt-in: stream the response token-by-token (SSE) instead of one JSON blob.
+   *  Used ONLY by the tutor today; deck generation stays non-streaming. */
+  stream?: boolean;
 }
 
 function parseOrigins(env: Env): string[] {
@@ -497,6 +500,83 @@ export async function callGeminiWithFallback(
   return { kind: 'overloaded' }; // defensivo (cadeia vazia)
 }
 
+// ── Streaming (SSE) com o MESMO fallback de modelos ──────────────────────────
+// O streaming usa o endpoint :streamGenerateContent?alt=sse do Gemini, que devolve
+// a resposta como Server-Sent Events (cada `data: {json}` traz um pedaço novo do
+// texto). O fallback de modelos se aplica ao INÍCIO do stream: se o modelo atual
+// não consegue COMEÇAR a transmitir (503/429, esgotadas as retentativas), cai para
+// o próximo modelo — exatamente como o caminho não-streaming. Uma vez que o stream
+// começou (HTTP 200), apenas repassamos o corpo ao cliente, sem parsear. A mesma
+// cadeia, as mesmas constantes (MAX_GEMINI_ATTEMPTS / backoffs / retryDelay).
+type GeminiStreamOutcome =
+  | { kind: 'ok'; response: Response } // stream iniciado (200): corpo a repassar
+  | { kind: 'overloaded' }
+  | { kind: 'error' }
+  | { kind: 'network' };
+
+/** Tenta INICIAR o stream de UM modelo, com a mesma política de retry (só 503/429)
+ *  do caminho não-streaming. Em 200 devolve a Response (corpo intacto p/ repassar);
+ *  em 503/429 esgotados -> 'overloaded'; erro real -> 'error'; rede -> 'network'. */
+async function startGeminiStream(
+  model: string,
+  geminiBody: unknown,
+  apiKey: string,
+  deps: GeminiCallDeps = {},
+): Promise<GeminiStreamOutcome> {
+  const doFetch = deps.fetchImpl ?? fetch;
+  const doSleep = deps.sleepImpl ?? sleep;
+  const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+  for (let attempt = 0; attempt < MAX_GEMINI_ATTEMPTS; attempt += 1) {
+    const last = attempt === MAX_GEMINI_ATTEMPTS - 1;
+    let res: Response;
+    try {
+      res = await doFetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(geminiBody),
+      });
+    } catch {
+      if (last) return { kind: 'network' };
+      await doSleep(withJitter(GEMINI_BACKOFFS_MS[attempt]));
+      continue;
+    }
+
+    if (res.ok) return { kind: 'ok', response: res }; // stream iniciado: repassa o corpo
+
+    if (res.status !== 503 && res.status !== 429) return { kind: 'error' };
+    if (last) return { kind: 'overloaded' };
+
+    let delay = GEMINI_BACKOFFS_MS[attempt];
+    if (res.status === 429) {
+      const hinted = await googleRetryDelayMs(res);
+      if (hinted != null) delay = Math.min(hinted, MAX_RETRY_DELAY_MS);
+    }
+    await doSleep(withJitter(delay));
+  }
+  return { kind: 'overloaded' };
+}
+
+/** Percorre a cadeia de modelos tentando INICIAR o stream; cai para o próximo em
+ *  sobrecarga (503/429) ou rede, devolve no primeiro 200 (relay) ou erro real. */
+export async function streamGeminiWithFallback(
+  models: string[],
+  geminiBody: unknown,
+  apiKey: string,
+  deps: GeminiCallDeps = {},
+): Promise<GeminiStreamOutcome> {
+  let sawOverloaded = false;
+  let sawNetwork = false;
+  for (const model of models) {
+    const outcome = await startGeminiStream(model, geminiBody, apiKey, deps);
+    if (outcome.kind === 'ok' || outcome.kind === 'error') return outcome;
+    if (outcome.kind === 'overloaded') sawOverloaded = true;
+    else sawNetwork = true;
+  }
+  if (sawOverloaded) return { kind: 'overloaded' };
+  if (sawNetwork) return { kind: 'network' };
+  return { kind: 'overloaded' };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -617,6 +697,36 @@ export default {
       // (primeiro da cadeia); o Worker é dono da cadeia de fallback. NUNCA
       // repassa o texto cru do Google: ao falhar, devolve só o nosso error_code.
       const models = buildModelChain(model);
+
+      // Streaming (SSE) — opt-in via `stream: true`, NUNCA para deckGen (que precisa
+      // do corte de cartas na resposta, impossível num passthrough). A cota já foi
+      // checada+consumida acima; um bloqueio de cota retornou 429 ANTES daqui e não
+      // vira stream. O fallback de modelos é o MESMO; ao iniciar o stream, repassamos
+      // os bytes SSE direto ao cliente (o token aparece assim que o Gemini emite).
+      const wantStream = body.stream === true && metric !== 'deckGen';
+      if (wantStream) {
+        const s = await streamGeminiWithFallback(models, geminiBody, env.GOOGLE_GEMINI_API_KEY);
+        if (s.kind === 'network') {
+          return json({ error: 'Falha ao falar com a IA. Tente novamente.', error_code: 'ai_unreachable' }, 502, cors);
+        }
+        if (s.kind === 'overloaded') {
+          return json({ error: 'A IA está sobrecarregada. Tente novamente em instantes.', error_code: 'ai_overloaded' }, 503, cors);
+        }
+        if (s.kind === 'error') {
+          return json({ error: 'A IA não conseguiu processar a solicitação.', error_code: 'ai_error' }, 502, cors);
+        }
+        // Stream iniciado: repassa o corpo SSE do Gemini direto ao cliente.
+        return new Response(s.response.body, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no', // evita buffering em proxies intermediários
+            ...cors,
+          },
+        });
+      }
+
       const outcome = await callGeminiWithFallback(models, geminiBody, env.GOOGLE_GEMINI_API_KEY);
 
       if (outcome.kind === 'network') {
