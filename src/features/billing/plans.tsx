@@ -41,8 +41,8 @@ export const PLANS_DATA: PlanCard[] = [
     cta: 'Começar grátis',
     features: [
       { ok: true, label: '2 decks de IA por mês' },
-      { ok: true, label: '15 usos de IA por dia' },
-      { ok: true, label: '50 áudios por mês' },
+      { ok: true, label: '5 usos de IA por dia' },
+      { ok: true, label: '20 áudios por mês' },
       { ok: false, label: 'Sem geração de imagens' },
       { ok: false, label: 'Funções exclusivas de IA' },
     ],

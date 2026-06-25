@@ -94,9 +94,9 @@ as $$
   from (values
     -- plano       metrica     periodo   teto
     ('free',     'deckGen',  'month',     2),
-    ('free',     'tutor',    'day',      15),
+    ('free',     'tutor',    'day',       5),
     ('free',     'image',    'month',     0),
-    ('free',     'audio',    'month',    50),
+    ('free',     'audio',    'month',    20),
     ('basic',    'deckGen',  'day',       5),
     ('basic',    'tutor',    'day',     100),
     ('basic',    'image',    'month',   100),
