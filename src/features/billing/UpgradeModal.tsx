@@ -31,8 +31,6 @@ function contextLine(metric: string | null): string {
   }
 }
 
-const PAID_PLANS = PLANS_DATA.filter((p) => p.key !== 'free');
-
 export function UpgradeModal({
   open,
   metric,
@@ -43,7 +41,7 @@ export function UpgradeModal({
   onClose: () => void;
 }) {
   const reduce = useReducedMotion();
-  const { user } = useAuth();
+  const { user, plan } = useAuth();
   const [billing, setBilling] = useState<Billing>('anual');
 
   // Paid plans open the correct Kiwify checkout WITH the user's email (so the
@@ -56,13 +54,13 @@ export function UpgradeModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} width={780}>
+    <Modal open={open} onClose={onClose} width={920}>
       <div className="text-center">
         <h2 className="display" style={{ fontSize: 24 }}>
           Desbloqueie a IA do Kioku
         </h2>
         <p className="text-muted mt-2" style={{ lineHeight: 1.5 }}>
-          {contextLine(metric)} Escolha um plano para continuar.
+          {contextLine(metric)} Compare os planos e escolha o seu.
         </p>
       </div>
 
@@ -70,15 +68,20 @@ export function UpgradeModal({
         <BillingToggle billing={billing} onChange={setBilling} reduce={!!reduce} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
-        {PAID_PLANS.map((plan) => (
+      {/* All three plans (Gratuito + Básico + Avançado) for comparison. The free
+          card and the user's CURRENT plan show no checkout button; only higher
+          tiers they can actually move to keep their "Assinar …" button. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
+        {PLANS_DATA.map((p) => (
           <PlanCardView
-            key={plan.key}
-            plan={plan}
+            key={p.key}
+            plan={p}
             billing={billing}
             active
             compact={false}
             onCta={buy}
+            currentPlan={plan}
+            hideCta={!!p.free || p.key === plan}
           />
         ))}
       </div>

@@ -223,6 +223,8 @@ export function PlanCardView({
   active,
   compact,
   onCta,
+  currentPlan,
+  hideCta = false,
 }: {
   plan: PlanCard;
   billing: Billing;
@@ -231,9 +233,15 @@ export function PlanCardView({
   compact: boolean;
   /** Acao do botao do plano (assinar / começar grátis). */
   onCta: (plan: Plan) => void;
+  /** Plano ATUAL do usuário: quando igual a plan.key, o card ganha o selo "Seu
+   *  plano". Undefined na landing (visitante deslogado). */
+  currentPlan?: Plan | null;
+  /** Esconde o botão de checkout/CTA (card gratuito, ou o plano atual do usuário). */
+  hideCta?: boolean;
 }) {
   const reduce = useReducedMotion();
   const hi = !!plan.highlighted;
+  const isCurrent = currentPlan != null && currentPlan === plan.key;
   const isAnnual = billing === 'anual';
   const savings = annualSavings(plan);
   const discountPct = annualDiscountPct(plan);
@@ -290,13 +298,24 @@ export function PlanCardView({
         <h3 className="display" style={{ fontSize: compact ? 15 : 20, fontWeight: 600, color: c.title }}>
           {PLAN_LABELS[plan.key]}
         </h3>
-        {plan.badge && (
+        {isCurrent ? (
+          // "Seu plano": marks the user's CURRENT plan (distinct green so it reads
+          // as "owned", not the orange promo). Replaces the promo badge on that card.
           <span
             className={`mono px-2 py-0.5 ${compact ? 'text-[8px]' : 'text-[11px]'}`}
-            style={{ background: 'var(--accent)', color: '#fff', borderRadius: 'var(--r-full)', whiteSpace: 'nowrap' }}
+            style={{ background: 'var(--accent-green)', color: '#fff', borderRadius: 'var(--r-full)', whiteSpace: 'nowrap' }}
           >
-            {plan.badge}
+            Seu plano
           </span>
+        ) : (
+          plan.badge && (
+            <span
+              className={`mono px-2 py-0.5 ${compact ? 'text-[8px]' : 'text-[11px]'}`}
+              style={{ background: 'var(--accent)', color: '#fff', borderRadius: 'var(--r-full)', whiteSpace: 'nowrap' }}
+            >
+              {plan.badge}
+            </span>
+          )
         )}
       </div>
       <p className={`${compact ? 'mt-1 text-[10.5px]' : 'mt-1.5 text-sm'}`} style={{ color: c.muted, lineHeight: 1.4 }}>
@@ -452,15 +471,28 @@ export function PlanCardView({
       </ul>
 
       {/* Assinar / Começar grátis: vai para o checkout da Kiwify (planos pagos) ou
-          para o cadastro/login (gratuito), via onCta. */}
-      <button
-        type="button"
-        onClick={() => onCta(plan.key)}
-        className={`${hi ? 'btn btn-accent' : 'btn'} ${compact ? 'btn-sm ' : ''}w-full ${compact ? 'mt-3' : 'mt-6'}`}
-        style={hi ? undefined : { background: '#17171b', color: '#fff', borderColor: 'transparent' }}
-      >
-        {plan.cta}
-      </button>
+          para o cadastro/login (gratuito), via onCta. Escondido no card gratuito e
+          no plano atual do usuário (nada a assinar). */}
+      {hideCta ? (
+        isCurrent && (
+          // Keeps the card's bottom rhythm and reaffirms the current plan.
+          <p
+            className={`text-center ${compact ? 'text-[10px] mt-3' : 'text-xs mt-6'}`}
+            style={{ color: c.muted }}
+          >
+            Plano atual
+          </p>
+        )
+      ) : (
+        <button
+          type="button"
+          onClick={() => onCta(plan.key)}
+          className={`${hi ? 'btn btn-accent' : 'btn'} ${compact ? 'btn-sm ' : ''}w-full ${compact ? 'mt-3' : 'mt-6'}`}
+          style={hi ? undefined : { background: '#17171b', color: '#fff', borderColor: 'transparent' }}
+        >
+          {plan.cta}
+        </button>
+      )}
     </div>
   );
 }
