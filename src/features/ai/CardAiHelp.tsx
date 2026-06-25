@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
@@ -148,6 +148,16 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
   const [error, setError] = useState<string | null>(null);
   const { openUpgrade } = useUpgradeModal();
 
+  // TEMP instrumentation: confirms the component actually COMMITS per token (this
+  // effect runs after each render where the active answer's length changed).
+  const activeText = active ? cache[active] : undefined;
+  useEffect(() => {
+    if (activeText !== undefined) {
+      // eslint-disable-next-line no-console
+      console.log('[tutor-ui] render', { t: Math.round(performance.now()), total: activeText.length });
+    }
+  }, [activeText]);
+
   if (!isAiConfigured()) return null;
 
   const loading = active !== null && cache[active] === undefined && error === null;
@@ -165,8 +175,11 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
       // Stream the reply: append each token chunk into this action's cache entry,
       // so the bubble fills in progressively (the "Pensando..." state clears the
       // moment the first chunk lands — cache[action] becomes a string).
-      const onToken = (delta: string) =>
+      const onToken = (delta: string) => {
+        // eslint-disable-next-line no-console
+        console.log('[tutor-ui] onToken', { t: Math.round(performance.now()), len: delta.length });
         setCache((c) => ({ ...c, [action]: (c[action] ?? '') + delta }));
+      };
       const reply =
         action === 'tutor'
           ? await tutorTeach(front, back, onToken)

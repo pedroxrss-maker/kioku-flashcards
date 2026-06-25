@@ -248,6 +248,9 @@ async function createMessageStream(
   if (!res.ok) await throwForErrorResponse(res, metric);
   if (!res.body) throw new AiError('A IA não retornou conteúdo. Tente novamente.');
 
+  // INCREMENTAL read of the response body — getReader() + TextDecoder in a loop.
+  // This NEVER buffers the whole body (no res.text()/res.json()); each chunk is
+  // parsed and emitted as it arrives.
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -266,6 +269,8 @@ async function createMessageStream(
         .join('');
       if (delta) {
         full += delta;
+        // eslint-disable-next-line no-console
+        console.log('[tutor-stream] token', { t: Math.round(performance.now()), len: delta.length, total: full.length });
         onToken(delta);
         return true;
       }
@@ -275,19 +280,38 @@ async function createMessageStream(
     return false;
   };
 
-  // Yield to a MACROTASK between emitted chunks. onToken triggers a React state
-  // update (a commit), but the browser only PAINTS between macrotasks. When the
-  // browser hands us the buffered SSE back-to-back, the read loop is one long
-  // microtask chain with no paint — the UI froze on "Pensando..." then dumped the
-  // full text at the end. A 0-delay macrotask lets the pending render paint, so the
-  // bubble grows token-by-token. (No-op cost when chunks are already network-paced.)
-  const yieldToPaint = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  // Yield until the next ANIMATION FRAME between emitted chunks. onToken triggers a
+  // React state update; the browser only PAINTS at frame boundaries. requestAnimation
+  // Frame parks us right before a paint, so the just-committed token is shown before
+  // we read the next one — the bubble grows token-by-token instead of dumping at the
+  // end. Falls back to a macrotask where rAF is unavailable (SSR/tests).
+  const yieldToPaint = (): Promise<void> =>
+    new Promise((resolve) => {
+      if (typeof requestAnimationFrame !== 'function') {
+        setTimeout(resolve, 0); // SSR / tests: no rAF.
+        return;
+      }
+      let done = false;
+      const finish = () => {
+        if (!done) {
+          done = true;
+          resolve();
+        }
+      };
+      requestAnimationFrame(finish);
+      // A BACKGROUND tab throttles rAF to ~0fps; this fallback keeps the stream
+      // moving (and finishing) even when the user isn't looking at it.
+      setTimeout(finish, 100);
+    });
 
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, { stream: true });
+      // eslint-disable-next-line no-console
+      console.log('[tutor-stream] read', { t: Math.round(performance.now()), len: chunk.length });
+      buffer += chunk;
       let nl: number;
       while ((nl = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, nl).trim();
