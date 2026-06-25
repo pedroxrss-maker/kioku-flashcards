@@ -659,14 +659,19 @@ button.pill.pill-active:hover {
   }
 }
 
-/* Review card "balloon" minimum height — smaller on phones so the rating
-   buttons (the priority) stay in view with less scrolling. */
+/* Review card minimum height — just a comfortable FLOOR; the card tracks its own
+   content height above this (see FlipCard) and only this min was forcing short
+   cards tall. The old 46vh/440px floor ballooned with viewport height, so at the
+   intermediate desktop widths (641–1279px) and xl+ a short card (e.g. one word)
+   sat in a ~440px box, ~70% empty. A gentle 22vh floor capped at 280px keeps the
+   card comfortable without leaving a big empty bottom for short content.
+   Smaller on phones so the rating buttons (the priority) stay in view. */
 :root {
-  --review-card-min: clamp(280px, 46vh, 440px);
+  --review-card-min: clamp(200px, 22vh, 280px);
 }
 @media (max-width: 640px) {
   :root {
-    --review-card-min: clamp(180px, 34vh, 340px);
+    --review-card-min: clamp(180px, 30vh, 280px);
   }
 }
 
