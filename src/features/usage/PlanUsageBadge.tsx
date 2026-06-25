@@ -17,6 +17,8 @@ import { supabase } from '../../lib/supabase';
 import { useQuery } from '../../db/store';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../../theme/theme';
+import { useUpgradeModal } from '../billing/UpgradeModalProvider';
+import { Modal } from '../../components/Modal';
 import { isBlocked, isUnlimited, quotaRule } from './limits';
 import type { Plan, UsageMetric } from './limits';
 
@@ -81,7 +83,12 @@ const ADVANCED_LIGHT_STYLE = {
 export function PlanUsageBadge() {
   const { user, plan } = useAuth();
   const { theme } = useTheme();
+  const { openPlans } = useUpgradeModal();
   const [open, setOpen] = useState(false);
+  // Avançado is the top tier (nothing to upgrade to): its bottom button shows a
+  // notice about managing/cancelling via the Kiwify confirmation e-mail instead.
+  const [manageOpen, setManageOpen] = useState(false);
+  const isTopTier = plan === 'advanced';
   const usage = useQuery<UsageRow[]>(`usage:${user?.id ?? 'none'}`, fetchUsage, []);
 
   const usedByMetric = new Map<string, number>();
@@ -189,9 +196,39 @@ export function PlanUsageBadge() {
                 );
               })}
             </div>
+
+            {/* Always-visible bottom action. Free/Básico → open the plans modal
+                (reuses the QuotaError upgrade flow). Avançado (top tier) → show the
+                Kiwify e-mail management notice. */}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                if (isTopTier) setManageOpen(true);
+                else openPlans();
+              }}
+              className="btn btn-accent btn-sm w-full mt-3"
+            >
+              {isTopTier ? 'Gerenciar plano' : 'Fazer upgrade do plano'}
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Avançado: how to manage/cancel (Kiwify has no stable customer-portal URL). */}
+      <Modal open={manageOpen} onClose={() => setManageOpen(false)} title="Gerenciar plano" width={460}>
+        <p className="text-sm text-muted" style={{ lineHeight: 1.6 }}>
+          Para alterar ou cancelar sua assinatura, use o botão de gerenciamento no e-mail de
+          confirmação de pagamento enviado pela Kiwify (assunto:{' '}
+          <b className="text-fg">“Pagamento de assinatura aprovado”</b>). O cancelamento interrompe
+          as próximas cobranças.
+        </p>
+        <div className="mt-5 flex justify-end">
+          <button type="button" className="btn btn-accent btn-sm" onClick={() => setManageOpen(false)}>
+            Entendi
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

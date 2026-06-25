@@ -24,6 +24,8 @@ function contextLine(metric: string | null): string {
       return 'Você atingiu o limite do tutor IA.';
     case 'image':
       return 'Geração de imagens é um recurso dos planos pagos.';
+    case 'upgrade':
+      return 'Tenha mais gerações com IA, áudios e recursos exclusivos.';
     default:
       return 'Você atingiu um limite do plano gratuito.';
   }
