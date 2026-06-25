@@ -121,6 +121,10 @@ export interface AppSettings {
    *  evaluation seeds already-earned achievements silently (one summary banner)
    *  instead of firing dozens; afterwards new unlocks celebrate individually. */
   achievementsSeededAt?: number;
+  /** Epoch ms the user last opened the notification bell. Items (friend requests +
+   *  achievement unlocks) newer than this drive the bell's "unread" badge. Stored
+   *  here (settings jsonb) so the read state follows the user across devices. */
+  notificationsSeenAt?: number;
   /** One-off feature-use counters for the "Exploração" achievements. Stored here
    *  (settings jsonb) so no event table is needed; these actions aren't logged
    *  historically, so the badges only unlock from the first use onward. */

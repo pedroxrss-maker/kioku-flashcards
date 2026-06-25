@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bell } from 'lucide-react';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 import { useRecentLogs, useDecks, useSettings } from '../db/hooks';
 import { studiedToday } from '../features/stats/compute';
 import { cn } from '../lib/cn';
@@ -109,8 +109,11 @@ export function Sidebar() {
       className="hidden md:flex md:flex-col shrink-0 border-r sticky top-0 h-screen"
       style={{ width: 210, borderColor: 'var(--line)', background: 'var(--sidebar-bg)' }}
     >
-      <div className="px-4 py-5">
+      <div className="px-4 py-5 flex items-center justify-between gap-2">
         <Wordmark />
+        <div className="-mr-1.5 shrink-0">
+          <NotificationBell />
+        </div>
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2">
@@ -189,13 +192,9 @@ export function MobileTopBar() {
     >
       <div className="flex items-center justify-between px-4 h-14">
         <Wordmark />
-        <button
-          type="button"
-          aria-label="Notificações"
-          className="p-2 -mr-2 rounded-[var(--r-sm)] text-muted hover:text-fg transition-colors"
-        >
-          <Bell size={20} />
-        </button>
+        <div className="-mr-2">
+          <NotificationBell />
+        </div>
       </div>
       <nav className="grid grid-cols-5">
         {NAV_ITEMS.map((item) => {

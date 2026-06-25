@@ -59,9 +59,10 @@ export function DeckDetail() {
     [cards, deck],
   );
 
-  // Direct subdecks of this deck (one level down), for parent decks.
-  const subNodes = useMemo<DeckTreeNode[]>(() => {
-    if (!deck) return [];
+  // This deck's node in the hierarchy (no card rows needed for structure). Used
+  // both for the subdeck rows and to aggregate the header's "new today" count.
+  const deckNode = useMemo<DeckTreeNode | null>(() => {
+    if (!deck) return null;
     const tree = buildDeckTree(decks, settings?.deckPaths, new Map<string, Card[]>(), settings?.deckOrder);
     const path = deckPathOf(deck, settings?.deckPaths);
     const find = (nodes: DeckTreeNode[]): DeckTreeNode | null => {
@@ -72,8 +73,17 @@ export function DeckDetail() {
       }
       return null;
     };
-    return find(tree)?.children ?? [];
+    return find(tree);
   }, [deck, decks, settings?.deckPaths, settings?.deckOrder]);
+  // Direct subdecks of this deck (one level down), for parent decks.
+  const subNodes = deckNode?.children ?? [];
+
+  // "Novos" in the header = the new cards to study TODAY, from deck_counts() —
+  // which respects the deck's new_per_day (0 means ZERO new today, NOT the Anki
+  // default). Aggregated over the subtree so a parent matches what "Estudar"
+  // pulls and the Home/Decks list. The raw `counts.newCount` (every new-state
+  // card) ignored new_per_day and showed e.g. 20 for a new_per_day=0 deck.
+  const newToday = deckNode ? aggregateCountSet(deckNode, deckCounts).newCount : 0;
 
   useEffect(() => {
     if (!focusCardId) return;
@@ -190,7 +200,7 @@ export function DeckDetail() {
           <div className="flex items-center gap-4 mt-4 mono text-[11px] text-muted flex-wrap">
             <span>{counts.total} cards</span>
             <span>·</span>
-            <span style={{ color: 'var(--accent-blue)' }}>{counts.newCount} novos</span>
+            <span style={{ color: 'var(--accent-blue)' }}>{newToday} novos</span>
             <span style={{ color: 'var(--accent-green)' }}>{counts.review} em revisão</span>
             <AlgoBadge algorithm={deck.algorithm} />
           </div>
