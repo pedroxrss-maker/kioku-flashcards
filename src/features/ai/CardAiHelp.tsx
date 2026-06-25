@@ -163,6 +163,7 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
   const loading = active !== null && cache[active] === undefined && error === null;
 
   async function pick(action: AiAction) {
+    const t0 = performance.now(); // TEMP timing: click instant ([tutor-timing] deltas measured from here)
     if (action === active) {
       setActive(null); // toggle the balloon closed
       return;
@@ -171,6 +172,8 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
     setError(null);
     setActive(action);
     if (cache[action] !== undefined) return; // already fetched
+    // eslint-disable-next-line no-console
+    console.log('[tutor-timing] click', { dMs: 0 });
     try {
       // Stream the reply: append each token chunk into this action's cache entry,
       // so the bubble fills in progressively (the "Pensando..." state clears the
@@ -182,8 +185,8 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
       };
       const reply =
         action === 'tutor'
-          ? await tutorTeach(front, back, onToken)
-          : await cardAssist(front, back, action, onToken);
+          ? await tutorTeach(front, back, onToken, t0)
+          : await cardAssist(front, back, action, onToken, t0);
       // Settle on the final (trimmed) text once streaming finishes.
       setCache((c) => ({ ...c, [action]: reply }));
       void recordFeatureUse('tutor');

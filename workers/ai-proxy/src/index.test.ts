@@ -262,7 +262,7 @@ describe('streamGeminiWithFallback', () => {
     expect(calls).toEqual(['gemini-2.5-flash-lite']);
   });
 
-  it('falls through to the next model on a 503 that fails to start, then relays', async () => {
+  it('falls through to the next model FAST on a 503 (1 quick retry, then next model)', async () => {
     const { fetchImpl, calls } = streamCalls({
       'gemini-2.5-flash-lite': () => makeRes(503),
       'gemini-2.5-flash': () => makeRes(200, { ok: true }),
@@ -270,7 +270,9 @@ describe('streamGeminiWithFallback', () => {
     });
     const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
     expect(out.kind).toBe('ok');
-    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(4); // retried 4×
+    // Streaming retries the overloaded model only ONCE before moving on (fast TTFT),
+    // vs the non-streaming path's 4 attempts.
+    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(2); // 1 + 1 retry
     expect(calls).toContain('gemini-2.5-flash'); // fell through and started
     expect(calls).not.toContain('gemini-2.0-flash');
   });
@@ -283,7 +285,20 @@ describe('streamGeminiWithFallback', () => {
     });
     const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
     expect(out.kind).toBe('overloaded');
-    expect(calls).toHaveLength(12); // 3 models × 4 attempts
+    expect(calls).toHaveLength(6); // 3 models × 2 attempts (fast fallthrough)
+  });
+
+  it('treats a 429 like a 503: fast fallthrough, ignoring a long Google retryDelay', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      // A big retryDelay hint MUST be ignored on the streaming path (no honoring the
+      // up-to-8s delay); it just does ONE quick retry, then moves to the next model.
+      'gemini-2.5-flash-lite': () => makeRes(429, { error: { details: [{ retryDelay: '30s' }] } }),
+      'gemini-2.5-flash': () => makeRes(200, { ok: true }),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    expect(out.kind).toBe('ok');
+    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(2); // 1 + 1 retry
+    expect(calls).toContain('gemini-2.5-flash');
   });
 
   it('fails fast on a real error (400) without retry or fallthrough', async () => {

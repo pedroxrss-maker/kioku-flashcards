@@ -500,14 +500,25 @@ export async function callGeminiWithFallback(
   return { kind: 'overloaded' }; // defensivo (cadeia vazia)
 }
 
-// ── Streaming (SSE) com o MESMO fallback de modelos ──────────────────────────
+// ── Streaming (SSE) com o MESMO fallback de modelos, porém FALLTHROUGH RÁPIDO ──
 // O streaming usa o endpoint :streamGenerateContent?alt=sse do Gemini, que devolve
 // a resposta como Server-Sent Events (cada `data: {json}` traz um pedaço novo do
 // texto). O fallback de modelos se aplica ao INÍCIO do stream: se o modelo atual
-// não consegue COMEÇAR a transmitir (503/429, esgotadas as retentativas), cai para
-// o próximo modelo — exatamente como o caminho não-streaming. Uma vez que o stream
-// começou (HTTP 200), apenas repassamos o corpo ao cliente, sem parsear. A mesma
-// cadeia, as mesmas constantes (MAX_GEMINI_ATTEMPTS / backoffs / retryDelay).
+// não consegue COMEÇAR a transmitir (503/429), cai para o PRÓXIMO modelo da cadeia.
+// Uma vez que o stream começou (HTTP 200), apenas repassamos o corpo, sem parsear.
+//
+// DIFERENÇA p/ o caminho não-streaming: o tutor é INTERATIVO (o time-to-first-token
+// importa). Não dá para queimar segundos reinsistindo num modelo sobrecarregado —
+// medições reais mostraram flash-lite devolvendo 503 nas tentativas 0,1,2 com
+// backoffs de ~0,5s/1s/1,6s antes de um 200 na 4ª (~3s só de espera). Então aqui
+// usamos NO MÁXIMO 1 retry curto e fixo por modelo e NÃO honramos o retryDelay do
+// Google (que pode ser ~8s): um 503 no flash-lite cai para o flash em bem menos de
+// 1s. A CADEIA continua flash-lite → flash → 2.0-flash (modelo mais barato primeiro;
+// só pagamos o flash quando o flash-lite está de fato indisponível). O caminho
+// não-streaming (deckGen) mantém as retentativas longas — é um batch em background.
+const STREAM_MAX_ATTEMPTS = 2; // 1 inicial + 1 retry rápido, depois cai pro próximo modelo
+const STREAM_BACKOFF_MS = 300; // único backoff curto entre as 2 tentativas (sem retryDelay de 8s)
+
 type GeminiStreamOutcome =
   | { kind: 'ok'; response: Response } // stream iniciado (200): corpo a repassar
   | { kind: 'overloaded' }
@@ -526,8 +537,8 @@ async function startGeminiStream(
   const doFetch = deps.fetchImpl ?? fetch;
   const doSleep = deps.sleepImpl ?? sleep;
   const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
-  for (let attempt = 0; attempt < MAX_GEMINI_ATTEMPTS; attempt += 1) {
-    const last = attempt === MAX_GEMINI_ATTEMPTS - 1;
+  for (let attempt = 0; attempt < STREAM_MAX_ATTEMPTS; attempt += 1) {
+    const last = attempt === STREAM_MAX_ATTEMPTS - 1;
     let res: Response;
     try {
       res = await doFetch(endpoint, {
@@ -536,22 +547,37 @@ async function startGeminiStream(
         body: JSON.stringify(geminiBody),
       });
     } catch {
+      const wait = last ? 0 : withJitter(STREAM_BACKOFF_MS);
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, attempt, status: 'network', sleepMs: wait, last });
       if (last) return { kind: 'network' };
-      await doSleep(withJitter(GEMINI_BACKOFFS_MS[attempt]));
+      await doSleep(wait);
       continue;
     }
 
-    if (res.ok) return { kind: 'ok', response: res }; // stream iniciado: repassa o corpo
-
-    if (res.status !== 503 && res.status !== 429) return { kind: 'error' };
-    if (last) return { kind: 'overloaded' };
-
-    let delay = GEMINI_BACKOFFS_MS[attempt];
-    if (res.status === 429) {
-      const hinted = await googleRetryDelayMs(res);
-      if (hinted != null) delay = Math.min(hinted, MAX_RETRY_DELAY_MS);
+    if (res.ok) {
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, attempt, status: 200, started: true });
+      return { kind: 'ok', response: res }; // stream iniciado: repassa o corpo
     }
-    await doSleep(withJitter(delay));
+
+    if (res.status !== 503 && res.status !== 429) {
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, attempt, status: res.status, kind: 'error' });
+      return { kind: 'error' };
+    }
+    if (last) {
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, attempt, status: res.status, kind: 'overloaded', last: true });
+      return { kind: 'overloaded' };
+    }
+
+    // UM retry curto e fixo, depois cai pro próximo modelo. NÃO honra o retryDelay
+    // do Google (até MAX_RETRY_DELAY_MS=8s) — fallthrough precisa ser rápido aqui.
+    const wait = withJitter(STREAM_BACKOFF_MS);
+    // eslint-disable-next-line no-console
+    console.log('[gemini-retry]', { model, attempt, status: res.status, sleepMs: wait });
+    await doSleep(wait);
   }
   return { kind: 'overloaded' };
 }
@@ -575,6 +601,38 @@ export async function streamGeminiWithFallback(
   if (sawOverloaded) return { kind: 'overloaded' };
   if (sawNetwork) return { kind: 'network' };
   return { kind: 'overloaded' };
+}
+
+/**
+ * Wrap the upstream Gemini SSE body so the FIRST bytes sent are an SSE comment
+ * (":\n\n"). This forces the browser to open the read pipe immediately (otherwise
+ * some stacks wait for the first real chunk before surfacing the stream to JS),
+ * then PUMPS the upstream chunks straight through one at a time — never buffering
+ * or accumulating the body (each chunk is enqueued the moment it is read).
+ */
+function ssePassthrough(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const reader = upstream.getReader();
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(':\n\n')); // initial flush: open the pipe early
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(value); // relay this chunk NOW (no accumulation)
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel(reason) {
+      void reader.cancel(reason);
+    },
+  });
 }
 
 export default {
@@ -715,13 +773,26 @@ export default {
         if (s.kind === 'error') {
           return json({ error: 'A IA não conseguiu processar a solicitação.', error_code: 'ai_error' }, 502, cors);
         }
-        // Stream iniciado: repassa o corpo SSE do Gemini direto ao cliente.
-        return new Response(s.response.body, {
+        // Stream iniciado: repassa o corpo SSE do Gemini direto ao cliente, SEM
+        // compressão/transformação — senão o navegador bufferiza o stream e só
+        // libera os chunks no fim (o bug do "Pensando..." que despeja tudo de uma
+        // vez). Pumpamos o corpo upstream chunk a chunk (ssePassthrough), com um
+        // flush inicial para abrir o pipe cedo.
+        const upstream = s.response.body;
+        if (!upstream) {
+          return json({ error: 'A IA não retornou conteúdo. Tente novamente.', error_code: 'ai_error' }, 502, cors);
+        }
+        return new Response(ssePassthrough(upstream), {
           status: 200,
           headers: {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no', // evita buffering em proxies intermediários
+            // Content-Type EXATO 'text/event-stream' (sem charset): o Cloudflare não
+            // comprime esse tipo, e o valor exato evita re-negociação de encoding.
+            'Content-Type': 'text/event-stream',
+            // 'identity' = corpo NÃO codificado; 'no-transform' proíbe o Cloudflare
+            // (e qualquer proxy) de comprimir/transformar a resposta no edge.
+            'Content-Encoding': 'identity',
+            'Cache-Control': 'no-cache, no-transform',
+            'X-Accel-Buffering': 'no', // desliga buffering em proxies (nginx-like)
             ...cors,
           },
         });
