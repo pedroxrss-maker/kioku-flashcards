@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
-import { Brain, GraduationCap, List, Loader2, Scale, Search, Sparkles, X } from 'lucide-react';
+import { Brain, GraduationCap, Loader2, Search, Sparkles, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cardAssist, isAiConfigured, QuotaError, tutorTeach } from './client';
 import type { CardAssistAction } from './client';
@@ -18,14 +18,13 @@ interface CardAiHelpProps {
   flipped: boolean;
 }
 
-/** The five AI helpers share ONE pool/metric ("tutor"); only one is active at a
+/** The AI helpers share ONE pool/metric ("tutor"); only one is active at a
  *  time and its answer shows in a single balloon. */
 type AiAction = CardAssistAction | 'tutor';
 
 const ASSIST: Array<{ id: CardAssistAction; label: string; icon: LucideIcon }> = [
   { id: 'example', label: 'Exemplo real', icon: Search },
-  { id: 'breakdown', label: 'Detalhar', icon: List },
-  { id: 'analogy', label: 'Analogia', icon: Scale },
+  // "Gancho de memória" devolve analogia + gancho de memória numa só resposta.
   { id: 'mnemonic', label: 'Gancho de memória', icon: Brain },
 ];
 

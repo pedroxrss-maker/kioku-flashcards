@@ -250,64 +250,163 @@ function streamCalls(byModel: Record<string, () => Promise<Response> | Response>
   return { fetchImpl, calls };
 }
 
+/** A streaming 200 whose SSE body carries one text delta (so the peek finds "text"). */
+function sseRes(text = 'hi'): Response {
+  const payload = JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] });
+  return new Response(`data: ${payload}\n\n`, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+}
+
+/** A streaming 200 whose body NEVER emits (flash-lite accepts then stalls forever). */
+function hangRes(): Response {
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start() {
+        /* never enqueue, never close: the first token never arrives */
+      },
+    }),
+    { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+  );
+}
+
+/** Drain a relay stream to a string. */
+async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const dec = new TextDecoder();
+  let out = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    out += dec.decode(value, { stream: true });
+  }
+  return out;
+}
+
+/** Budget timer that NEVER fires — the first model gets unlimited time (healthy case). */
+const neverBudget = () => ({ signal: new Promise<void>(() => {}), cancel: () => {} });
+/** Budget timer that fires IMMEDIATELY — the first model's window is already blown. */
+const instantBudget = () => ({ signal: Promise.resolve(), cancel: () => {} });
+
+/** Streaming deps: instant backoff + an injectable budget timer (defaults to never). */
+const streamDeps = (fetchImpl: typeof fetch, budgetTimer = neverBudget) => ({
+  fetchImpl,
+  sleepImpl: () => Promise.resolve(),
+  budgetTimer,
+});
+
 describe('streamGeminiWithFallback', () => {
-  it('returns ok (the started stream) on the first model that succeeds', async () => {
+  it('uses flash-lite when it STARTS streaming text within the budget (cheap, healthy)', async () => {
     const { fetchImpl, calls } = streamCalls({
-      'gemini-2.5-flash-lite': () => makeRes(200, { ok: true }),
+      'gemini-2.5-flash-lite': () => sseRes('oi'),
       'gemini-2.5-flash': () => makeRes(503),
     });
-    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
     expect(out.kind).toBe('ok');
-    if (out.kind === 'ok') expect(out.response.status).toBe(200);
-    expect(calls).toEqual(['gemini-2.5-flash-lite']);
+    if (out.kind === 'ok') expect(await readAll(out.stream)).toContain('oi'); // the relayed text
+    expect(calls).toEqual(['gemini-2.5-flash-lite']); // never touched flash
   });
 
-  it('falls through to the next model FAST on a 503 (1 quick retry, then next model)', async () => {
+  it('abandons flash-lite for flash when it STALLS past the budget (200 but no first token)', async () => {
     const { fetchImpl, calls } = streamCalls({
-      'gemini-2.5-flash-lite': () => makeRes(503),
-      'gemini-2.5-flash': () => makeRes(200, { ok: true }),
-      'gemini-2.0-flash': () => makeRes(503),
+      'gemini-2.5-flash-lite': () => hangRes(), // accepts, then never emits
+      'gemini-2.5-flash': () => sseRes('hi'),
     });
-    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    // instantBudget = the 800ms window is already blown -> bail to flash immediately.
+    const out = await streamGeminiWithFallback(
+      buildModelChain('gemini-2.5-flash-lite'),
+      {},
+      KEY,
+      streamDeps(fetchImpl, instantBudget),
+    );
     expect(out.kind).toBe('ok');
-    // Streaming retries the overloaded model only ONCE before moving on (fast TTFT),
-    // vs the non-streaming path's 4 attempts.
-    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(2); // 1 + 1 retry
-    expect(calls).toContain('gemini-2.5-flash'); // fell through and started
-    expect(calls).not.toContain('gemini-2.0-flash');
-  });
-
-  it('reports overloaded only after the WHOLE chain fails to start (all 503)', async () => {
-    const { fetchImpl, calls } = streamCalls({
-      'gemini-2.5-flash-lite': () => makeRes(503),
-      'gemini-2.5-flash': () => makeRes(503),
-      'gemini-2.0-flash': () => makeRes(503),
-    });
-    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
-    expect(out.kind).toBe('overloaded');
-    expect(calls).toHaveLength(6); // 3 models × 2 attempts (fast fallthrough)
-  });
-
-  it('treats a 429 like a 503: fast fallthrough, ignoring a long Google retryDelay', async () => {
-    const { fetchImpl, calls } = streamCalls({
-      // A big retryDelay hint MUST be ignored on the streaming path (no honoring the
-      // up-to-8s delay); it just does ONE quick retry, then moves to the next model.
-      'gemini-2.5-flash-lite': () => makeRes(429, { error: { details: [{ retryDelay: '30s' }] } }),
-      'gemini-2.5-flash': () => makeRes(200, { ok: true }),
-    });
-    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
-    expect(out.kind).toBe('ok');
-    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(2); // 1 + 1 retry
+    if (out.kind === 'ok') expect(await readAll(out.stream)).toContain('hi'); // flash served it
     expect(calls).toContain('gemini-2.5-flash');
   });
 
-  it('fails fast on a real error (400) without retry or fallthrough', async () => {
+  it('falls through when flash-lite returns 200 but ENDS without ever emitting text', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(200, { ok: true }), // 200, body has no "text", then ends
+      'gemini-2.5-flash': () => sseRes('hi'),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
+    expect(out.kind).toBe('ok');
+    if (out.kind === 'ok') expect(await readAll(out.stream)).toContain('hi');
+    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(1); // single budgeted attempt
+    expect(calls).toContain('gemini-2.5-flash');
+  });
+
+  it('abandons flash-lite on a 503 in a SINGLE budgeted attempt (no retry), goes to flash', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(503),
+      'gemini-2.5-flash': () => sseRes('hi'),
+      'gemini-2.0-flash': () => makeRes(503),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
+    expect(out.kind).toBe('ok');
+    // The budgeted FIRST model does NOT retry — one shot, then straight to flash (faster
+    // than the old 1+1 retry). The later models keep the 2-attempt fast-fallthrough.
+    expect(calls.filter((m) => m === 'gemini-2.5-flash-lite')).toHaveLength(1);
+    expect(calls).toContain('gemini-2.5-flash');
+    expect(calls).not.toContain('gemini-2.0-flash');
+  });
+
+  it('reports overloaded after the WHOLE chain fails (flash-lite 1 + flash 2 + 2.0 2 = 5 calls)', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(503),
+      'gemini-2.5-flash': () => makeRes(503),
+      'gemini-2.0-flash': () => makeRes(503),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
+    expect(out.kind).toBe('overloaded');
+    expect(calls).toHaveLength(5); // flash-lite 1 (budgeted) + flash 2 + 2.0-flash 2
+  });
+
+  it('a LATER model (flash) ignores a long retryDelay and does its quick 2-attempt fallthrough', async () => {
+    const { fetchImpl, calls } = streamCalls({
+      'gemini-2.5-flash-lite': () => makeRes(503), // bail to flash
+      // flash gets a 429 with a 30s hint that MUST be ignored: 2 quick attempts, then 2.0.
+      'gemini-2.5-flash': () => makeRes(429, { error: { details: [{ retryDelay: '30s' }] } }),
+      'gemini-2.0-flash': () => sseRes('hi'),
+    });
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
+    expect(out.kind).toBe('ok');
+    expect(calls.filter((m) => m === 'gemini-2.5-flash')).toHaveLength(2); // quick retry, not a 30s wait
+    expect(calls).toContain('gemini-2.0-flash');
+  });
+
+  it('fails fast on a real error (400) from flash-lite without fallthrough', async () => {
     const { fetchImpl, calls } = streamCalls({
       'gemini-2.5-flash-lite': () => makeRes(400, { error: { message: 'bad request' } }),
-      'gemini-2.5-flash': () => makeRes(200, { ok: true }),
+      'gemini-2.5-flash': () => sseRes('hi'),
     });
-    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
+    const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
     expect(out.kind).toBe('error');
     expect(calls).toEqual(['gemini-2.5-flash-lite']);
+  });
+
+  // Tutor TTFT fix: the streaming path disables Gemini "thinking" (thinkingBudget:0)
+  // to skip the multi-second internal reasoning phase — but ONLY on the 2.5-flash
+  // family. The 2.0-flash isn't a thinking model, so the field must NOT be sent to it
+  // (an unsupported field could 400). This pins the per-model guard.
+  it('sends thinkingBudget:0 to the 2.5-flash family but NOT to 2.0-flash', async () => {
+    const bodies: Record<string, Record<string, unknown>> = {};
+    const fetchImpl = (async (input: unknown, init: RequestInit) => {
+      const url = String(input);
+      const model = /\/models\/([^:]+):/.exec(url)?.[1] ?? '';
+      bodies[model] = JSON.parse(String(init.body)) as Record<string, unknown>;
+      // 2.5 models 503 so the chain falls all the way through and we capture every body.
+      return model === 'gemini-2.0-flash' ? makeRes(200, { ok: true }) : makeRes(503);
+    }) as unknown as typeof fetch;
+
+    const reqBody = { contents: [], generationConfig: { maxOutputTokens: 700 } };
+    await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), reqBody, KEY, streamDeps(fetchImpl));
+
+    const gen = (m: string) => bodies[m]?.generationConfig as Record<string, unknown> | undefined;
+    // 2.5 family: thinking disabled, and the original generationConfig is preserved.
+    expect(gen('gemini-2.5-flash-lite')?.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(gen('gemini-2.5-flash-lite')?.maxOutputTokens).toBe(700);
+    expect(gen('gemini-2.5-flash')?.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    // 2.0-flash: the field is omitted (unsupported), body passes through untouched.
+    expect(gen('gemini-2.0-flash')).not.toHaveProperty('thinkingConfig');
+    expect(gen('gemini-2.0-flash')?.maxOutputTokens).toBe(700);
   });
 });

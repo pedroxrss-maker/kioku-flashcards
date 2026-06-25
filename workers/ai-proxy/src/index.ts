@@ -357,6 +357,17 @@ export function capDeckCardsResponse(data: unknown, maxCards: number): unknown {
 // A cota do plano (429 nosso, quota_exceeded) é tratada ANTES disto, no handler,
 // e NUNCA passa por aqui: o fallback se aplica só à sobrecarga do lado do Google.
 const MODEL_FALLBACK_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+// Tutor/STREAMING: tenta o flash-lite (BARATO) 1º, mas com um ORÇAMENTO de tempo. Se
+// ele não COMEÇAR a emitir texto dentro de TUTOR_FIRST_MODEL_TIMEOUT_MS, abandona e
+// cai pro flash (rápido e estável, ~474ms TTFT medido). Assim: flash-lite saudável
+// serve barato; flash-lite lento/instável (frequente nesta conta) é trocado pelo
+// flash em <0,8s. O caminho NÃO-streaming (deckGen) NÃO usa isto: lá o flash-lite
+// (mais barato) segue 1º na cadeia normal, pois é um batch em background.
+const TUTOR_STREAM_PRIMARY = 'gemini-2.5-flash-lite';
+// Orçamento do 1º modelo (flash-lite): janela PRÉ-primeiro-token. Cobre tanto a
+// demora pra retornar os headers quanto o caso "200 mas trava antes do 1º token".
+// Depois que o stream COMEÇA (1º chunk com texto), NUNCA aborta.
+const TUTOR_FIRST_MODEL_TIMEOUT_MS = 800;
 const MAX_GEMINI_ATTEMPTS = 4; // por modelo
 const GEMINI_BACKOFFS_MS = [300, 800, 1500]; // espera após a 1ª, 2ª, 3ª falha (4 tentativas)
 // Teto para o retryDelay sugerido pelo Google: respeitamos a dica, mas limitada,
@@ -413,6 +424,27 @@ type GeminiOutcome =
 interface GeminiCallDeps {
   fetchImpl?: typeof fetch;
   sleepImpl?: (ms: number) => Promise<void>;
+  // Orçamento de tempo do 1º modelo no streaming (injetável p/ teste): devolve um
+  // `signal` que resolve quando o tempo estoura e um `cancel()` p/ desarmá-lo quando
+  // o stream começa. Default: setTimeout real.
+  budgetTimer?: (ms: number) => { signal: Promise<void>; cancel: () => void };
+}
+
+/** Cronômetro do orçamento do 1º modelo: resolve `signal` após `ms`, cancelável. */
+function defaultBudgetTimer(ms: number): { signal: Promise<void>; cancel: () => void } {
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  const signal = new Promise<void>((resolve) => {
+    handle = setTimeout(resolve, ms);
+  });
+  return {
+    signal,
+    cancel: () => {
+      if (handle !== undefined) {
+        clearTimeout(handle);
+        handle = undefined;
+      }
+    },
+  };
 }
 
 /**
@@ -519,8 +551,31 @@ export async function callGeminiWithFallback(
 const STREAM_MAX_ATTEMPTS = 2; // 1 inicial + 1 retry rápido, depois cai pro próximo modelo
 const STREAM_BACKOFF_MS = 300; // único backoff curto entre as 2 tentativas (sem retryDelay de 8s)
 
+// O tempo até o 1º token do tutor é dominado pelos "thinking tokens" que o Gemini
+// gera ANTES da resposta visível (medido: ~6-7s de geração interna, com o Worker
+// devolvendo 200 em <1s). Para um tutor de flashcard — explicações curtas e diretas
+// — esse raciocínio multi-passo é latência pura. Só a família 2.5-flash aceita
+// DESLIGAR o thinking via generationConfig.thinkingConfig.thinkingBudget:0; o
+// 2.0-flash NÃO é modelo de thinking e enviar o campo poderia causar 400. Guardamos
+// por-modelo: aplicamos só onde é suportado, no caminho de STREAMING (tutor).
+function supportsThinkingDisable(model: string): boolean {
+  return model.includes('2.5-flash'); // gemini-2.5-flash e gemini-2.5-flash-lite (e variantes versionadas)
+}
+
+/** Cópia do corpo do Gemini com thinkingBudget:0 em generationConfig quando o modelo
+ *  suporta desligar o thinking; senão devolve o corpo INTACTO (sem o campo). */
+function withThinkingDisabled(geminiBody: unknown, model: string): unknown {
+  if (!supportsThinkingDisable(model)) return geminiBody;
+  const base = geminiBody && typeof geminiBody === 'object' ? (geminiBody as Record<string, unknown>) : {};
+  const gen =
+    base.generationConfig && typeof base.generationConfig === 'object'
+      ? (base.generationConfig as Record<string, unknown>)
+      : {};
+  return { ...base, generationConfig: { ...gen, thinkingConfig: { thinkingBudget: 0 } } };
+}
+
 type GeminiStreamOutcome =
-  | { kind: 'ok'; response: Response } // stream iniciado (200): corpo a repassar
+  | { kind: 'ok'; response: Response; model: string; requestSentAt: number } // stream iniciado (200): corpo a repassar
   | { kind: 'overloaded' }
   | { kind: 'error' }
   | { kind: 'network' };
@@ -537,14 +592,25 @@ async function startGeminiStream(
   const doFetch = deps.fetchImpl ?? fetch;
   const doSleep = deps.sleepImpl ?? sleep;
   const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+  // Tutor (único caminho de streaming): desliga o thinking onde suportado p/ cortar
+  // o time-to-first-token. Guarda por-modelo — 2.0-flash recebe o corpo intacto.
+  const bodyForModel = withThinkingDisabled(geminiBody, model);
+  // TEMP diag: confirma no wrangler tail que generationConfig.thinkingConfig.thinkingBudget
+  // está REALMENTE no corpo enviado a este modelo (e com a aninhação correta).
+  // eslint-disable-next-line no-console
+  console.log('[gemini-body]', {
+    model,
+    generationConfig: (bodyForModel as { generationConfig?: unknown }).generationConfig,
+  });
   for (let attempt = 0; attempt < STREAM_MAX_ATTEMPTS; attempt += 1) {
     const last = attempt === STREAM_MAX_ATTEMPTS - 1;
     let res: Response;
+    const sentAt = Date.now(); // p/ medir TTFT (envio -> 1º chunk de texto) deste modelo
     try {
       res = await doFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(geminiBody),
+        body: JSON.stringify(bodyForModel),
       });
     } catch {
       const wait = last ? 0 : withJitter(STREAM_BACKOFF_MS);
@@ -558,7 +624,7 @@ async function startGeminiStream(
     if (res.ok) {
       // eslint-disable-next-line no-console
       console.log('[gemini-retry]', { model, attempt, status: 200, started: true });
-      return { kind: 'ok', response: res }; // stream iniciado: repassa o corpo
+      return { kind: 'ok', response: res, model, requestSentAt: sentAt }; // stream iniciado: repassa o corpo
     }
 
     if (res.status !== 503 && res.status !== 429) {
@@ -582,19 +648,194 @@ async function startGeminiStream(
   return { kind: 'overloaded' };
 }
 
-/** Percorre a cadeia de modelos tentando INICIAR o stream; cai para o próximo em
- *  sobrecarga (503/429) ou rede, devolve no primeiro 200 (relay) ou erro real. */
+// Resultado do 1º modelo (budgetado): além dos status de falha normais, 'timeout'
+// = estourou o orçamento PRÉ-primeiro-token (cai pro próximo, igual a 'overloaded').
+type FirstModelOutcome =
+  | { kind: 'ok'; stream: ReadableStream<Uint8Array> } // já COMEÇOU: stream pronto p/ repassar
+  | { kind: 'timeout' }
+  | { kind: 'overloaded' }
+  | { kind: 'error' }
+  | { kind: 'network' };
+
+/** Stream de saída que RE-EMITE os chunks já lidos no "peek" (pre) e depois bombeia
+ *  o resto do reader — usado quando o 1º modelo já começou a emitir texto. Mesmo
+ *  flush inicial (":\n\n") do ssePassthrough; sem re-logar TTFT (já logado). */
+function prependedSsePassthrough(
+  pre: Uint8Array[],
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(':\n\n')); // mesmo flush inicial
+      for (const chunk of pre) controller.enqueue(chunk); // chunks já lidos no peek
+    },
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel(reason) {
+      void reader.cancel(reason);
+    },
+  });
+}
+
+/** 1º modelo (flash-lite) COM ORÇAMENTO: faz UMA tentativa e a corre contra um
+ *  cronômetro (budgetMs) que cobre a janela PRÉ-primeiro-token — tanto a demora pra
+ *  retornar headers quanto o "200 que trava antes do 1º token". Se o 1º chunk COM
+ *  texto chega a tempo -> 'ok' (stream pronto, com o chunk já lido re-emitido) e o
+ *  cronômetro é desarmado: dali em diante NUNCA aborta. Senão -> cai pro próximo. */
+async function startFirstModelBudgeted(
+  model: string,
+  geminiBody: unknown,
+  apiKey: string,
+  budgetMs: number,
+  deps: GeminiCallDeps = {},
+): Promise<FirstModelOutcome> {
+  const doFetch = deps.fetchImpl ?? fetch;
+  const mkBudget = deps.budgetTimer ?? defaultBudgetTimer;
+  const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+  const bodyForModel = withThinkingDisabled(geminiBody, model);
+  // eslint-disable-next-line no-console
+  console.log('[gemini-body]', {
+    model,
+    generationConfig: (bodyForModel as { generationConfig?: unknown }).generationConfig,
+  });
+
+  const controller = new AbortController();
+  const budget = mkBudget(budgetMs);
+  const sentAt = Date.now();
+  // marcador que vence a corrida quando o orçamento estoura
+  const timedOut = budget.signal.then(() => 'timeout' as const);
+
+  // 1) headers dentro do orçamento? corre o fetch contra o cronômetro.
+  let res: Response;
+  try {
+    const fetched = doFetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(bodyForModel),
+      signal: controller.signal,
+    }).then((r) => ({ r }));
+    const raced = await Promise.race([fetched, timedOut]);
+    if (raced === 'timeout') {
+      controller.abort(); // solta o fetch pendente
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, status: 'budget-timeout', phase: 'headers', firstModel: true });
+      return { kind: 'timeout' };
+    }
+    res = raced.r;
+  } catch {
+    budget.cancel();
+    // eslint-disable-next-line no-console
+    console.log('[gemini-retry]', { model, status: 'network', firstModel: true });
+    return { kind: 'network' };
+  }
+
+  if (res.status === 503 || res.status === 429) {
+    budget.cancel();
+    // eslint-disable-next-line no-console
+    console.log('[gemini-retry]', { model, status: res.status, kind: 'overloaded', firstModel: true });
+    return { kind: 'overloaded' };
+  }
+  if (!res.ok) {
+    budget.cancel();
+    // eslint-disable-next-line no-console
+    console.log('[gemini-retry]', { model, status: res.status, kind: 'error', firstModel: true });
+    return { kind: 'error' };
+  }
+  if (!res.body) {
+    budget.cancel();
+    return { kind: 'error' };
+  }
+
+  // 2) 200: "peek" o 1º chunk COM texto, ainda dentro do orçamento. Cada read() corre
+  //    contra o cronômetro — se estourar antes do texto, cai pro próximo modelo.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  const pre: Uint8Array[] = [];
+  for (;;) {
+    let chunk: ReadableStreamReadResult<Uint8Array> | 'timeout';
+    try {
+      chunk = await Promise.race([reader.read(), timedOut]);
+    } catch {
+      budget.cancel();
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, status: 'read-error', firstModel: true });
+      void reader.cancel();
+      return { kind: 'network' };
+    }
+    if (chunk === 'timeout') {
+      controller.abort(); // aborta o upstream (real)
+      void reader.cancel(); // solta o reader (mock/real)
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, status: 'budget-timeout', phase: 'first-token', firstModel: true });
+      return { kind: 'timeout' };
+    }
+    if (chunk.done) {
+      // terminou sem nunca emitir texto -> trata como falha, cai pro próximo
+      budget.cancel();
+      // eslint-disable-next-line no-console
+      console.log('[gemini-retry]', { model, status: 'ended-no-text', firstModel: true });
+      return { kind: 'timeout' };
+    }
+    pre.push(chunk.value);
+    if (decoder.decode(chunk.value, { stream: true }).includes('"text"')) {
+      // COMEÇOU: desarma o orçamento (nunca mais aborta) e repassa o stream.
+      budget.cancel();
+      // eslint-disable-next-line no-console
+      console.log('[gemini-ttft]', { model, ttftMs: Date.now() - sentAt, firstModel: true });
+      return { kind: 'ok', stream: prependedSsePassthrough(pre, reader) };
+    }
+    // chunk sem texto ainda (ex.: ':\n\n' / metadados): continua lendo dentro do budget.
+  }
+}
+
+// Resultado já PRONTO p/ repassar ao cliente: o stream final (com flush + relay).
+type StreamRelayOutcome =
+  | { kind: 'ok'; stream: ReadableStream<Uint8Array> }
+  | { kind: 'overloaded' }
+  | { kind: 'error' }
+  | { kind: 'network' };
+
+/** Percorre a cadeia: o 1º modelo (flash-lite) roda BUDGETADO (orçamento pré-primeiro-
+ *  token); os demais usam o caminho normal (startGeminiStream, com retry 2x rápido) e
+ *  têm o corpo embrulhado no ssePassthrough. Cai pro próximo em sobrecarga/timeout/rede;
+ *  devolve no 1º que COMEÇAR a emitir, ou erro real. */
 export async function streamGeminiWithFallback(
   models: string[],
   geminiBody: unknown,
   apiKey: string,
   deps: GeminiCallDeps = {},
-): Promise<GeminiStreamOutcome> {
+): Promise<StreamRelayOutcome> {
   let sawOverloaded = false;
   let sawNetwork = false;
-  for (const model of models) {
+  for (let i = 0; i < models.length; i += 1) {
+    const model = models[i];
+    if (i === 0) {
+      // 1º modelo: tentativa ÚNICA budgetada (um 503/429 OU um stall >budget cai pro
+      // flash já — sem o backoff de retry, justamente p/ não fazer o usuário esperar).
+      const r = await startFirstModelBudgeted(model, geminiBody, apiKey, TUTOR_FIRST_MODEL_TIMEOUT_MS, deps);
+      if (r.kind === 'ok') return { kind: 'ok', stream: r.stream };
+      if (r.kind === 'error') return { kind: 'error' };
+      if (r.kind === 'network') sawNetwork = true;
+      else sawOverloaded = true; // 'overloaded' (503/429) ou 'timeout' (estourou o orçamento)
+      continue;
+    }
     const outcome = await startGeminiStream(model, geminiBody, apiKey, deps);
-    if (outcome.kind === 'ok' || outcome.kind === 'error') return outcome;
+    if (outcome.kind === 'ok') {
+      if (!outcome.response.body) return { kind: 'error' };
+      return { kind: 'ok', stream: ssePassthrough(outcome.response.body, outcome.model, outcome.requestSentAt) };
+    }
+    if (outcome.kind === 'error') return { kind: 'error' };
     if (outcome.kind === 'overloaded') sawOverloaded = true;
     else sawNetwork = true;
   }
@@ -610,9 +851,15 @@ export async function streamGeminiWithFallback(
  * then PUMPS the upstream chunks straight through one at a time — never buffering
  * or accumulating the body (each chunk is enqueued the moment it is read).
  */
-function ssePassthrough(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+function ssePassthrough(
+  upstream: ReadableStream<Uint8Array>,
+  model = '',
+  requestSentAt = 0,
+): ReadableStream<Uint8Array> {
   const reader = upstream.getReader();
   const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let firstTextLogged = false; // TEMP diag: loga TTFT (envio -> 1º chunk COM texto) uma vez
   return new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(encoder.encode(':\n\n')); // initial flush: open the pipe early
@@ -623,6 +870,16 @@ function ssePassthrough(upstream: ReadableStream<Uint8Array>): ReadableStream<Ui
         if (done) {
           controller.close();
           return;
+        }
+        // TEMP diag: o 1º chunk que carrega texto de verdade marca o fim do "thinking"
+        // do modelo. Se thinkingBudget:0 funcionar, isso cai de ~5s p/ <1s no flash-lite.
+        if (!firstTextLogged && requestSentAt > 0) {
+          const text = decoder.decode(value, { stream: true });
+          if (text.includes('"text"')) {
+            firstTextLogged = true;
+            // eslint-disable-next-line no-console
+            console.log('[gemini-ttft]', { model, ttftMs: Date.now() - requestSentAt });
+          }
         }
         controller.enqueue(value); // relay this chunk NOW (no accumulation)
       } catch (err) {
@@ -763,7 +1020,11 @@ export default {
       // os bytes SSE direto ao cliente (o token aparece assim que o Gemini emite).
       const wantStream = body.stream === true && metric !== 'deckGen';
       if (wantStream) {
-        const s = await streamGeminiWithFallback(models, geminiBody, env.GOOGLE_GEMINI_API_KEY);
+        // Tutor: cadeia PRÓPRIA com flash-lite 1º BUDGETADO (orçamento pré-primeiro-
+        // token); se ele travar >800ms cai pro flash. NÃO usa `models` (a cadeia do
+        // cliente) — esse fica só para o caminho não-streaming abaixo.
+        const streamModels = buildModelChain(TUTOR_STREAM_PRIMARY);
+        const s = await streamGeminiWithFallback(streamModels, geminiBody, env.GOOGLE_GEMINI_API_KEY);
         if (s.kind === 'network') {
           return json({ error: 'Falha ao falar com a IA. Tente novamente.', error_code: 'ai_unreachable' }, 502, cors);
         }
@@ -773,16 +1034,11 @@ export default {
         if (s.kind === 'error') {
           return json({ error: 'A IA não conseguiu processar a solicitação.', error_code: 'ai_error' }, 502, cors);
         }
-        // Stream iniciado: repassa o corpo SSE do Gemini direto ao cliente, SEM
-        // compressão/transformação — senão o navegador bufferiza o stream e só
-        // libera os chunks no fim (o bug do "Pensando..." que despeja tudo de uma
-        // vez). Pumpamos o corpo upstream chunk a chunk (ssePassthrough), com um
-        // flush inicial para abrir o pipe cedo.
-        const upstream = s.response.body;
-        if (!upstream) {
-          return json({ error: 'A IA não retornou conteúdo. Tente novamente.', error_code: 'ai_error' }, 502, cors);
-        }
-        return new Response(ssePassthrough(upstream), {
+        // Stream iniciado: `s.stream` JÁ vem embrulhado (flush inicial ":\n\n" + relay
+        // chunk a chunk, SEM compressão/transformação — senão o navegador bufferiza e
+        // só libera no fim, o bug do "Pensando..."). Só falta mandar com os headers
+        // corretos pro edge não comprimir/bufferizar.
+        return new Response(s.stream, {
           status: 200,
           headers: {
             // Content-Type EXATO 'text/event-stream' (sem charset): o Cloudflare não

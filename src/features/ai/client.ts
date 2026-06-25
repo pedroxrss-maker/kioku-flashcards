@@ -516,11 +516,11 @@ export async function tutorTeach(
   return onToken ? createMessageStream({ ...opts, onToken, t0 }) : createMessage(opts);
 }
 
-export type CardAssistAction = 'example' | 'breakdown' | 'analogy' | 'mnemonic';
+export type CardAssistAction = 'example' | 'mnemonic';
 
 /**
  * One short, single-shot AI help for a card under review: a real-world example,
- * a breakdown, an analogy, or a memory hook. Plain-text pt-BR, a few sentences.
+ * or a memory aid (analogy + memory hook). Plain-text pt-BR, a few sentences.
  */
 export async function cardAssist(
   front: string,
@@ -530,21 +530,25 @@ export async function cardAssist(
   t0?: number, // TEMP timing: click instant, for [tutor-timing] deltas
 ): Promise<string> {
   const ASK: Record<CardAssistAction, string> = {
-    example: 'Dê UM exemplo do mundo real, concreto e curto, que ilustre este card.',
-    breakdown: 'Explique este card dividido em partes simples, num passo a passo bem curto.',
-    analogy: 'Dê UMA analogia curta e memorável para este card.',
-    mnemonic: 'Dê um gancho de memória (mnemônico) curto para lembrar deste card.',
+    example: 'Dê UM exemplo do mundo real, concreto e curto (1 a 3 frases), que ilustre este card.',
+    // "Gancho de memória" agora combina DUAS coisas numa só resposta: uma analogia
+    // útil e, em seguida, um parágrafo curto com um gancho de memória/resumo.
+    mnemonic:
+      'Primeiro, dê UMA analogia útil e memorável para este card. ' +
+      'Depois, numa linha em branco, escreva um parágrafo CURTO com um gancho de memória ' +
+      '(resumo fácil de lembrar) para fixar o card.',
   };
   const system =
     'You help a student reviewing a flashcard. ' +
     `Front: ${front}. Back: ${back}. ` +
-    'Answer in Brazilian Portuguese, in at most 3 short sentences. Be concrete and concise. ' +
-    'No headings and no preamble. You MAY wrap one or two KEY words or short phrases in ' +
+    'Answer in Brazilian Portuguese, concisely (follow the length the instruction asks for). ' +
+    'Be concrete. No headings and no preamble. You MAY wrap one or two KEY words or short phrases in ' +
     '**double asterisks** to highlight them — use sparingly, never a whole sentence.';
   const opts: CreateOptions = {
     system,
     messages: [{ role: 'user', content: ASK[action] }],
-    maxTokens: 400,
+    // mnemonic now returns two parts (analogy + hook), so it gets a bit more room.
+    maxTokens: action === 'mnemonic' ? 550 : 400,
     metric: 'tutor',
   };
   return onToken ? createMessageStream({ ...opts, onToken, t0 }) : createMessage(opts);
