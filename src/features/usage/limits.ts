@@ -55,15 +55,15 @@ export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, QuotaRule>> = {
 /**
  * Max number of cards a single AI-generated deck may contain, by plan. This is a
  * PER-GENERATION cap (not a daily/monthly counter, so it is not in quota_rules):
- * the free plan is held to 10 cards per generated deck; paid plans use the UI
- * maximum (100). Enforced where the deck is generated (the quantity selector is
- * capped AND the result is truncated, so instructions like "faça 100 cards" can
- * never exceed it on the free plan).
+ * the free plan is held to 10 cards per generated deck; paid plans are higher
+ * (Básico 150, Avançado 300). Enforced where the deck is generated (the quantity
+ * selector is capped AND the result is truncated, so instructions like "faça 500
+ * cards" can never exceed the plan's cap).
  */
 export const AI_DECK_MAX_CARDS: Record<Plan, number> = {
   free: 10,
-  basic: 100,
-  advanced: 100,
+  basic: 150,
+  advanced: 300,
 };
 
 /** The cards-per-AI-deck cap for a plan (falls back to free). */

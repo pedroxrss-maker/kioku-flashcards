@@ -47,10 +47,10 @@ const METERED_METRICS = ['deckGen', 'tutor'];
 /**
  * Teto de cartas por deck gerado por IA, por plano. ESPELHA `AI_DECK_MAX_CARDS`
  * em src/features/usage/limits.ts - mantenha os dois em sincronia. free = 10;
- * pagos (basic/advanced) = 100. Este e o teto REAL, aplicado no servidor (corta
+ * Basico = 150; Avancado = 300. Este e o teto REAL, aplicado no servidor (corta
  * a resposta do Gemini); o cliente so limita o seletor visualmente.
  */
-const AI_DECK_MAX_CARDS: Record<string, number> = { free: 10, basic: 100, advanced: 100 };
+const AI_DECK_MAX_CARDS: Record<string, number> = { free: 10, basic: 150, advanced: 300 };
 const maxCardsForPlan = (plan: string): number =>
   AI_DECK_MAX_CARDS[plan] ?? AI_DECK_MAX_CARDS.free;
 
