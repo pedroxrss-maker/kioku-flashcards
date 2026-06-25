@@ -667,11 +667,11 @@ button.pill.pill-active:hover {
    card comfortable without leaving a big empty bottom for short content.
    Smaller on phones so the rating buttons (the priority) stay in view. */
 :root {
-  --review-card-min: clamp(200px, 22vh, 280px);
+  --review-card-min: clamp(440px, 46vh, 560px);
 }
 @media (max-width: 640px) {
   :root {
-    --review-card-min: clamp(180px, 30vh, 280px);
+    --review-card-min: clamp(320px, 50vh, 440px);
   }
 }
 
