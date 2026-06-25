@@ -115,6 +115,47 @@ export async function deleteDraft(key: string): Promise<void> {
   });
 }
 
+/**
+ * Namespace a draft key to a specific user. IndexedDB is per-BROWSER, not per-
+ * user, so without this two accounts sharing a browser would read each other's
+ * drafts (a content leak). Every save/restore goes through this (see useDraft).
+ */
+export function scopedDraftKey(userId: string, key: string): string {
+  return `u:${userId}:${key}`;
+}
+
+/**
+ * Delete every draft that does NOT belong to `userId` (and any expired one). Call
+ * on login / account switch so a previous account's drafts can't linger on a
+ * shared browser. Also removes legacy un-namespaced drafts from before scoping.
+ * Best-effort.
+ */
+export async function pruneForeignDrafts(userId: string): Promise<void> {
+  const db = await openDb();
+  if (!db) return;
+  const ownPrefix = `u:${userId}:`;
+  return new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(STORE, 'readwrite');
+      const cursorReq = tx.objectStore(STORE).openCursor();
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (!cursor) return;
+        const k = String(cursor.key);
+        const rec = cursor.value as DraftRecord<unknown> | undefined;
+        const expired = !rec || typeof rec !== 'object' || isDraftExpired(rec.savedAt);
+        if (!k.startsWith(ownPrefix) || expired) cursor.delete();
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 /** Sweep every expired draft. Call once on app start. Best-effort. */
 export async function cleanupDrafts(): Promise<void> {
   const db = await openDb();

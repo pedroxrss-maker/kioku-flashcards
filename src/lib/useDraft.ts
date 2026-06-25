@@ -7,8 +7,38 @@
  * All persistence is best-effort (see drafts.ts) — if IndexedDB is unavailable
  * the hook simply never restores or saves, and the form works normally.
  */
-import { useEffect, useRef } from 'react';
-import { deleteDraft, getDraft, setDraft } from './drafts';
+import { useEffect, useRef, useState } from 'react';
+import { deleteDraft, getDraft, scopedDraftKey, setDraft } from './drafts';
+import { supabase } from './supabase';
+
+/**
+ * Current authenticated user id (reactive), read straight from the Supabase
+ * session. Kept here (not via the React AuthProvider) so the draft store scopes
+ * keys per user without coupling to — or requiring — that provider in every
+ * surface/test. Returns null while signed out or if auth is unavailable.
+ */
+function useCurrentUserId(): string | null {
+  const [uid, setUid] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (active) setUid(data.session?.user?.id ?? null);
+      })
+      .catch(() => {
+        /* auth unavailable -> treat as signed out (no draft scope) */
+      });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUid(session?.user?.id ?? null);
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+  return uid;
+}
 
 interface UseDraftOptions<T> {
   /** Where to store it, e.g. "draft:create-deck" or "draft:add-cards:{id}". A
@@ -36,6 +66,14 @@ export function useDraft<T>({
   onRestore,
   debounceMs = 400,
 }: UseDraftOptions<T>): { clear: () => void } {
+  // Scope every draft to the CURRENT user. IndexedDB is per-browser, not per-user,
+  // so an un-scoped key would let account B restore account A's draft on a shared
+  // browser (a content leak). With no logged-in user (or no base key), the hook is
+  // disabled entirely — nothing is ever restored or saved. Save AND restore use
+  // this same scoped key, so a user still gets their OWN draft back.
+  const userId = useCurrentUserId();
+  const scopedKey = key && userId ? scopedDraftKey(userId, key) : null;
+
   // Latest-value/callbacks refs so the debounce + flush use fresh data without
   // re-subscribing every render.
   const valueRef = useRef(value);
@@ -51,9 +89,9 @@ export function useDraft<T>({
   // Restore on (re)activation or key change.
   useEffect(() => {
     hydratedRef.current = false;
-    if (!active || !key) return;
+    if (!active || !scopedKey) return;
     let cancelled = false;
-    void getDraft<T>(key).then((draft) => {
+    void getDraft<T>(scopedKey).then((draft) => {
       if (cancelled) return;
       if (draft && hasContentRef.current(draft)) onRestoreRef.current(draft);
       hydratedRef.current = true;
@@ -61,35 +99,35 @@ export function useDraft<T>({
     return () => {
       cancelled = true;
     };
-  }, [active, key]);
+  }, [active, scopedKey]);
 
   // Debounced persist. `serialized` only changes when the draft content changes,
   // so unrelated re-renders don't reset the timer (no per-render thrash).
-  const serialized = active && key ? safeStringify(value) : '';
+  const serialized = active && scopedKey ? safeStringify(value) : '';
   useEffect(() => {
-    if (!active || !key) return;
+    if (!active || !scopedKey) return;
     const t = setTimeout(() => {
       if (!hydratedRef.current) return;
-      if (hasContentRef.current(valueRef.current)) void setDraft(key, valueRef.current);
-      else void deleteDraft(key);
+      if (hasContentRef.current(valueRef.current)) void setDraft(scopedKey, valueRef.current);
+      else void deleteDraft(scopedKey);
     }, debounceMs);
     return () => clearTimeout(t);
-  }, [active, key, serialized, debounceMs]);
+  }, [active, scopedKey, serialized, debounceMs]);
 
   // Flush the latest value when the screen deactivates / unmounts, so an edit
   // made within the debounce window (then navigating away) isn't lost.
   useEffect(() => {
-    if (!active || !key) return;
+    if (!active || !scopedKey) return;
     return () => {
       if (hydratedRef.current && hasContentRef.current(valueRef.current)) {
-        void setDraft(key, valueRef.current);
+        void setDraft(scopedKey, valueRef.current);
       }
     };
-  }, [active, key]);
+  }, [active, scopedKey]);
 
   return {
     clear: () => {
-      if (key) void deleteDraft(key);
+      if (scopedKey) void deleteDraft(scopedKey);
     },
   };
 }

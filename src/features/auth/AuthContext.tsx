@@ -22,6 +22,7 @@ import type { ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import { clearQueryCache, invalidate } from '../../db/store';
+import { pruneForeignDrafts } from '../../lib/drafts';
 import { DEFAULT_PLAN } from '../usage/limits';
 import type { Plan } from '../usage/limits';
 import { PRIVACY_POLICY_VERSION } from '../../config';
@@ -113,6 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (prevUidRef.current !== undefined && prevUidRef.current !== uid) {
       clearQueryCache();
     }
+    // Form drafts live in (per-browser) IndexedDB. On login / account switch, drop
+    // every draft that isn't this user's — so a previous account's in-progress work
+    // never lingers on a shared browser. The per-user key scoping already prevents
+    // it from being SURFACED; this prevents stale accumulation. (Skipped on logout
+    // so the same user gets their own draft back when they sign back in.)
+    if (uid) void pruneForeignDrafts(uid);
     prevUidRef.current = uid;
   }, [user?.id]);
 
