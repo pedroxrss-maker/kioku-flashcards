@@ -7,7 +7,7 @@ import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
 import { recordFeatureUse } from '../gamification/achievements';
 import { beginAppBusy } from '../../lib/appBusy';
-import type { ImportProgress, ImportResult } from './apkg-import';
+import type { CollisionResolution, ImportProgress, ImportResult } from './apkg-import';
 
 interface ImportButtonProps {
   variant?: 'default' | 'accent' | 'ghost';
@@ -67,6 +67,29 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Name-collision prompt: the importer asks (before creating anything) when a
+  // deck it would create shares a name with an existing one. `collision` holds the
+  // colliding names while the dialog is open; `collisionResolver` resolves the
+  // promise the importer is awaiting with the user's choice.
+  const [collision, setCollision] = useState<string[] | null>(null);
+  const collisionResolver = useRef<((c: CollisionResolution) => void) | null>(null);
+  // True when the user resolved a collision with "Cancelar", so the catch below
+  // closes silently (like an abort) instead of showing an error dialog.
+  const cancelledByUserRef = useRef(false);
+
+  function askCollision(names: string[]): Promise<CollisionResolution> {
+    return new Promise<CollisionResolution>((resolve) => {
+      collisionResolver.current = resolve;
+      setCollision(names);
+    });
+  }
+  function resolveCollision(choice: CollisionResolution) {
+    if (choice === 'cancel') cancelledByUserRef.current = true;
+    setCollision(null);
+    const resolve = collisionResolver.current;
+    collisionResolver.current = null;
+    resolve?.(choice);
+  }
 
   function cancelImport() {
     abortRef.current?.abort();
@@ -79,6 +102,7 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
     setBusy(true);
     setError(null);
     setProgress(null);
+    cancelledByUserRef.current = false;
     const controller = new AbortController();
     abortRef.current = controller;
     // Hold the global busy guard for the WHOLE import (read → parse → upload →
@@ -114,13 +138,14 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
             if (p.total > 0) setProgress(p);
           },
           controller.signal,
+          askCollision,
         );
         setResult(res);
         void recordFeatureUse('import');
       } catch (err) {
-        // A user cancel aborts the controller; the import rolls itself back, so we
-        // just close the dialog silently instead of showing an error.
-        if (!controller.signal.aborted) {
+        // A user cancel (abort button OR "Cancelar" on the collision prompt) rolls
+        // the import back; close silently instead of showing an error.
+        if (!controller.signal.aborted && !cancelledByUserRef.current) {
           setError(err instanceof Error ? err.message : 'Falha ao importar o arquivo.');
         }
       }
@@ -152,9 +177,10 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
       />
 
       {/* Blocking import overlay: blurred backdrop, live progress, and the only
-          way out is the Cancel button (clicks elsewhere are swallowed). */}
+          way out is the Cancel button (clicks elsewhere are swallowed). Hidden
+          while the name-collision prompt is up so the user can answer it. */}
       <AnimatePresence>
-        {busy && (
+        {busy && !collision && (
           <motion.div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
@@ -207,6 +233,76 @@ export function ImportButton({ variant = 'default', size = 'md' }: ImportButtonP
               <Button variant="ghost" size="sm" onClick={cancelImport}>
                 Cancelar
               </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Name-collision prompt (Anki-style): shown when the .apkg would create a
+          deck whose name already exists. Replace / keep both / cancel — applied to
+          ALL colliding decks. Sits above the import overlay (z-[110]). Closing it
+          any other way counts as "Criar separado" (the safe, non-destructive default). */}
+      <AnimatePresence>
+        {collision && (
+          <motion.div
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              background: 'rgba(0, 0, 0, 0.55)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="surface p-6 w-full max-w-md flex flex-col gap-4"
+              style={{ borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-pop)' }}
+            >
+              <div>
+                <h3 className="font-bold text-base">Deck já existe</h3>
+                {collision.length === 1 ? (
+                  <p className="text-sm text-muted mt-2">
+                    Você já tem um deck chamado <b className="text-fg">“{collision[0]}”</b>. O que
+                    deseja fazer?
+                  </p>
+                ) : (
+                  <div className="text-sm text-muted mt-2">
+                    <p>Você já tem decks com estes nomes:</p>
+                    <ul className="mt-1.5 mb-1 list-disc pl-5">
+                      {collision.map((name) => (
+                        <li key={name} className="text-fg">
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                    <p>O que deseja fazer?</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Button variant="accent" onClick={() => resolveCollision('replace')}>
+                  Substituir
+                </Button>
+                <p className="text-xs text-muted -mt-1 mb-1">
+                  Apaga o deck antigo (cards e histórico) e importa este no lugar.
+                </p>
+                <Button variant="default" onClick={() => resolveCollision('separate')}>
+                  Criar separado
+                </Button>
+                <p className="text-xs text-muted -mt-1 mb-1">
+                  Mantém os dois: importa como um deck novo, separado.
+                </p>
+                <Button variant="ghost" onClick={() => resolveCollision('cancel')}>
+                  Cancelar
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}

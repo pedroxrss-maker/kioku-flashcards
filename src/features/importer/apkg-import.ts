@@ -289,6 +289,12 @@ export interface ImportProgress {
   total: number;
 }
 
+/** Choice the caller returns when imported deck name(s) collide with existing ones:
+ *  - 'replace'  → delete the existing same-named deck(s) and import in their place
+ *  - 'separate' → import as new, separate decks (legacy behavior)
+ *  - 'cancel'   → abort the import, create nothing */
+export type CollisionResolution = 'replace' | 'separate' | 'cancel';
+
 /** Thrown internally when the caller aborts the import (rolled back, then re-thrown). */
 class ImportCancelledError extends Error {
   constructor() {
@@ -325,6 +331,11 @@ export async function importApkg(
   onProgress?: (p: ImportProgress) => void,
   /** Abort the import; partially-created decks are rolled back. */
   signal?: AbortSignal,
+  /** Asked once, BEFORE any deck/media is created, when one or more decks the
+   *  .apkg would create share a name (case-insensitive, full path) with an
+   *  existing deck. The returned choice applies to ALL colliding decks. When
+   *  omitted, collisions import as separate decks (legacy behavior). */
+  onCollision?: (collidingNames: string[]) => Promise<CollisionResolution>,
 ): Promise<ImportResult> {
   const warnings: string[] = [];
   // Parse from the in-memory buffer the caller already read (never from a File
@@ -748,6 +759,61 @@ export async function importApkg(
 
     if (plans.length === 0) {
       throw new Error('As notas não tinham conteúdo de texto reconhecível.');
+    }
+
+    // ---- name-collision check (BEFORE any deck/media is created) -------------
+    // Each plan would create a deck whose full path name is plan.fullName. An
+    // existing deck's full path name is settings.deckPaths[id] (when imported with
+    // a hierarchy) or its plain name. If any planned name matches an existing one
+    // (case-insensitive, trimmed), ask the caller what to do — replace, keep both,
+    // or cancel — and apply that single choice to ALL colliding decks.
+    const nameKey = (s: string) => s.trim().toLowerCase();
+    const existingIdsByName = new Map<string, string[]>();
+    for (const d of await repo.listDecks()) {
+      const fullName = settings.deckPaths?.[d.id] ?? d.name;
+      const k = nameKey(fullName);
+      const arr = existingIdsByName.get(k);
+      if (arr) arr.push(d.id);
+      else existingIdsByName.set(k, [d.id]);
+    }
+    const collidingNames: string[] = [];
+    const seenCollision = new Set<string>();
+    for (const plan of plans) {
+      const k = nameKey(plan.fullName);
+      if (existingIdsByName.has(k) && !seenCollision.has(k)) {
+        seenCollision.add(k);
+        collidingNames.push(plan.fullName);
+      }
+    }
+
+    if (collidingNames.length > 0) {
+      const choice = onCollision ? await onCollision(collidingNames) : 'separate';
+      if (choice === 'cancel') throw new ImportCancelledError();
+      if (choice === 'replace') {
+        // Delete EVERY existing deck whose name matches a colliding plan (handles
+        // pre-existing duplicates → leaves exactly one clean deck after import).
+        const idsToDelete = new Set<string>();
+        for (const name of collidingNames) {
+          for (const id of existingIdsByName.get(nameKey(name)) ?? []) idsToDelete.add(id);
+        }
+        for (const id of idsToDelete) {
+          if (signal?.aborted) throw new ImportCancelledError();
+          await repo.deleteDeck(id); // cascades cards + review_logs
+        }
+        // deleteDeck doesn't touch settings, so prune the deleted decks' deckPaths/
+        // deckAudio entries from the in-memory settings. The final saveSettings
+        // below rewrites both maps wholesale, so pruning here keeps the replaced
+        // decks from leaving orphaned settings entries behind.
+        const prune = <T>(m?: Record<string, T>): Record<string, T> | undefined => {
+          if (!m) return m;
+          const out: Record<string, T> = {};
+          for (const [k, v] of Object.entries(m)) if (!idsToDelete.has(k)) out[k] = v;
+          return out;
+        };
+        settings.deckPaths = prune(settings.deckPaths);
+        settings.deckAudio = prune(settings.deckAudio);
+      }
+      // 'separate' → fall through and import as new decks (legacy behavior).
     }
 
     const mediaTotal = plans.reduce((n, p) => n + p.imageFiles.length + p.audioFiles.length, 0);
