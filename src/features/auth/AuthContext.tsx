@@ -208,8 +208,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, name: string, opts?: SignUpOptions) => {
       const trimmed = name.trim();
       const phone = opts?.phone?.trim();
-      // TEMP [signup-timing]: mede só a ida-e-volta do auth.signUp (remover depois).
-      const t0 = performance.now();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -231,10 +229,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         },
       });
-      console.log(
-        `[signup-timing] auth.signUp ${Math.round(performance.now() - t0)}ms`,
-        { hasSession: !!data.session, error: error?.message },
-      );
       if (error) throw new Error(mapAuthError(error.message));
 
       if (!data.session) {

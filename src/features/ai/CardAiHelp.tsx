@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../../lib/useReducedMotion';
@@ -150,22 +150,11 @@ export function CardAiHelp({ front, back, flipped, side = false }: CardAiHelpPro
   const [error, setError] = useState<string | null>(null);
   const { openUpgrade } = useUpgradeModal();
 
-  // TEMP instrumentation: confirms the component actually COMMITS per token (this
-  // effect runs after each render where the active answer's length changed).
-  const activeText = active ? cache[active] : undefined;
-  useEffect(() => {
-    if (activeText !== undefined) {
-      // eslint-disable-next-line no-console
-      console.log('[tutor-ui] render', { t: Math.round(performance.now()), total: activeText.length });
-    }
-  }, [activeText]);
-
   if (!isAiConfigured()) return null;
 
   const loading = active !== null && cache[active] === undefined && error === null;
 
   async function pick(action: AiAction) {
-    const t0 = performance.now(); // TEMP timing: click instant ([tutor-timing] deltas measured from here)
     if (action === active) {
       setActive(null); // toggle the balloon closed
       return;
@@ -174,21 +163,17 @@ export function CardAiHelp({ front, back, flipped, side = false }: CardAiHelpPro
     setError(null);
     setActive(action);
     if (cache[action] !== undefined) return; // already fetched
-    // eslint-disable-next-line no-console
-    console.log('[tutor-timing] click', { dMs: 0 });
     try {
       // Stream the reply: append each token chunk into this action's cache entry,
       // so the bubble fills in progressively (the "Pensando..." state clears the
       // moment the first chunk lands — cache[action] becomes a string).
       const onToken = (delta: string) => {
-        // eslint-disable-next-line no-console
-        console.log('[tutor-ui] onToken', { t: Math.round(performance.now()), len: delta.length });
         setCache((c) => ({ ...c, [action]: (c[action] ?? '') + delta }));
       };
       const reply =
         action === 'tutor'
-          ? await tutorTeach(front, back, onToken, t0)
-          : await cardAssist(front, back, action, onToken, t0);
+          ? await tutorTeach(front, back, onToken)
+          : await cardAssist(front, back, action, onToken);
       // Settle on the final (trimmed) text once streaming finishes.
       setCache((c) => ({ ...c, [action]: reply }));
       void recordFeatureUse('tutor');

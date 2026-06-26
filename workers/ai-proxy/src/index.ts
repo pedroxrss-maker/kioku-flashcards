@@ -575,7 +575,7 @@ function withThinkingDisabled(geminiBody: unknown, model: string): unknown {
 }
 
 type GeminiStreamOutcome =
-  | { kind: 'ok'; response: Response; model: string; requestSentAt: number } // stream iniciado (200): corpo a repassar
+  | { kind: 'ok'; response: Response } // stream iniciado (200): corpo a repassar
   | { kind: 'overloaded' }
   | { kind: 'error' }
   | { kind: 'network' };
@@ -595,17 +595,9 @@ async function startGeminiStream(
   // Tutor (único caminho de streaming): desliga o thinking onde suportado p/ cortar
   // o time-to-first-token. Guarda por-modelo — 2.0-flash recebe o corpo intacto.
   const bodyForModel = withThinkingDisabled(geminiBody, model);
-  // TEMP diag: confirma no wrangler tail que generationConfig.thinkingConfig.thinkingBudget
-  // está REALMENTE no corpo enviado a este modelo (e com a aninhação correta).
-  // eslint-disable-next-line no-console
-  console.log('[gemini-body]', {
-    model,
-    generationConfig: (bodyForModel as { generationConfig?: unknown }).generationConfig,
-  });
   for (let attempt = 0; attempt < STREAM_MAX_ATTEMPTS; attempt += 1) {
     const last = attempt === STREAM_MAX_ATTEMPTS - 1;
     let res: Response;
-    const sentAt = Date.now(); // p/ medir TTFT (envio -> 1º chunk de texto) deste modelo
     try {
       res = await doFetch(endpoint, {
         method: 'POST',
@@ -614,35 +606,25 @@ async function startGeminiStream(
       });
     } catch {
       const wait = last ? 0 : withJitter(STREAM_BACKOFF_MS);
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, attempt, status: 'network', sleepMs: wait, last });
       if (last) return { kind: 'network' };
       await doSleep(wait);
       continue;
     }
 
     if (res.ok) {
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, attempt, status: 200, started: true });
-      return { kind: 'ok', response: res, model, requestSentAt: sentAt }; // stream iniciado: repassa o corpo
+      return { kind: 'ok', response: res }; // stream iniciado: repassa o corpo
     }
 
     if (res.status !== 503 && res.status !== 429) {
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, attempt, status: res.status, kind: 'error' });
       return { kind: 'error' };
     }
     if (last) {
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, attempt, status: res.status, kind: 'overloaded', last: true });
       return { kind: 'overloaded' };
     }
 
     // UM retry curto e fixo, depois cai pro próximo modelo. NÃO honra o retryDelay
     // do Google (até MAX_RETRY_DELAY_MS=8s) — fallthrough precisa ser rápido aqui.
     const wait = withJitter(STREAM_BACKOFF_MS);
-    // eslint-disable-next-line no-console
-    console.log('[gemini-retry]', { model, attempt, status: res.status, sleepMs: wait });
     await doSleep(wait);
   }
   return { kind: 'overloaded' };
@@ -704,15 +686,9 @@ async function startFirstModelBudgeted(
   const mkBudget = deps.budgetTimer ?? defaultBudgetTimer;
   const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
   const bodyForModel = withThinkingDisabled(geminiBody, model);
-  // eslint-disable-next-line no-console
-  console.log('[gemini-body]', {
-    model,
-    generationConfig: (bodyForModel as { generationConfig?: unknown }).generationConfig,
-  });
 
   const controller = new AbortController();
   const budget = mkBudget(budgetMs);
-  const sentAt = Date.now();
   // marcador que vence a corrida quando o orçamento estoura
   const timedOut = budget.signal.then(() => 'timeout' as const);
 
@@ -728,28 +704,20 @@ async function startFirstModelBudgeted(
     const raced = await Promise.race([fetched, timedOut]);
     if (raced === 'timeout') {
       controller.abort(); // solta o fetch pendente
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, status: 'budget-timeout', phase: 'headers', firstModel: true });
       return { kind: 'timeout' };
     }
     res = raced.r;
   } catch {
     budget.cancel();
-    // eslint-disable-next-line no-console
-    console.log('[gemini-retry]', { model, status: 'network', firstModel: true });
     return { kind: 'network' };
   }
 
   if (res.status === 503 || res.status === 429) {
     budget.cancel();
-    // eslint-disable-next-line no-console
-    console.log('[gemini-retry]', { model, status: res.status, kind: 'overloaded', firstModel: true });
     return { kind: 'overloaded' };
   }
   if (!res.ok) {
     budget.cancel();
-    // eslint-disable-next-line no-console
-    console.log('[gemini-retry]', { model, status: res.status, kind: 'error', firstModel: true });
     return { kind: 'error' };
   }
   if (!res.body) {
@@ -768,31 +736,23 @@ async function startFirstModelBudgeted(
       chunk = await Promise.race([reader.read(), timedOut]);
     } catch {
       budget.cancel();
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, status: 'read-error', firstModel: true });
       void reader.cancel();
       return { kind: 'network' };
     }
     if (chunk === 'timeout') {
       controller.abort(); // aborta o upstream (real)
       void reader.cancel(); // solta o reader (mock/real)
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, status: 'budget-timeout', phase: 'first-token', firstModel: true });
       return { kind: 'timeout' };
     }
     if (chunk.done) {
       // terminou sem nunca emitir texto -> trata como falha, cai pro próximo
       budget.cancel();
-      // eslint-disable-next-line no-console
-      console.log('[gemini-retry]', { model, status: 'ended-no-text', firstModel: true });
       return { kind: 'timeout' };
     }
     pre.push(chunk.value);
     if (decoder.decode(chunk.value, { stream: true }).includes('"text"')) {
       // COMEÇOU: desarma o orçamento (nunca mais aborta) e repassa o stream.
       budget.cancel();
-      // eslint-disable-next-line no-console
-      console.log('[gemini-ttft]', { model, ttftMs: Date.now() - sentAt, firstModel: true });
       return { kind: 'ok', stream: prependedSsePassthrough(pre, reader) };
     }
     // chunk sem texto ainda (ex.: ':\n\n' / metadados): continua lendo dentro do budget.
@@ -833,7 +793,7 @@ export async function streamGeminiWithFallback(
     const outcome = await startGeminiStream(model, geminiBody, apiKey, deps);
     if (outcome.kind === 'ok') {
       if (!outcome.response.body) return { kind: 'error' };
-      return { kind: 'ok', stream: ssePassthrough(outcome.response.body, outcome.model, outcome.requestSentAt) };
+      return { kind: 'ok', stream: ssePassthrough(outcome.response.body) };
     }
     if (outcome.kind === 'error') return { kind: 'error' };
     if (outcome.kind === 'overloaded') sawOverloaded = true;
@@ -851,15 +811,9 @@ export async function streamGeminiWithFallback(
  * then PUMPS the upstream chunks straight through one at a time — never buffering
  * or accumulating the body (each chunk is enqueued the moment it is read).
  */
-function ssePassthrough(
-  upstream: ReadableStream<Uint8Array>,
-  model = '',
-  requestSentAt = 0,
-): ReadableStream<Uint8Array> {
+function ssePassthrough(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
   const reader = upstream.getReader();
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  let firstTextLogged = false; // TEMP diag: loga TTFT (envio -> 1º chunk COM texto) uma vez
   return new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(encoder.encode(':\n\n')); // initial flush: open the pipe early
@@ -870,16 +824,6 @@ function ssePassthrough(
         if (done) {
           controller.close();
           return;
-        }
-        // TEMP diag: o 1º chunk que carrega texto de verdade marca o fim do "thinking"
-        // do modelo. Se thinkingBudget:0 funcionar, isso cai de ~5s p/ <1s no flash-lite.
-        if (!firstTextLogged && requestSentAt > 0) {
-          const text = decoder.decode(value, { stream: true });
-          if (text.includes('"text"')) {
-            firstTextLogged = true;
-            // eslint-disable-next-line no-console
-            console.log('[gemini-ttft]', { model, ttftMs: Date.now() - requestSentAt });
-          }
         }
         controller.enqueue(value); // relay this chunk NOW (no accumulation)
       } catch (err) {

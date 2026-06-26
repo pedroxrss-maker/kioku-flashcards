@@ -159,7 +159,8 @@ function decideAction(eventType: string, status: string, mappedPlan: PaidPlan): 
     sig.includes('reembol') ||
     sig.includes('chargeback') ||
     sig.includes('charged') ||
-    sig.includes('cancel')
+    sig.includes('cancel') ||
+    sig.includes('expir')
   ) {
     return { kind: 'free' };
   }
@@ -251,6 +252,9 @@ export default {
       console.error('kiwify: corpo JSON invalido');
       return text('Bad Request', 400);
     }
+
+    // TEMP diag: payload CRU completo, p/ inspecionar o que a Kiwify realmente manda.
+    console.log('[kiwify-payload]', JSON.stringify(payload));
 
     // 3) Campos lidos de forma defensiva (varios nomes possiveis) + log p/ conferir.
     const productId = firstString(payload, [

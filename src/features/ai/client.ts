@@ -218,19 +218,9 @@ function buildGeminiBody(system: string | undefined, messages: AiMessage[], maxT
  * text once) so local testing keeps working.
  */
 async function createMessageStream(
-  opts: CreateOptions & { onToken: (delta: string) => void; t0?: number },
+  opts: CreateOptions & { onToken: (delta: string) => void },
 ): Promise<string> {
-  const { system, messages, maxTokens = 4096, model = AI_MODEL, metric, onToken, t0 } = opts;
-  // TEMP timing: log ms elapsed since the click (t0) at each phase boundary, so we
-  // can localize the perceived delay (pre-fetch work vs network/worker vs model TTFT
-  // vs generation). No-op when t0 isn't provided (non-tutor callers).
-  const logT = (label: string): void => {
-    if (t0 !== undefined) {
-      // eslint-disable-next-line no-console
-      console.log(`[tutor-timing] ${label}`, { dMs: Math.round(performance.now() - t0) });
-    }
-  };
-  let firstTokenLogged = false;
+  const { system, messages, maxTokens = 4096, model = AI_MODEL, metric, onToken } = opts;
   if (!isAiConfigured()) throw new AiError(NOT_CONFIGURED);
 
   // Streaming needs the proxy (SSE passthrough). Local direct-key mode falls back
@@ -241,20 +231,16 @@ async function createMessageStream(
     return text;
   }
 
-  // Prime suspect for pre-fetch latency: getAccessToken() reads the Supabase session
-  // and may trigger a token refresh (network) before we can even issue the request.
   const token = await getAccessToken();
   if (!token) throw new AiError('Faça login para usar a IA.');
 
   let res: Response;
   try {
-    logT('fetch-start'); // delta from click INCLUDES getAccessToken() above
     res = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ model, metric, stream: true, ...(buildGeminiBody(system, messages, maxTokens) as object) }),
     });
-    logT('response-headers'); // delta from click: + network to worker + worker pre-stream (quota/JWKS) + model start
   } catch {
     throw new AiError('Falha de conexão com a IA. Verifique sua internet ou o proxy configurado.');
   }
@@ -283,12 +269,6 @@ async function createMessageStream(
         .join('');
       if (delta) {
         full += delta;
-        if (!firstTokenLogged) {
-          firstTokenLogged = true;
-          logT('first-token'); // delta from click: full round-trip to the first visible token
-        }
-        // eslint-disable-next-line no-console
-        console.log('[tutor-stream] token', { t: Math.round(performance.now()), len: delta.length, total: full.length });
         onToken(delta);
         return true;
       }
@@ -327,8 +307,6 @@ async function createMessageStream(
       const { done, value } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
-      // eslint-disable-next-line no-console
-      console.log('[tutor-stream] read', { t: Math.round(performance.now()), len: chunk.length });
       buffer += chunk;
       let nl: number;
       while ((nl = buffer.indexOf('\n')) >= 0) {
@@ -344,8 +322,6 @@ async function createMessageStream(
   } catch {
     /* mid-stream read failure: keep whatever streamed so far (best-effort) */
   }
-
-  logT('done'); // delta from click: last token / stream end
 
   const out = full.trim();
   if (!out) throw new AiError('A IA não retornou conteúdo. Tente novamente.');
@@ -497,7 +473,6 @@ export async function tutorTeach(
   front: string,
   back: string,
   onToken?: (delta: string) => void,
-  t0?: number, // TEMP timing: click instant, for [tutor-timing] deltas
 ): Promise<string> {
   const system =
     'You are a patient, encouraging tutor. The student did NOT understand this flashcard. ' +
@@ -513,7 +488,7 @@ export async function tutorTeach(
     maxTokens: 700,
     metric: 'tutor',
   };
-  return onToken ? createMessageStream({ ...opts, onToken, t0 }) : createMessage(opts);
+  return onToken ? createMessageStream({ ...opts, onToken }) : createMessage(opts);
 }
 
 export type CardAssistAction = 'example' | 'mnemonic';
@@ -527,7 +502,6 @@ export async function cardAssist(
   back: string,
   action: CardAssistAction,
   onToken?: (delta: string) => void,
-  t0?: number, // TEMP timing: click instant, for [tutor-timing] deltas
 ): Promise<string> {
   const ASK: Record<CardAssistAction, string> = {
     example: 'Dê UM exemplo do mundo real, concreto e curto (1 a 3 frases), que ilustre este card.',
@@ -551,7 +525,7 @@ export async function cardAssist(
     maxTokens: action === 'mnemonic' ? 550 : 400,
     metric: 'tutor',
   };
-  return onToken ? createMessageStream({ ...opts, onToken, t0 }) : createMessage(opts);
+  return onToken ? createMessageStream({ ...opts, onToken }) : createMessage(opts);
 }
 
 /**
