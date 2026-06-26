@@ -78,16 +78,17 @@ export default function InstallPrompt() {
   const [mode, setMode] = useState<'android' | 'ios' | null>(null);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
+  const [dbg, setDbg] = useState<string>(''); // TEMP on-screen diagnostic
 
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('[install-debug]', {
+    // TEMP on-screen diagnostic: surface the decision inputs on mobile (no console).
+    const info = {
       standalone: isStandalone(),
       dismissedRecently: dismissedRecently(),
       isIosSafari: isIosSafari(),
       hasCapturedPrompt: !!getCapturedPrompt(),
-      ua: navigator.userAgent,
-    });
+    };
+    setDbg(JSON.stringify(info));
 
     // Never invite when already installed or recently dismissed.
     if (isStandalone() || dismissedRecently()) return;
@@ -133,8 +134,6 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  if (!visible || mode === null) return null;
-
   const dismiss = () => {
     markDismissed();
     setVisible(false);
@@ -149,13 +148,35 @@ export default function InstallPrompt() {
     setVisible(false);
   };
 
-  return (
+  // TEMP on-screen diagnostic box — ALWAYS rendered (even when the banner is
+  // hidden), so the decision inputs are visible on mobile without a console.
+  const debugBox = (
     <div
-      className="fixed inset-x-0 bottom-0 z-50"
-      style={{ padding: '12px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-      role="dialog"
-      aria-label="Instalar o Kioku"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        background: '#000',
+        color: '#bef264',
+        fontSize: '11px',
+        padding: '6px',
+        wordBreak: 'break-all',
+      }}
     >
+      {dbg + ' | ' + navigator.userAgent}
+    </div>
+  );
+
+  const banner =
+    !visible || mode === null ? null : (
+      <div
+        className="fixed inset-x-0 bottom-0 z-50"
+        style={{ padding: '12px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        role="dialog"
+        aria-label="Instalar o Kioku"
+      >
       <div className="mx-auto w-full" style={{ maxWidth: 520 }}>
         <div
           className="flex items-start gap-3 p-4"
@@ -209,5 +230,12 @@ export default function InstallPrompt() {
         </div>
       </div>
     </div>
+    );
+
+  return (
+    <>
+      {debugBox}
+      {banner}
+    </>
   );
 }
