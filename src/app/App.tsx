@@ -23,6 +23,7 @@ import { isSupabaseConfigured } from '../lib/supabase';
 import { AuthProvider, useAuth } from '../features/auth/AuthContext';
 import { AuthLoading, AuthPage, ResetPasswordPage, SupabaseConfigNotice } from '../features/auth/AuthPage';
 import { ThemeProvider } from '../theme/theme';
+import InstallPrompt from '../features/pwa/InstallPrompt';
 
 export function App() {
   return (
@@ -103,6 +104,9 @@ function AuthedApp() {
       </Routes>
       <Toaster />
       <CelebrationBanner />
+      {/* Convite para instalar o PWA (Android: botão nativo; iOS: instruções).
+          Some sozinho quando já instalado / dispensado / fora do alvo. */}
+      <InstallPrompt />
       {/* Conclui o fluxo "assinar deslogado": ao autenticar, redireciona ao
           checkout da Kiwify do plano escolhido na landing (se houver intent). */}
       <CheckoutIntentRedirect />

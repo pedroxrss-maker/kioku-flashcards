@@ -10,6 +10,17 @@ applyRoundedFavicon();
 registerPwaUpdates();
 void cleanupDrafts(); // sweep expired form drafts (>7 days) on startup
 
+// Capture the PWA install prompt BEFORE React mounts: Chrome can fire
+// `beforeinstallprompt` before <InstallPrompt> renders, and the event is only
+// usable once. We stash it on window and notify any mounted component via a
+// custom event, so the install banner works regardless of timing.
+(window as unknown as { __kiokuInstallPrompt: Event | null }).__kiokuInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  (window as unknown as { __kiokuInstallPrompt: Event | null }).__kiokuInstallPrompt = e;
+  window.dispatchEvent(new Event('kioku-install-available'));
+});
+
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element #root not found');
 
