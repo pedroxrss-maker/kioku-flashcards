@@ -78,18 +78,8 @@ export default function InstallPrompt() {
   const [mode, setMode] = useState<'android' | 'ios' | null>(null);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
-  const [dbg, setDbg] = useState<string>(''); // TEMP on-screen diagnostic
 
   useEffect(() => {
-    // TEMP on-screen diagnostic: surface the decision inputs on mobile (no console).
-    const info = {
-      standalone: isStandalone(),
-      dismissedRecently: dismissedRecently(),
-      isIosSafari: isIosSafari(),
-      hasCapturedPrompt: !!getCapturedPrompt(),
-    };
-    setDbg(JSON.stringify(info));
-
     // Never invite when already installed or recently dismissed.
     if (isStandalone() || dismissedRecently()) return;
 
@@ -148,35 +138,15 @@ export default function InstallPrompt() {
     setVisible(false);
   };
 
-  // TEMP on-screen diagnostic box — ALWAYS rendered (even when the banner is
-  // hidden), so the decision inputs are visible on mobile without a console.
-  const debugBox = (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 9999,
-        background: '#000',
-        color: '#bef264',
-        fontSize: '11px',
-        padding: '6px',
-        wordBreak: 'break-all',
-      }}
-    >
-      {dbg + ' | ' + navigator.userAgent}
-    </div>
-  );
+  if (!visible || mode === null) return null;
 
-  const banner =
-    !visible || mode === null ? null : (
-      <div
-        className="fixed inset-x-0 bottom-0 z-50"
-        style={{ padding: '12px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-        role="dialog"
-        aria-label="Instalar o Kioku"
-      >
+  return (
+    <div
+      className="fixed inset-x-0 bottom-0 z-50"
+      style={{ padding: '12px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      role="dialog"
+      aria-label="Instalar o Kioku"
+    >
       <div className="mx-auto w-full" style={{ maxWidth: 520 }}>
         <div
           className="flex items-start gap-3 p-4"
@@ -205,9 +175,9 @@ export default function InstallPrompt() {
                 className="text-xs mt-1 flex flex-wrap items-center gap-x-1"
                 style={{ color: 'var(--muted)' }}
               >
-                Toque em
+                Toque no botão Compartilhar
                 <Share size={14} aria-hidden style={{ color: 'var(--accent)' }} />
-                e depois em “Adicionar à Tela de Início”.
+                do Safari (na barra inferior) e depois em “Adicionar à Tela de Início”.
               </p>
             )}
 
@@ -230,12 +200,5 @@ export default function InstallPrompt() {
         </div>
       </div>
     </div>
-    );
-
-  return (
-    <>
-      {debugBox}
-      {banner}
-    </>
   );
 }

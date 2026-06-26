@@ -36,6 +36,10 @@ export function App() {
             landing and it carries into login and into the app. */}
         <ThemeProvider>
           <RootGate />
+          {/* Convite para instalar o PWA — no nível raiz para aparecer em TODAS as
+              telas (landing, login e app). Some sozinho quando já instalado /
+              dispensado / fora do alvo (Android: botão; iOS: instruções). */}
+          <InstallPrompt />
         </ThemeProvider>
       </BrowserRouter>
     </AuthProvider>
@@ -104,9 +108,6 @@ function AuthedApp() {
       </Routes>
       <Toaster />
       <CelebrationBanner />
-      {/* Convite para instalar o PWA (Android: botão nativo; iOS: instruções).
-          Some sozinho quando já instalado / dispensado / fora do alvo. */}
-      <InstallPrompt />
       {/* Conclui o fluxo "assinar deslogado": ao autenticar, redireciona ao
           checkout da Kiwify do plano escolhido na landing (se houver intent). */}
       <CheckoutIntentRedirect />
