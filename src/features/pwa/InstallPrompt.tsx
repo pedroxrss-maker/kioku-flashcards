@@ -80,6 +80,15 @@ export default function InstallPrompt() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[install-debug]', {
+      standalone: isStandalone(),
+      dismissedRecently: dismissedRecently(),
+      isIosSafari: isIosSafari(),
+      hasCapturedPrompt: !!getCapturedPrompt(),
+      ua: navigator.userAgent,
+    });
+
     // Never invite when already installed or recently dismissed.
     if (isStandalone() || dismissedRecently()) return;
 
