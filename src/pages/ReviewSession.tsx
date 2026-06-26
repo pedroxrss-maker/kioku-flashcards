@@ -289,6 +289,16 @@ export function ReviewSession() {
       // Below this, capping the card to fit the buttons below would make it too
       // cramped — so move the buttons to a side column and let the card grow.
       const MIN_CARD = 340;
+      // Phone/tablet (<1024px): the left side-column (right-full, w-36) renders
+      // OFF-SCREEN here, so NEVER trigger it. Keep the buttons below the card and
+      // cap the card to clear them, floored at MIN_CARD so it isn't cramped.
+      if (window.matchMedia('(max-width: 1023px)').matches) {
+        setAiSide(false);
+        setCardMaxH(Math.max(MIN_CARD, Math.round(cap)));
+        return;
+      }
+      // >=1024px: there IS horizontal room for the left column when vertical space
+      // runs out, so a too-short cap may move the buttons to the side.
       if (cap < MIN_CARD) {
         setAiSide(true);
         setCardMaxH(undefined);
