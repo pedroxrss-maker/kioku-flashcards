@@ -5,10 +5,12 @@ import { App } from './app/App';
 import { applyRoundedFavicon } from './lib/favicon';
 import { registerPwaUpdates } from './features/pwa/registerPwa';
 import { cleanupDrafts } from './lib/drafts';
+import { initSyncEngine } from './db/syncEngine';
 
 applyRoundedFavicon();
 registerPwaUpdates();
 void cleanupDrafts(); // sweep expired form drafts (>7 days) on startup
+initSyncEngine(); // offline-first: replay any queued writes when connectivity returns
 
 // Capture the PWA install prompt BEFORE React mounts: Chrome can fire
 // `beforeinstallprompt` before <InstallPrompt> renders, and the event is only

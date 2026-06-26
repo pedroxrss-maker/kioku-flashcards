@@ -222,7 +222,7 @@ function rowToDeck(r: DeckRow): Deck {
   };
 }
 
-function cardToRow(c: Card, userId: string) {
+export function cardToRow(c: Card, userId: string) {
   const row: Record<string, unknown> = {
     id: c.id,
     deck_id: c.deckId,
@@ -257,7 +257,7 @@ function rowToCard(r: CardRow): Card {
   };
 }
 
-function logToRow(l: ReviewLog, userId: string) {
+export function logToRow(l: ReviewLog, userId: string) {
   return {
     id: l.id,
     card_id: l.cardId,
@@ -295,7 +295,7 @@ const DECK_COLS =
 /** Refresh ONLY the (non-live) card-row queries (deck card table / Stats) after a
  *  card mutation. A REVIEW write deliberately does NOT call this, so saving a
  *  review never re-downloads a deck's cards. */
-function refreshCardQueries(): void {
+export function refreshCardQueries(): void {
   refetchKeys((k) => k.startsWith('cards:'));
 }
 
@@ -659,6 +659,11 @@ export class SupabaseRepository implements KiokuRepository {
       // Retries exhausted (likely offline): queue the review so it's durable and
       // can be replayed later. Optimistic UI + toast/log behavior unchanged.
       void enqueue('saveReview', card.id, { card, log });
+      // Also reflect the change in the local mirror NOW, so an OFFLINE session
+      // doesn't re-serve this already-reviewed card (localDueQueueFromMirror reads
+      // the mirror's due dates).
+      void mirrorPutCards([card]);
+      void mirrorPutReviewLog(log);
       // eslint-disable-next-line no-console
       console.error('[supabase saveReview]', err);
       pushToast('error', 'Não foi possível salvar sua revisão. Verifique sua conexão.');
@@ -684,6 +689,10 @@ export class SupabaseRepository implements KiokuRepository {
     } catch (err) {
       // Retries exhausted (likely offline): queue the undo for a later replay.
       void enqueue('undoReview', card.id, { card, logId });
+      // Reflect the undo in the local mirror NOW (restore the card, drop the log),
+      // so an OFFLINE session sees the rolled-back state.
+      void mirrorPutCards([card]);
+      void mirrorDeleteReviewLog(logId);
       // eslint-disable-next-line no-console
       console.error('[supabase undoReview]', err);
       pushToast('error', 'Não foi possível desfazer a revisão.');
