@@ -277,12 +277,6 @@ export function ReviewSession() {
   useEffect(() => {
     const compute = () => {
       if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-      if (!window.matchMedia('(max-width: 1279px)').matches) {
-        // xl+: card grows freely, buttons stay below (their own row has room here).
-        setCardMaxH(undefined);
-        setAiSide(false);
-        return;
-      }
       const HEADER_H = 56; // top bar (h-14)
       const BOTTOM_H = 150; // grade / "mostrar resposta" action area + its padding
       const AREA_PAD_Y = 48; // the card area's py-6
