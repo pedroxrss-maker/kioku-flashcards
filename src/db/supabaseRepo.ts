@@ -17,6 +17,8 @@ import { supabase } from '../lib/supabase';
 import { db } from './db';
 import {
   mirrorDeleteReviewLog,
+  mirrorGetCards,
+  mirrorGetDecks,
   mirrorPutCards,
   mirrorPutDecks,
   mirrorPutReviewLog,
@@ -89,6 +91,52 @@ async function currentUserId(): Promise<string> {
   const id = data.session?.user?.id;
   if (!id) throw new Error('Você precisa estar conectado.');
   return id;
+}
+
+/**
+ * Pragmatic "is this a CONNECTIVITY failure?" check — so reads can fall back to the
+ * local mirror ONLY when offline, never for auth errors or real query bugs (those
+ * must still surface). True when the browser reports offline, or the error (thrown
+ * OR returned in PostgREST's `error` field) looks like a fetch/network failure.
+ */
+function isNetworkError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  let msg = '';
+  if (err instanceof Error) msg = err.message;
+  else if (typeof err === 'object' && err !== null && 'message' in err) {
+    msg = String((err as { message: unknown }).message);
+  } else if (typeof err === 'string') msg = err;
+  if (!msg) return false;
+  return /failed to fetch|fetch failed|network ?error|load failed|err_network|err_internet|err_connection|net::|networkerror|timeout|offline/i.test(
+    msg,
+  );
+}
+
+/**
+ * Offline replacement for dueQueueCards: read the deck's cards from the mirror and
+ * compute the due queue LOCALLY with the SAME filtering/ordering the server query
+ * uses — due learning/relearning (ungated), due reviews (earliest-first, capped),
+ * then new cards (creation order, capped). Empty if the deck isn't mirrored yet.
+ */
+async function localDueQueueFromMirror(
+  deckId: string,
+  reviewLimit: number,
+  newLimit: number,
+  nowMs: number,
+): Promise<Card[]> {
+  const all = await mirrorGetCards(deckId);
+  const learn = all.filter(
+    (c) => (c.state === 'learning' || c.state === 'relearning') && c.due <= nowMs,
+  );
+  const review = all
+    .filter((c) => c.state === 'review' && c.due <= nowMs)
+    .sort((a, b) => a.due - b.due)
+    .slice(0, reviewLimit);
+  const fresh = all
+    .filter((c) => c.state === 'new')
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, newLimit);
+  return [...learn, ...review, ...fresh];
 }
 
 /* -------------------------------------------------------------- row types -- */
@@ -259,14 +307,22 @@ const REVIEW_SESSION_CAP = 5000;
 export class SupabaseRepository implements KiokuRepository {
   // ---------------------------------------------------------------- decks --
   async listDecks(): Promise<Deck[]> {
-    const { data, error } = await supabase
-      .from('decks')
-      .select(DECK_COLS)
-      .order('created_at', { ascending: true });
-    if (error) readFail(error);
-    const decks = ((data ?? []) as unknown as DeckRow[]).map(rowToDeck);
-    void mirrorPutDecks(decks); // offline-first: keep a local copy (fire-and-forget)
-    return decks;
+    try {
+      const { data, error } = await supabase
+        .from('decks')
+        .select(DECK_COLS)
+        .order('created_at', { ascending: true });
+      if (error) {
+        if (isNetworkError(error)) return await mirrorGetDecks(); // offline → mirror
+        readFail(error); // real error: surface as before
+      }
+      const decks = ((data ?? []) as unknown as DeckRow[]).map(rowToDeck);
+      void mirrorPutDecks(decks); // offline-first: keep a local copy (fire-and-forget)
+      return decks;
+    } catch (err) {
+      if (isNetworkError(err)) return await mirrorGetDecks(); // thrown fetch failure → mirror
+      throw err;
+    }
   }
   async getDeck(id: string): Promise<Deck | undefined> {
     const { data, error } = await supabase.from('decks').select(DECK_COLS).eq('id', id).maybeSingle();
@@ -329,21 +385,29 @@ export class SupabaseRepository implements KiokuRepository {
     // every card (otherwise counts/lists silently truncate on big decks).
     const PAGE = 1000;
     const rows: CardRow[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase
-        .from('cards')
-        .select(CARD_COLS)
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error) readFail(error);
-      const batch = (data ?? []) as unknown as CardRow[];
-      rows.push(...batch);
-      if (batch.length < PAGE) break;
+    try {
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('cards')
+          .select(CARD_COLS)
+          .eq('deck_id', deckId)
+          .order('created_at', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) {
+          if (isNetworkError(error)) return await mirrorGetCards(deckId); // offline → mirror
+          readFail(error); // real error: surface as before
+        }
+        const batch = (data ?? []) as unknown as CardRow[];
+        rows.push(...batch);
+        if (batch.length < PAGE) break;
+      }
+      const cards = rows.map(rowToCard);
+      void mirrorPutCards(cards); // offline-first: keep a local copy (fire-and-forget)
+      return cards;
+    } catch (err) {
+      if (isNetworkError(err)) return await mirrorGetCards(deckId); // thrown fetch failure → mirror
+      throw err;
     }
-    const cards = rows.map(rowToCard);
-    void mirrorPutCards(cards); // offline-first: keep a local copy (fire-and-forget)
-    return cards;
   }
   async getCard(id: string): Promise<Card | undefined> {
     const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('id', id).maybeSingle();
@@ -423,23 +487,42 @@ export class SupabaseRepository implements KiokuRepository {
     const nowIso = toIso(opts.nowMs);
     const reviewLimit = Math.max(0, Math.min(opts.reviewLimit, REVIEW_SESSION_CAP));
     const newLimit = Math.max(0, Math.min(opts.newLimit, REVIEW_SESSION_CAP));
-    const base = () => supabase.from('cards').select(CARD_COLS).eq('deck_id', deckId);
-    const [learnRes, reviewRes, newRes] = await Promise.all([
-      base().in('state', ['learning', 'relearning']).lte('due', nowIso),
-      reviewLimit > 0
-        ? base().eq('state', 'review').lte('due', nowIso).order('due', { ascending: true }).limit(reviewLimit)
-        : Promise.resolve({ data: [], error: null }),
-      newLimit > 0
-        ? base().eq('state', 'new').order('created_at', { ascending: true }).limit(newLimit)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-    for (const r of [learnRes, reviewRes, newRes]) if (r.error) readFail(r.error);
-    const rows = [
-      ...((learnRes.data ?? []) as unknown as CardRow[]),
-      ...((reviewRes.data ?? []) as unknown as CardRow[]),
-      ...((newRes.data ?? []) as unknown as CardRow[]),
-    ];
-    return rows.map(rowToCard);
+    try {
+      const base = () => supabase.from('cards').select(CARD_COLS).eq('deck_id', deckId);
+      const [learnRes, reviewRes, newRes] = await Promise.all([
+        base().in('state', ['learning', 'relearning']).lte('due', nowIso),
+        reviewLimit > 0
+          ? base().eq('state', 'review').lte('due', nowIso).order('due', { ascending: true }).limit(reviewLimit)
+          : Promise.resolve({ data: [], error: null }),
+        newLimit > 0
+          ? base().eq('state', 'new').order('created_at', { ascending: true }).limit(newLimit)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      for (const r of [learnRes, reviewRes, newRes]) {
+        if (r.error) {
+          // offline → compute the queue locally from the mirror
+          if (isNetworkError(r.error)) {
+            return await localDueQueueFromMirror(deckId, reviewLimit, newLimit, opts.nowMs);
+          }
+          readFail(r.error); // real error: surface as before
+        }
+      }
+      const rows = [
+        ...((learnRes.data ?? []) as unknown as CardRow[]),
+        ...((reviewRes.data ?? []) as unknown as CardRow[]),
+        ...((newRes.data ?? []) as unknown as CardRow[]),
+      ];
+      const cards = rows.map(rowToCard);
+      // offline-first: mirror the pulled cards so a later OFFLINE session can build
+      // this queue locally even for users who only ever review (never list a deck).
+      void mirrorPutCards(cards);
+      return cards;
+    } catch (err) {
+      if (isNetworkError(err)) {
+        return await localDueQueueFromMirror(deckId, reviewLimit, newLimit, opts.nowMs);
+      }
+      throw err;
+    }
   }
   async createCard(input: CardInput): Promise<Card> {
     const card = makeCard(input);
