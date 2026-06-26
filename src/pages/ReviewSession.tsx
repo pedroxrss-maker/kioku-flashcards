@@ -289,8 +289,6 @@ export function ReviewSession() {
       // Below this, capping the card to fit the buttons below would make it too
       // cramped — so move the buttons to a side column and let the card grow.
       const MIN_CARD = 340;
-      // eslint-disable-next-line no-console
-      console.log('[ai-fit]', { innerH: window.innerHeight, aiRowH, contentBoxH, cap, MIN_CARD });
       if (cap < MIN_CARD) {
         setAiSide(true);
         setCardMaxH(undefined);
