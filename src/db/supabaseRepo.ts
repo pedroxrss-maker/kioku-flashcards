@@ -15,6 +15,12 @@
  */
 import { supabase } from '../lib/supabase';
 import { db } from './db';
+import {
+  mirrorDeleteReviewLog,
+  mirrorPutCards,
+  mirrorPutDecks,
+  mirrorPutReviewLog,
+} from './localMirror';
 import { defaultSettings, makeCard, makeDeck, newFsrsFields, newSm2Fields } from './factories';
 import { getQueryData, invalidate, refetchKeys, setQueryData } from './store';
 import { pushToast } from '../lib/toast';
@@ -257,7 +263,9 @@ export class SupabaseRepository implements KiokuRepository {
       .select(DECK_COLS)
       .order('created_at', { ascending: true });
     if (error) readFail(error);
-    return ((data ?? []) as unknown as DeckRow[]).map(rowToDeck);
+    const decks = ((data ?? []) as unknown as DeckRow[]).map(rowToDeck);
+    void mirrorPutDecks(decks); // offline-first: keep a local copy (fire-and-forget)
+    return decks;
   }
   async getDeck(id: string): Promise<Deck | undefined> {
     const { data, error } = await supabase.from('decks').select(DECK_COLS).eq('id', id).maybeSingle();
@@ -332,7 +340,9 @@ export class SupabaseRepository implements KiokuRepository {
       rows.push(...batch);
       if (batch.length < PAGE) break;
     }
-    return rows.map(rowToCard);
+    const cards = rows.map(rowToCard);
+    void mirrorPutCards(cards); // offline-first: keep a local copy (fire-and-forget)
+    return cards;
   }
   async getCard(id: string): Promise<Card | undefined> {
     const { data, error } = await supabase.from('cards').select(CARD_COLS).eq('id', id).maybeSingle();
@@ -437,6 +447,7 @@ export class SupabaseRepository implements KiokuRepository {
     if (error) writeFail(error);
     invalidate();
     refreshCardQueries();
+    void mirrorPutCards([card]); // offline-first: keep a local copy (fire-and-forget)
     return card;
   }
   async bulkInsertCards(cards: Card[]): Promise<void> {
@@ -546,6 +557,9 @@ export class SupabaseRepository implements KiokuRepository {
         if (logRes.error) throw logRes.error;
       }, 3);
       invalidate();
+      // offline-first: mirror the updated card + the new log (fire-and-forget).
+      void mirrorPutCards([card]);
+      void mirrorPutReviewLog(log);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[supabase saveReview]', err);
@@ -566,6 +580,9 @@ export class SupabaseRepository implements KiokuRepository {
         if (delRes.error) throw delRes.error;
       }, 3);
       invalidate();
+      // offline-first: mirror the restored card + drop the undone log (fire-and-forget).
+      void mirrorPutCards([card]);
+      void mirrorDeleteReviewLog(logId);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[supabase undoReview]', err);
