@@ -278,7 +278,7 @@ export function CardAiHelp({ front, back, flipped, side = false }: CardAiHelpPro
                 type="button"
                 onClick={() => pick(a.id)}
                 disabled={loading && !on}
-                className="flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-[var(--r-md)] text-center ai-hover-outline disabled:opacity-50"
+                className="flex flex-col items-center justify-center gap-1.5 px-2 py-2 rounded-[var(--r-md)] text-center ai-hover-outline disabled:opacity-50"
                 style={{
                   background: on ? 'var(--accent-soft)' : 'var(--surface)',
                   border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,

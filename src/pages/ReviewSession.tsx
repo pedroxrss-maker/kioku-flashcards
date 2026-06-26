@@ -284,10 +284,11 @@ export function ReviewSession() {
       const aiBelow = document.querySelector('[data-ai-below]') as HTMLElement | null;
       const aiRowH = aiBelow?.offsetHeight ?? 64;
       const contentBoxH = window.innerHeight - HEADER_H - BOTTOM_H - AREA_PAD_Y;
-      const cap = contentBoxH - 2 * (AI_GAP + aiRowH);
+      const SAFETY = 24;
+      const cap = contentBoxH - 2 * (AI_GAP + aiRowH) - SAFETY;
       // Below this, capping the card to fit the buttons below would make it too
       // cramped — so move the buttons to a side column and let the card grow.
-      const MIN_CARD = 300;
+      const MIN_CARD = 340;
       // eslint-disable-next-line no-console
       console.log('[ai-fit]', { innerH: window.innerHeight, aiRowH, contentBoxH, cap, MIN_CARD });
       if (cap < MIN_CARD) {
