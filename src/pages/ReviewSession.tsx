@@ -58,6 +58,9 @@ export function ReviewSession() {
   // from colliding with the grade buttons. Undefined on xl+ (AI buttons are in a
   // side column there, so the card may grow freely).
   const [cardMaxH, setCardMaxH] = useState<number | undefined>(undefined);
+  // true = not enough vertical room for AI buttons below the card, so they
+  // move to a left side-column and the card grows freely.
+  const [aiSide, setAiSide] = useState(false);
   const reduce = useReducedMotion();
 
   // The current card's own deck drives audio + TTS language (in a parent session
@@ -275,7 +278,9 @@ export function ReviewSession() {
     const compute = () => {
       if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
       if (!window.matchMedia('(max-width: 1279px)').matches) {
-        setCardMaxH(undefined); // xl+: AI buttons are in a side column — no cap
+        // xl+: card grows freely, buttons stay below (their own row has room here).
+        setCardMaxH(undefined);
+        setAiSide(false);
         return;
       }
       const HEADER_H = 56; // top bar (h-14)
@@ -286,7 +291,16 @@ export function ReviewSession() {
       const aiRowH = aiBelow?.offsetHeight ?? 64;
       const contentBoxH = window.innerHeight - HEADER_H - BOTTOM_H - AREA_PAD_Y;
       const cap = contentBoxH - 2 * (AI_GAP + aiRowH);
-      setCardMaxH(Math.max(240, Math.round(cap)));
+      // Below this, capping the card to fit the buttons below would make it too
+      // cramped — so move the buttons to a side column and let the card grow.
+      const MIN_CARD = 300;
+      if (cap < MIN_CARD) {
+        setAiSide(true);
+        setCardMaxH(undefined);
+      } else {
+        setAiSide(false);
+        setCardMaxH(Math.round(cap));
+      }
     };
     compute();
     window.addEventListener('resize', compute);
@@ -560,6 +574,7 @@ export function ReviewSession() {
               flipped={flipped}
               front={stripHtml(current.front)}
               back={stripHtml(current.back)}
+              side={aiSide}
             />
           )}
         </div>

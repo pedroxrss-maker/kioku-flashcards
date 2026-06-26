@@ -16,6 +16,9 @@ interface CardAiHelpProps {
   /** Whether the card is revealed (back). The component stays MOUNTED across
    *  flips so its fetched answers persist; it just renders nothing on the front. */
   flipped: boolean;
+  /** When true, there isn't enough vertical room below the card, so the AI buttons
+   *  render in a left side-column instead of below the card. Wired up next step. */
+  side?: boolean;
 }
 
 /** The AI helpers share ONE pool/metric ("tutor"); only one is active at a
@@ -140,7 +143,7 @@ function AiBody({
  * balloon anchors to the card's right edge and the mobile overlay (absolute
  * inset-0) covers the card exactly. Hidden entirely when the AI is not configured.
  */
-export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
+export function CardAiHelp({ front, back, flipped, side = false }: CardAiHelpProps) {
   const reduce = useReducedMotion();
   const [active, setActive] = useState<AiAction | null>(null);
   const [cache, setCache] = useState<Partial<Record<AiAction, string>>>({});
@@ -204,36 +207,86 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
 
   return (
     <>
-      {/* Botões de IA — grade empilhada abaixo do card, em TODAS as larguras. */}
+      {/* Botões de IA. Dois layouts mutuamente exclusivos conforme `side`:
+          - side=false: grade empilhada ABAIXO do card (em todas as larguras).
+          - side=true: coluna vertical (com ícones) à ESQUERDA do card, quando não
+            há espaço vertical suficiente abaixo (decidido pelo ReviewSession). */}
       <AnimatePresence>
-        {flipped && (
-          <motion.div
-            key="ai-buttons"
-            data-ai-below
-            className="absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
-            style={{ top: '100%', zIndex: 0 }}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -24 }}
-            animate={{ opacity: 1, y: 12 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16, transition: { duration: 0.2 } }}
-            transition={{ duration: reduce ? 0 : 0.34, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.1 }}
-          >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        {flipped &&
+          (side ? (
+            <motion.div
+              key="ai-buttons-left"
+              className="flex flex-col gap-2 absolute right-full top-0 bottom-0 mr-4 w-36"
+              style={{ zIndex: 0 }}
+              initial={reduce ? { opacity: 0 } : { opacity: 0, x: 36 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, x: 36, transition: { duration: 0.2 } }}
+              transition={{ duration: reduce ? 0 : 0.34, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.1 }}
+            >
+              {ASSIST.map((a) => {
+                const on = active === a.id;
+                const Icon = a.icon;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => pick(a.id)}
+                    disabled={loading && !on}
+                    className="flex-1 flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-[var(--r-md)] text-center ai-hover-outline disabled:opacity-50"
+                    style={{
+                      background: on ? 'var(--accent-soft)' : 'var(--surface)',
+                      border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
+                      color: on ? 'var(--accent)' : 'var(--fg)',
+                    }}
+                  >
+                    <Icon size={18} />
+                    <span className="text-xs leading-tight">{a.label}</span>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => pick('tutor')}
+                className="flex-1 px-3 py-2.5 rounded-[var(--r-md)] text-xs font-semibold text-center leading-tight ai-hover-outline"
+                style={{
+                  background: isTutor ? `color-mix(in srgb, ${PURPLE} 14%, transparent)` : 'var(--surface)',
+                  border: `1px solid ${isTutor ? PURPLE : 'var(--line)'}`,
+                  color: PURPLE,
+                }}
+              >
+                Não entendeu? Me ensine isso →
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="ai-buttons"
+              data-ai-below
+              className="absolute left-0 right-0 mx-auto w-full max-w-2xl flex flex-col gap-2"
+              style={{ top: '100%', zIndex: 0 }}
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: -24 }}
+              animate={{ opacity: 1, y: 12 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16, transition: { duration: 0.2 } }}
+              transition={{ duration: reduce ? 0 : 0.34, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.1 }}
+            >
+        <div className="grid grid-cols-2 gap-2">
           {ASSIST.map((a) => {
             const on = active === a.id;
+            const Icon = a.icon;
             return (
               <button
                 key={a.id}
                 type="button"
                 onClick={() => pick(a.id)}
                 disabled={loading && !on}
-                className="px-2 py-1 text-[11px] sm:text-xs rounded-[var(--r-sm)] text-center ai-hover-outline disabled:opacity-50"
+                className="flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-[var(--r-md)] text-center ai-hover-outline disabled:opacity-50"
                 style={{
                   background: on ? 'var(--accent-soft)' : 'var(--surface)',
                   border: `1px solid ${on ? 'var(--accent)' : 'var(--line)'}`,
                   color: on ? 'var(--accent)' : 'var(--fg)',
                 }}
               >
-                {a.label}
+                <Icon size={18} />
+                <span className="text-xs leading-tight">{a.label}</span>
               </button>
             );
           })}
@@ -252,8 +305,8 @@ export function CardAiHelp({ front, back, flipped }: CardAiHelpProps) {
         >
           Não entendeu? Me ensine isso →
         </button>
-          </motion.div>
-        )}
+            </motion.div>
+          ))}
       </AnimatePresence>
 
       {/* Telas menores: o botão do tutor fica ACIMA do card, para não sobrepor os
