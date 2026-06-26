@@ -2,6 +2,22 @@ import Dexie, { type Table } from 'dexie';
 import type { AppSettings, Card, Deck, MediaBlob, ReviewLog } from './types';
 
 /**
+ * A durable write queued for later replay (offline-first, phase 2). When a
+ * Supabase write fails (offline / network), the repository enqueues one of these
+ * so the write is never lost. `payload` carries the DOMAIN objects needed to
+ * re-run the write (kept untyped here; the replayer narrows by `op`). `seq` is the
+ * auto-increment primary key, preserving FIFO order.
+ */
+export interface OutboxRow {
+  seq?: number;
+  op: 'saveReview' | 'createCard' | 'undoReview';
+  entityId: string; // the card id (dedup / inspection)
+  createdAt: number;
+  status: 'pending' | 'done' | 'error';
+  payload: unknown;
+}
+
+/**
  * IndexedDB persistence via Dexie. The UI never touches this directly — it goes
  * through the repository (see `repositories.ts`) so the storage engine can be
  * swapped for a remote/sync backend later without rewriting the UI.
@@ -16,6 +32,7 @@ export class KiokuDB extends Dexie {
   reviewLogs!: Table<ReviewLog, string>;
   media!: Table<MediaBlob, string>;
   settings!: Table<AppSettings, string>;
+  outbox!: Table<OutboxRow, number>;
 
   constructor() {
     super('kioku');
@@ -38,6 +55,12 @@ export class KiokuDB extends Dexie {
       decks: 'id, createdAt, category',
       cards: 'id, deckId, updatedAt, due',
       reviewLogs: 'id, cardId, reviewedAt',
+    });
+    // v3: durable write outbox. `++seq` = auto-increment PK (FIFO order); indexes
+    // on op / entityId / createdAt / status for inspection and pending lookups.
+    // `payload` is intentionally NOT indexed. Other tables carry over from v2.
+    this.version(3).stores({
+      outbox: '++seq, op, entityId, createdAt, status',
     });
   }
 }

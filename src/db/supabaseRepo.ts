@@ -21,6 +21,7 @@ import {
   mirrorPutDecks,
   mirrorPutReviewLog,
 } from './localMirror';
+import { enqueue } from './outbox';
 import { defaultSettings, makeCard, makeDeck, newFsrsFields, newSm2Fields } from './factories';
 import { getQueryData, invalidate, refetchKeys, setQueryData } from './store';
 import { pushToast } from '../lib/toast';
@@ -442,13 +443,24 @@ export class SupabaseRepository implements KiokuRepository {
   }
   async createCard(input: CardInput): Promise<Card> {
     const card = makeCard(input);
-    const userId = await currentUserId();
-    const { error } = await supabase.from('cards').insert(cardToRow(card, userId));
-    if (error) writeFail(error);
-    invalidate();
-    refreshCardQueries();
-    void mirrorPutCards([card]); // offline-first: keep a local copy (fire-and-forget)
-    return card;
+    try {
+      const userId = await currentUserId();
+      const { error } = await supabase.from('cards').insert(cardToRow(card, userId));
+      if (error) throw error;
+      invalidate();
+      refreshCardQueries();
+      void mirrorPutCards([card]); // offline-first: keep a local copy (fire-and-forget)
+      return card;
+    } catch (err) {
+      // Offline / write failed: SOFT path — don't hard-fail the UI. Queue the
+      // insert for a later replay, make the card locally visible (mirror), and
+      // return the optimistic card so the user keeps going.
+      // eslint-disable-next-line no-console
+      console.error('[supabase createCard] queued offline', err);
+      void enqueue('createCard', card.id, { card });
+      void mirrorPutCards([card]);
+      return card;
+    }
   }
   async bulkInsertCards(cards: Card[]): Promise<void> {
     if (cards.length === 0) return;
@@ -561,6 +573,9 @@ export class SupabaseRepository implements KiokuRepository {
       void mirrorPutCards([card]);
       void mirrorPutReviewLog(log);
     } catch (err) {
+      // Retries exhausted (likely offline): queue the review so it's durable and
+      // can be replayed later. Optimistic UI + toast/log behavior unchanged.
+      void enqueue('saveReview', card.id, { card, log });
       // eslint-disable-next-line no-console
       console.error('[supabase saveReview]', err);
       pushToast('error', 'Não foi possível salvar sua revisão. Verifique sua conexão.');
@@ -584,6 +599,8 @@ export class SupabaseRepository implements KiokuRepository {
       void mirrorPutCards([card]);
       void mirrorDeleteReviewLog(logId);
     } catch (err) {
+      // Retries exhausted (likely offline): queue the undo for a later replay.
+      void enqueue('undoReview', card.id, { card, logId });
       // eslint-disable-next-line no-console
       console.error('[supabase undoReview]', err);
       pushToast('error', 'Não foi possível desfazer a revisão.');
