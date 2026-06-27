@@ -5,3 +5,8 @@ dist/
 *.log
 .env.local
 .env.*.local
+
+# Ingestão do banco de questões: PDFs de provas, CSVs e imagens são CONTEÚDO de
+# vestibular (vai para o Supabase, não para o repo). Mantém tudo de ingestao/ fora
+# do git. (ingestao/.env.local já era coberto por .env.local acima.)
+ingestao/

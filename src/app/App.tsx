@@ -8,6 +8,7 @@ import { UpgradeModalProvider } from '../features/billing/UpgradeModalProvider';
 import { AppLayout } from './AppLayout';
 import { Home } from '../pages/Home';
 import { Decks } from '../pages/Decks';
+import { BancoProvas } from '../pages/BancoProvas';
 import { GenerateDeck } from '../pages/GenerateDeck';
 import { DeckDetail } from '../pages/DeckDetail';
 import { ReviewHub } from '../pages/ReviewHub';
@@ -96,6 +97,7 @@ function AuthedApp() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/decks" element={<Decks />} />
+          <Route path="/provas" element={<BancoProvas />} />
           <Route path="/generate" element={<GenerateDeck />} />
           <Route path="/decks/:id" element={<DeckDetail />} />
           <Route path="/review" element={<ReviewHub />} />

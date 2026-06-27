@@ -38,6 +38,7 @@ export function AppLayout() {
   const THEMED_PATHS = new Set([
     '/',
     '/decks',
+    '/provas',
     '/stats',
     '/conquistas',
     '/settings',
