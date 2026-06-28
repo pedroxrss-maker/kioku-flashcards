@@ -16,7 +16,7 @@
  */
 import { buildGeneratePrompt, parseCardsJson } from './cards';
 import type { GeneratedCard, GenerateRequest } from './cards';
-import { supabase } from '../../lib/supabase';
+import { getFreshAccessToken } from '../../lib/supabase';
 
 /** The model used for all generation and tutoring. Single source of truth; a
  *  single call can override it via createMessage's `model` option if needed. */
@@ -74,14 +74,11 @@ function quotaMessage(p: { metric?: string; period?: string; max_count?: number 
   }
 }
 
-/** Current Supabase access token (JWT) for the proxy's auth, or null. */
+/** Fresh Supabase access token (JWT) for the proxy's auth, or null. Delegates to
+ *  the shared helper, which proactively refreshes a near-expiry token so authed
+ *  AI calls don't fail with "sessão expirada". */
 async function getAccessToken(): Promise<string | null> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  } catch {
-    return null;
-  }
+  return getFreshAccessToken();
 }
 
 /** True when either a proxy URL or a direct key is configured. */

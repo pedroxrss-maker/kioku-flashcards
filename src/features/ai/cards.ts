@@ -187,6 +187,10 @@ function toCardHtml(text: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    // Markdown **bold** -> <strong>. Done AFTER escaping, so the ONLY real tags in
+    // the output are the ones we insert here (any '<' from the model is already
+    // entity-encoded). Non-greedy, within a line; stray '**' stays literal.
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\r?\n/g, '<br>')
     .trim();
 }
@@ -208,7 +212,7 @@ const LANG_TO_TTS: Record<string, string> = {
 export async function createDeckFromGenerated(
   name: string,
   cards: GeneratedCard[],
-  opts?: { category?: string; language?: string },
+  opts?: { category?: string; language?: string; backHtmlSuffix?: string },
 ): Promise<{ deck: Deck; cards: Card[] }> {
   const settings = await repo.getSettings();
   const color = DECK_COLORS[Math.floor(Math.random() * DECK_COLORS.length)];
@@ -222,6 +226,12 @@ export async function createDeckFromGenerated(
     desiredRetention: settings.defaultDesiredRetention,
     ttsLang: opts?.language ? LANG_TO_TTS[opts.language] : undefined,
   });
+  // Trusted HTML appended to each back AFTER toCardHtml (toCardHtml escapes its
+  // input, so a footer can't go through it). Only the banco-provas flow passes a
+  // suffix, so normal AI decks are untouched. It must survive sanitizeHtml on the
+  // render path — the banco footer uses only allowed inline styles (font-size,
+  // text-align, margin, color).
+  const suffix = opts?.backHtmlSuffix ? `<br>${opts.backHtmlSuffix}` : '';
   const made = cards
     .filter((c) => c.front.trim() || c.back.trim())
     .map((c) => {
@@ -230,7 +240,7 @@ export async function createDeckFromGenerated(
         deckId: deck.id,
         // type-in needs the hidden marker; cloze keeps its {{cN::}}; basic stays as-is.
         front: c.type === 'typein' ? markTypeIn(front) : front,
-        back: toCardHtml(c.back),
+        back: toCardHtml(c.back) + suffix,
       });
     });
   await repo.bulkInsertCards(made);
