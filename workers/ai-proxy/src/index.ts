@@ -139,19 +139,43 @@ interface Jwk {
 let jwksCache: { keys: Jwk[]; fetchedAt: number } | null = null;
 const JWKS_TTL_MS = 10 * 60 * 1000; // 10 min
 
+// Timeouts de RESILIÊNCIA p/ os fetches ao Supabase: uma conexão fria/host
+// travado NÃO pode pendurar a request (já vimos stalls de 28-42s). Em vez de
+// pendurar, o AbortController corta e o caller cai num fallback/erro limpo. Só
+// limita o PIOR caso — o caminho feliz é idêntico.
+const JWKS_FETCH_TIMEOUT_MS = 5000; // JWKS: curto; em estouro cai no cache antigo.
+const SUPABASE_FETCH_TIMEOUT_MS = 10000; // qb_questions / consume_quota / profiles.
+
+/** fetch com timeout via AbortController: em estouro, lança AbortError (que os
+ *  callers já tratam como falha de rede) em vez de pendurar. */
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function jwksUrl(env: Env): string {
   return `${env.SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/.well-known/jwks.json`;
 }
 
 async function fetchJwks(env: Env): Promise<Jwk[] | null> {
   try {
-    const res = await fetch(jwksUrl(env), { headers: { apikey: env.SUPABASE_ANON_KEY } });
+    const res = await fetchWithTimeout(
+      jwksUrl(env),
+      { headers: { apikey: env.SUPABASE_ANON_KEY } },
+      JWKS_FETCH_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
     const data = (await res.json()) as { keys?: Jwk[] };
     if (!Array.isArray(data.keys)) return null;
     jwksCache = { keys: data.keys, fetchedAt: Date.now() };
     return data.keys;
   } catch {
+    // inclui AbortError (timeout): getJwks cai no cache antigo se existir.
     return null;
   }
 }
@@ -246,17 +270,21 @@ async function consumeQuota(env: Env, userJwt: string, metric: string): Promise<
   const url = `${env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/consume_quota`;
   let res: Response;
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${userJwt}`,
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${userJwt}`,
+        },
+        body: JSON.stringify({ p_metric: metric, p_period: 'day' }),
       },
-      body: JSON.stringify({ p_metric: metric, p_period: 'day' }),
-    });
+      SUPABASE_FETCH_TIMEOUT_MS,
+    );
   } catch {
-    return null;
+    return null; // inclui AbortError (timeout) → caller responde quota_unavailable.
   }
   if (!res.ok) return null;
   let rows: QuotaRow[];
@@ -267,6 +295,51 @@ async function consumeQuota(env: Env, userJwt: string, metric: string): Promise<
   }
   if (!Array.isArray(rows) || rows.length === 0) return null;
   return rows[0];
+}
+
+/** Uma linha do get_usage(): uso atual SEM consumir. remaining: -1 ilimitado,
+ *  0 bloqueado (no teto), >0 permitido. */
+interface UsageRow {
+  metric: string;
+  period: string;
+  used: number;
+  max_count: number;
+  remaining: number;
+}
+
+/**
+ * CHECA o uso de UMA métrica sem consumir (via get_usage). Usado p/ barrar um
+ * usuário no limite ANTES de gerar, sem decrementar — o consumo real só ocorre
+ * no fim, em caso de sucesso. Null em falha de leitura (caller -> quota_unavailable).
+ */
+async function peekUsage(env: Env, userJwt: string, metric: string): Promise<UsageRow | null> {
+  const url = `${env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/get_usage`;
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${userJwt}`,
+        },
+        body: JSON.stringify({}), // get_usage() não recebe argumentos
+      },
+      SUPABASE_FETCH_TIMEOUT_MS,
+    );
+  } catch {
+    return null; // inclui AbortError (timeout)
+  }
+  if (!res.ok) return null;
+  try {
+    const rows = (await res.json()) as UsageRow[];
+    if (!Array.isArray(rows)) return null;
+    return rows.find((r) => r.metric === metric) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Teto de cartas por deck (deckGen) ────────────────────────────────────────
@@ -281,15 +354,17 @@ async function fetchUserPlan(env: Env, userJwt: string, uid: string): Promise<st
   const base = env.SUPABASE_URL.replace(/\/+$/, '');
   const url = `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(uid)}&select=plan&limit=1`;
   try {
-    const res = await fetch(url, {
-      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${userJwt}` },
-    });
+    const res = await fetchWithTimeout(
+      url,
+      { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${userJwt}` } },
+      SUPABASE_FETCH_TIMEOUT_MS,
+    );
     if (!res.ok) return 'free';
     const rows = (await res.json()) as Array<{ plan?: string }>;
     const plan = Array.isArray(rows) && typeof rows[0]?.plan === 'string' ? rows[0].plan : 'free';
     return plan === 'basic' || plan === 'advanced' ? plan : 'free';
   } catch {
-    return 'free';
+    return 'free'; // inclui AbortError (timeout) → cai no teto mais restrito.
   }
 }
 
@@ -356,7 +431,10 @@ export function capDeckCardsResponse(data: unknown, maxCards: number): unknown {
 //
 // A cota do plano (429 nosso, quota_exceeded) é tratada ANTES disto, no handler,
 // e NUNCA passa por aqui: o fallback se aplica só à sobrecarga do lado do Google.
-const MODEL_FALLBACK_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+// Cadeia de fallback (compartilhada por tutor, deckGen e banco-provas). gemini-2.0-flash
+// foi REMOVIDO: o Google o desliga em 01/06/2026, então não serve de fallback. Sobram os
+// dois modelos atuais — flash-lite (barato) e flash (forte) — que se cobrem mutuamente.
+const MODEL_FALLBACK_CHAIN = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
 // Tutor/STREAMING: tenta o flash-lite (BARATO) 1º, mas com um ORÇAMENTO de tempo. Se
 // ele não COMEÇAR a emitir texto dentro de TUTOR_FIRST_MODEL_TIMEOUT_MS, abandona e
 // cai pro flash (rápido e estável, ~474ms TTFT medido). Assim: flash-lite saudável
@@ -424,6 +502,10 @@ type GeminiOutcome =
 interface GeminiCallDeps {
   fetchImpl?: typeof fetch;
   sleepImpl?: (ms: number) => Promise<void>;
+  /** Tentativas por modelo (default MAX_GEMINI_ATTEMPTS=4). O endpoint /banco-provas
+   *  usa 2 p/ caber no orçamento de subrequests do loop de batches. Deve ser <=4
+   *  (índices de GEMINI_BACKOFFS_MS). */
+  maxAttempts?: number;
   // Orçamento de tempo do 1º modelo no streaming (injetável p/ teste): devolve um
   // `signal` que resolve quando o tempo estoura e um `cancel()` p/ desarmá-lo quando
   // o stream começa. Default: setTimeout real.
@@ -463,9 +545,10 @@ async function callGeminiWithRetry(
 ): Promise<GeminiOutcome> {
   const doFetch = deps.fetchImpl ?? fetch;
   const doSleep = deps.sleepImpl ?? sleep;
+  const maxAttempts = deps.maxAttempts ?? MAX_GEMINI_ATTEMPTS; // <=4 (índices de backoff)
   const endpoint = `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`;
-  for (let attempt = 0; attempt < MAX_GEMINI_ATTEMPTS; attempt += 1) {
-    const last = attempt === MAX_GEMINI_ATTEMPTS - 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const last = attempt === maxAttempts - 1;
     let res: Response;
     try {
       res = await doFetch(endpoint, {
@@ -836,6 +919,340 @@ function ssePassthrough(upstream: ReadableStream<Uint8Array>): ReadableStream<Ui
   });
 }
 
+// ── Banco de provas: geração de flashcards a partir das questões ─────────────
+// Endpoint server-side (cliente fino): lê as questões de um tópico, gera cards em
+// LOTES acumulando os conceitos já cobertos (sem repetir, sem lacunas) e emite o
+// progresso por SSE. Tudo aqui no Worker para o app mobile (Capacitor) ficar leve.
+
+const BANCO_BATCH_SIZE = 40; // questões por chamada ao Gemini
+const BANCO_MAX_ATTEMPTS = 2; // tentativas/modelo NESTE loop (vs 4 do deckGen) p/ caber no orçamento de subrequests
+const BANCO_COVERED_CAP = 250; // máx. de conceitos já-cobertos enviados no prompt (limita o tamanho)
+// flash (não -lite): o -lite descumpre regras combinadas (highlight + decontextualização).
+// O flash entrega a qualidade cheia; custo ~R$0,044/geração (≈ uma imagem), dentro da margem.
+const BANCO_DEFAULT_MODEL = 'gemini-2.5-flash';
+
+interface BancoQuestion {
+  enunciado: string;
+  alternativas: Array<{ letra?: string; texto?: string }>;
+  gabarito: string;
+  fonte: string;
+  ano: number;
+}
+
+interface BancoCard {
+  front: string;
+  back: string;
+}
+
+/** Lê as questões COMPLETAS do tópico via qb_questions, como o próprio usuário
+ *  (apikey anon + JWT) p/ a RLS valer. Retorna [] se vazio, null em falha real. */
+async function fetchTopicQuestions(
+  env: Env,
+  userJwt: string,
+  vestibular: string,
+  disciplina: string,
+  topico: string,
+): Promise<BancoQuestion[] | null> {
+  const url = `${env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/qb_questions`;
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${userJwt}`,
+        },
+        body: JSON.stringify({ p_vestibular: vestibular, p_disciplina: disciplina, p_topico: topico }),
+      },
+      SUPABASE_FETCH_TIMEOUT_MS,
+    );
+  } catch {
+    return null; // inclui AbortError (timeout) → caller responde ai_unreachable (502).
+  }
+  if (!res.ok) return null;
+  try {
+    const rows = (await res.json()) as BancoQuestion[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return null;
+  }
+}
+
+/** Extrai o texto concatenado de uma resposta generateContent do Gemini. */
+function geminiText(data: unknown): string {
+  const d = data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  return (d.candidates?.[0]?.content?.parts ?? [])
+    .map((p) => (typeof p.text === 'string' ? p.text : ''))
+    .join('\n')
+    .trim();
+}
+
+/** Parse defensivo do array JSON de cards (mesma ideia do parseCardsJson do app):
+ *  fatia do primeiro '[' ao último ']', JSON.parse, mantém só {front,back} válidos. */
+function parseBancoCards(raw: string): BancoCard[] {
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start < 0 || end < 0 || end < start) return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: BancoCard[] = [];
+  for (const item of arr) {
+    if (item && typeof item === 'object') {
+      const rec = item as Record<string, unknown>;
+      const front = String(rec.front ?? '').trim();
+      const back = String(rec.back ?? '').trim();
+      if (front && back) out.push({ front, back });
+    }
+  }
+  return out;
+}
+
+/** Normaliza p/ casamento: minúsculas + sem acentos (NFD − diacríticos). */
+function normalizeForMatch(s: string): string {
+  return s.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '').toLowerCase();
+}
+
+/**
+ * Padrões (já SEM acento) que denunciam um FRONT dependente de um material que o
+ * aluno NÃO vê (rede de segurança determinística p/ RULE 3/4 — o modelo flash
+ * ainda vaza "conforme o texto", "no contexto descrito" etc.). Casam com fronteira
+ * de palavra (\b) p/ NÃO matar usos legítimos: "\btextos?\b" não pega "contexto",
+ * e "contexto" só cai nas formas que apontam a fonte (não em "contexto histórico").
+ */
+const SOURCE_REF_PATTERNS: RegExp[] = [
+  /\btextos?\b/, //               o/os/no/nos/do/dos/segundo/conforme/de acordo com ... texto(s)
+  /\bdecretos?\b/, //             o/conforme/segundo ... decreto
+  /\bdescrit[ao]s?\b/, //         descrito/a(s) — cobre "acontecimento/evento/situação/caso/contexto descrito"
+  /\bapresentad[ao]s?\b/, //      apresentado/a(s) — "no contexto apresentado"
+  /\bmencionad[ao]s?\b/, //       mencionado/a(s)
+  /\b(?:no|neste|nesse|deste|desse|num) contexto\b/, // "no contexto" SEM matar "contexto histórico"
+  // artefatos de fonte: exigem artigo/preposição+artigo p/ poupar o uso geral do
+  // substantivo (ex.: "a imagem" cai; um substantivo solto sobrevive).
+  /\b(?:a|o|na|no|da|do|as|os|nas|nos|das|dos|essa|esse|esta|este|aquela|aquele|nessa|nesse|nesta|neste|dessa|desse|desta|deste) (?:charge|tirinha|cartum|cartaz|imagem|grafico|poema|trecho|excerto|fragmento|questao|enunciado|alternativa|autor|autora|autores)\b/,
+];
+
+/** True se o FRONT referencia um material-fonte que o aluno não vê → remover o card. */
+function frontReferencesSource(front: string): boolean {
+  const f = normalizeForMatch(front);
+  return SOURCE_REF_PATTERNS.some((re) => re.test(f));
+}
+
+/** Renderiza uma questão (enunciado + alternativas + gabarito + fonte/ano) p/ o prompt. */
+function renderQuestion(q: BancoQuestion): string {
+  const alts = (q.alternativas ?? [])
+    .map((a) => `${a.letra ?? '?'}) ${a.texto ?? ''}`)
+    .join('\n');
+  return (
+    `[${q.fonte} | ano ${q.ano}]\n` +
+    `Enunciado: ${q.enunciado}\n` +
+    (alts ? `Alternativas:\n${alts}\n` : '') +
+    `Gabarito: ${q.gabarito}\n`
+  );
+}
+
+/** Monta o corpo Gemini para um lote: extrai CONCEITOS das questões como cards
+ *  limpos e decontextualizados, sem repetir os conceitos já cobertos. */
+function buildBancoBody(batch: BancoQuestion[], covered: string[], _model: string): unknown {
+  const system =
+    'You build ATOMIC study flashcards from Brazilian college-entrance exam (vestibular) questions. ' +
+    'Extract the underlying CONCEPTS each question tests and turn them into clean, reusable flashcards — ' +
+    'do NOT restate or paraphrase the original exam items. ' +
+    // RULE 1 — concepts, not exercises.
+    'RULE 1 — CONCEPTS, NOT EXERCISES: a flashcard is for fast active recall of a CONCEPT, NEVER a problem ' +
+    'to solve. NEVER include specific numbers, values, data, scenarios, named characters, dates or any ' +
+    'concrete context from the original question (no "1800 m", no "3 voltas", no story setup). ALWAYS ' +
+    'extract the ABSTRACT, GENERAL, reusable knowledge — the definition, property, formula, method, ' +
+    'cause/consequence or general fact — NEVER the specific instance. FORBIDDEN: a card whose answer is a ' +
+    'calculation result or a specific number. RIGHT: "O que é uma **proporção**?" / "Relação de igualdade ' +
+    'entre duas razões". WRONG: "Um corredor corre 3 voltas... qual a distância?" / "400 m". ' +
+    // RULE 2 — highlight (moved up, hard MUST).
+    'RULE 2 — HIGHLIGHT (MANDATORY, NON-NEGOTIABLE): EVERY front MUST contain EXACTLY ONE term wrapped in ' +
+    'markdown double asterisks (**term**) — the single central/distinguishing key word of the card. A front ' +
+    'WITHOUT ** is INVALID and must NOT be produced. Bold ONLY that one term (a word or very short phrase), ' +
+    'never half the sentence. This disambiguates cards that differ by one word, e.g. "Quais aspectos ' +
+    '**socioeconômicos** fundamentaram o preconceito?" vs "Quais aspectos **ideológicos** fundamentaram o ' +
+    'mesmo preconceito?". ' +
+    // RULE 3 — stand-alone / decontextualized (strengthened).
+    'RULE 3 — STAND-ALONE (MANDATORY): every front MUST work as general knowledge on its own. NEVER reference ' +
+    'the source item. FORBIDDEN in the front: "o contexto", "no contexto apresentado", "o texto", "os textos", ' +
+    '"os textos sobre ...", "a questão", "a alternativa", "o enunciado", "mencionado(s)", "apresentado(s)". ' +
+    'If a front needs the original passage to make sense, it is INVALID — rewrite it as the general concept. ' +
+    // RULE 4 — reusable world knowledge vs. interpretation of an unseen text (extends RULE 3).
+    'RULE 4 — REUSABLE WORLD KNOWLEDGE ONLY (MANDATORY, applies to ALL disciplines): the student NEVER sees ' +
+    'the original exam text — the question bank is ONLY raw material. So distinguish TWO kinds of questions. ' +
+    'TYPE 1 = general world knowledge: the question uses a text merely as a pretext but tests a fact that ' +
+    'exists in the world (e.g. a passage about the French Revolution that tests "what was the French ' +
+    'Revolution"). This knowledge STANDS ALONE → it MAKES a good flashcard. TYPE 2 = interpretation of that ' +
+    'specific text: the question gives a specific poem/text/cartoon/image and asks what THAT passage means, ' +
+    'critiques, suggests or expresses — the answer exists ONLY inside that text, it is a reading of that ' +
+    'passage, NOT a fact of the world. TYPE 2 is NOT reusable: it dies outside the text the student cannot ' +
+    'see. RULE: generate a card ONLY when the knowledge tested is a GENERAL, REUSABLE FACT OF THE WORLD that ' +
+    'stands on its own without the source text. If a question is purely TYPE 2 (interpreting a specific ' +
+    'text/passage/poem/cartoon/image the student will not see), SKIP that question entirely — do NOT force a ' +
+    'card from it. It is BETTER to output FEWER cards, all solid and reusable, than to include cards that ' +
+    'depend on an unseen text. WORKED EXAMPLE: a question asking for "the central critique of THIS text about ' +
+    'the Madeira-Mamoré railway" → SKIP (interpretation of a specific text); but if the topic also carries a ' +
+    'general historical fact (e.g. what the **Madeira-Mamoré** railway was, or its historical contradiction ' +
+    'as established history) → that IS a fine stand-alone card. ' +
+    // remaining rules.
+    'LANGUAGE: write every card in Portuguese (Brazil). ' +
+    'CARD FORMAT: each card is a JSON object with string fields "front" and "back", EXACTLY like this shape ' +
+    '(note the **bolded** term in the front): ' +
+    '{"front":"Qual a definição de **sinédoque**?","back":"Figura que toma a parte pelo todo (ou vice-versa)."} ' +
+    'ATOMIC: each card covers EXACTLY ONE single fact. NEVER bundle multiple facts into one card. ' +
+    '"front" MUST be a clear, DIRECT question (question words "O que é...", "Qual...", "Como...", "Por que...", ' +
+    '"Quando...", ending with "?"), NOT label/topic style — and it MUST contain its one **bolded** term ' +
+    '(e.g. "Qual a definição de **sistema linear**?", not "Sistema linear: definição"). ' +
+    '"back" MUST be SHORT: ideally ONE line, at most TWO short lines. NO paragraphs. If an answer needs more, ' +
+    'the concept is too big — SPLIT it into several small atomic cards. Example: "O que é um **sistema de ' +
+    'equações lineares**?" / "Conjunto de 2+ equações com as mesmas variáveis"; and "Quais são os **métodos** ' +
+    'de resolução de sistemas lineares?" / "Substituição, adição e comparação". ' +
+    'COVERAGE: cover every distinct REUSABLE concept tested by the questions in this batch (complete, no ' +
+    'gaps) — but SKIP any TYPE 2 question per RULE 4; covering fewer questions with solid cards is correct, ' +
+    'not a gap. NO ' +
+    'REPETITION: a list of already-covered concepts is given; only output cards for concepts NOT yet covered. ' +
+    'The back holds ONLY the fact — NO source/attribution (no "Adaptado de ..." line). ' +
+    'OUTPUT: ONLY a JSON array of {"front","back"} objects where EVERY front contains exactly one **bolded** ' +
+    'term and references no source/context — no prose, no code fences, nothing before or after the array. ' +
+    'If every concept in this batch is already covered, output [].';
+
+  const coveredText = covered.length > 0 ? covered.join(' | ') : '(nenhum ainda)';
+  const userText =
+    `Conceitos JÁ cobertos (NÃO repita):\n${coveredText}\n\n` +
+    `Questões (extraia os conceitos destas):\n\n${batch.map(renderQuestion).join('\n')}`;
+
+  return {
+    contents: [{ role: 'user', parts: [{ text: userText }] }],
+    systemInstruction: { parts: [{ text: system }] },
+    // thinkingBudget: 0 — a família 2.5-flash "pensa" por padrão, o que é mais lento e
+    // come o orçamento de saída (risco de JSON truncado). Desligado AQUI, só no corpo do
+    // banco-provas (mesma técnica do tutor). maxOutputTokens 8000 mantido.
+    generationConfig: { maxOutputTokens: 8000, thinkingConfig: { thinkingBudget: 0 } },
+  };
+}
+
+/** Quebra um array em pedaços de tamanho `size`. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/** Cabeçalhos SSE (mesmos do tutor): sem compressão/transformação no edge. */
+function sseHeaders(cors: Record<string, string>): Record<string, string> {
+  return {
+    'Content-Type': 'text/event-stream',
+    'Content-Encoding': 'identity',
+    'Cache-Control': 'no-cache, no-transform',
+    'X-Accel-Buffering': 'no',
+    ...cors,
+  };
+}
+
+/** Cria um corpo SSE que roda `run(send)`; `send(event,data)` enfileira um evento.
+ *  Faz um flush inicial (":\n\n") p/ abrir o pipe cedo e fecha ao terminar. */
+function sseStream(
+  run: (send: (event: string, data: unknown) => void) => Promise<void>,
+): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, data: unknown) =>
+        controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      try {
+        controller.enqueue(enc.encode(':\n\n'));
+        await run(send);
+      } catch (e) {
+        try {
+          send('error', { reason: 'internal', detail: String(e).slice(0, 200) });
+        } catch {
+          /* controlador já fechado */
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
+/**
+ * Loop de geração por lotes (sequencial). Para cada lote chama o Gemini com a
+ * cadeia de modelos (retry reduzido), acumula cards novos (dedupe por front) e
+ * emite `progress`. No fim emite `done`. Em falha de um lote, emite `error` e para.
+ */
+async function runBancoGeneration(
+  questions: BancoQuestion[],
+  model: string,
+  apiKey: string,
+  send: (event: string, data: unknown) => void,
+  // Consumo de cota SÓ no sucesso (≥1 card): thunk injetado p/ manter o gerador
+  // desacoplado do Supabase. Best-effort — se falhar, ainda entregamos o deck.
+  consumeOnSuccess?: () => Promise<unknown>,
+): Promise<void> {
+  const batches = chunk(questions, BANCO_BATCH_SIZE);
+  const cards: BancoCard[] = [];
+  const covered: string[] = [];
+  const seen = new Set<string>();
+  const models = buildModelChain(model);
+  let dropped = 0; // cards removidos pelo filtro de referência-a-fonte (RULE 3/4).
+
+  for (let i = 0; i < batches.length; i += 1) {
+    const body = buildBancoBody(batches[i], covered.slice(-BANCO_COVERED_CAP), model);
+    const outcome = await callGeminiWithFallback(models, body, apiKey, { maxAttempts: BANCO_MAX_ATTEMPTS });
+    if (outcome.kind !== 'ok') {
+      // 'overloaded' | 'error' | 'network': um lote falhou após a cadeia toda.
+      send('error', { reason: outcome.kind, batch: i + 1, totalBatches: batches.length });
+      return;
+    }
+    const parsed = parseBancoCards(geminiText(outcome.data));
+    for (const c of parsed) {
+      // Rede de segurança determinística: descarta cards cujo FRONT depende de um
+      // material que o aluno não vê (RULE 3/4). NÃO tenta consertar — remove.
+      if (frontReferencesSource(c.front)) {
+        dropped += 1;
+        continue;
+      }
+      const key = c.front.trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        covered.push(c.front);
+        cards.push(c);
+      }
+    }
+    send('progress', { batch: i + 1, totalBatches: batches.length, cardsSoFar: cards.length });
+  }
+
+  // Zero cards (tudo filtrado / só questões TYPE 2): NÃO cria deck vazio e NÃO
+  // cobra cota — emite um erro amigável p/ o app mostrar a mensagem.
+  if (cards.length === 0) {
+    send('error', { reason: 'no_cards' });
+    return;
+  }
+
+  // Sucesso com ≥1 card: AGORA consome a cota (best-effort). Uma falha aqui não
+  // tira o deck do usuário — o trabalho já está feito (entregamos mesmo assim).
+  if (consumeOnSuccess) {
+    try {
+      await consumeOnSuccess();
+    } catch (e) {
+      // Anomalia que afeta receita (deck entregue sem debitar) e some sem rastro;
+      // vale um aviso real, ao contrário das demais falhas que voltam ao cliente.
+      // eslint-disable-next-line no-console
+      console.warn('[banco-provas] quota consume failed after success; deck delivered uncharged:', e);
+    }
+  }
+
+  send('done', { cards, dropped });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -850,6 +1267,110 @@ export default {
     // Se uma origem foi enviada e nao esta liberada, bloqueia.
     if (origin && !cors['Access-Control-Allow-Origin']) {
       return json({ error: 'Origem não permitida.' }, 403, cors);
+    }
+
+    // POST /banco-provas : gera flashcards a partir das questões de um tópico.
+    // Cliente fino: toda a lógica (ler questões, batches, dedupe, prompts) roda
+    // aqui. Progresso via SSE. Conta como UM deck de IA (deckGen) — uma vez só.
+    if (request.method === 'POST' && url.pathname === '/banco-provas') {
+      if (!env.GOOGLE_GEMINI_API_KEY) {
+        return json({ error: 'Chave da IA não configurada no servidor.' }, 500, cors);
+      }
+      if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+        return json({ error: 'Autenticação não configurada no servidor.' }, 500, cors);
+      }
+
+      let bbody: Record<string, unknown>;
+      try {
+        bbody = (await request.json()) as Record<string, unknown>;
+      } catch {
+        return json({ error: 'Corpo JSON inválido.' }, 400, cors);
+      }
+      const vestibular = typeof bbody.vestibular === 'string' ? bbody.vestibular.trim() : '';
+      const disciplina = typeof bbody.disciplina === 'string' ? bbody.disciplina.trim() : '';
+      const topico = typeof bbody.topico === 'string' ? bbody.topico.trim() : '';
+      const bmodel =
+        typeof bbody.model === 'string' && bbody.model.trim() ? bbody.model.trim() : BANCO_DEFAULT_MODEL;
+      if (!vestibular || !disciplina || !topico) {
+        return json({ error: 'Parâmetros obrigatórios: vestibular, disciplina, topico.' }, 400, cors);
+      }
+
+      // Autenticação: JWT do Supabase, validado localmente.
+      const bauth = request.headers.get('Authorization') ?? '';
+      const btoken = bauth.replace(/^Bearer\s+/i, '').trim();
+      if (!btoken) return json({ error: 'Não autenticado.', code: 'unauthenticated' }, 401, cors);
+      const bclaims = await verifySupabaseJwt(btoken, env);
+      if (!bclaims) {
+        return json(
+          { error: 'Sessão inválida ou expirada. Entre novamente.', code: 'unauthenticated' },
+          401,
+          cors,
+        );
+      }
+
+      // Lê as questões ANTES de consumir cota (leitura é grátis): assim um tópico
+      // vazio/erro não gasta um crédito de deck à toa.
+      const questions = await fetchTopicQuestions(env, btoken, vestibular, disciplina, topico);
+      if (questions === null) {
+        return json(
+          { error: 'Não foi possível ler as questões. Tente novamente.', error_code: 'ai_unreachable' },
+          502,
+          cors,
+        );
+      }
+      if (questions.length === 0) {
+        // Sem questões: stream SSE 200 com um único evento de erro (nenhuma cota consumida).
+        return new Response(
+          sseStream(async (send) => {
+            send('error', { reason: 'no_questions' });
+          }),
+          { status: 200, headers: sseHeaders(cors) },
+        );
+      }
+
+      // Cota: CHECA (sem consumir) ANTES de gerar, p/ um usuário no limite receber
+      // o 429/upsell na hora. O CONSUMO real só acontece no FIM, se a geração der
+      // certo e produzir ≥1 card (via consumeOnSuccess em runBancoGeneration) — uma
+      // falha (ou zero cards) não cobra crédito.
+      const usage = await peekUsage(env, btoken, 'deckGen');
+      if (!usage) {
+        return json(
+          {
+            error: 'Não foi possível verificar seu limite de uso. Tente novamente.',
+            code: 'quota_unavailable',
+            error_code: 'quota_unavailable',
+          },
+          503,
+          cors,
+        );
+      }
+      // remaining: -1 ilimitado, >0 permitido, 0 bloqueado (no teto / teto zero).
+      if (usage.remaining === 0) {
+        return json(
+          {
+            error: 'Limite de uso atingido.',
+            code: 'quota_exceeded',
+            error_code: 'quota_exceeded',
+            metric: 'deckGen',
+            period: usage.period,
+            used: usage.used,
+            max_count: usage.max_count,
+          },
+          429,
+          cors,
+        );
+      }
+
+      // Geração por lotes com progresso SSE. O consumo de cota é passado como thunk
+      // e disparado SÓ no sucesso (≥1 card), dentro de runBancoGeneration.
+      return new Response(
+        sseStream((send) =>
+          runBancoGeneration(questions, bmodel, env.GOOGLE_GEMINI_API_KEY, send, () =>
+            consumeQuota(env, btoken, 'deckGen'),
+          ),
+        ),
+        { status: 200, headers: sseHeaders(cors) },
+      );
     }
 
     // POST / : valida usuario, aplica limite e repassa a geracao para o Gemini.

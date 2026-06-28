@@ -140,7 +140,6 @@ describe('buildModelChain', () => {
     expect(buildModelChain('gemini-2.5-flash-lite')).toEqual([
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
-      'gemini-2.0-flash',
     ]);
   });
 
@@ -148,7 +147,6 @@ describe('buildModelChain', () => {
     expect(buildModelChain('gemini-2.5-flash')).toEqual([
       'gemini-2.5-flash',
       'gemini-2.5-flash-lite',
-      'gemini-2.0-flash',
     ]);
   });
 
@@ -157,7 +155,6 @@ describe('buildModelChain', () => {
       'gemini-foo',
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
-      'gemini-2.0-flash',
     ]);
   });
 });
@@ -201,11 +198,10 @@ describe('callGeminiWithFallback', () => {
     const { fetchImpl, calls } = mockFetch({
       'gemini-2.5-flash-lite': () => makeRes(503),
       'gemini-2.5-flash': () => makeRes(503),
-      'gemini-2.0-flash': () => makeRes(503),
     });
     const out = await callGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, fast(fetchImpl));
     expect(out.kind).toBe('overloaded');
-    expect(calls).toHaveLength(12); // 3 models × 4 attempts
+    expect(calls).toHaveLength(8); // 2 models × 4 attempts
   });
 
   it('fails fast on a real Google error (400) without retrying or falling through', async () => {
@@ -349,28 +345,25 @@ describe('streamGeminiWithFallback', () => {
     expect(calls).not.toContain('gemini-2.0-flash');
   });
 
-  it('reports overloaded after the WHOLE chain fails (flash-lite 1 + flash 2 + 2.0 2 = 5 calls)', async () => {
+  it('reports overloaded after the WHOLE chain fails (flash-lite 1 + flash 2 = 3 calls)', async () => {
     const { fetchImpl, calls } = streamCalls({
       'gemini-2.5-flash-lite': () => makeRes(503),
       'gemini-2.5-flash': () => makeRes(503),
-      'gemini-2.0-flash': () => makeRes(503),
     });
     const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
     expect(out.kind).toBe('overloaded');
-    expect(calls).toHaveLength(5); // flash-lite 1 (budgeted) + flash 2 + 2.0-flash 2
+    expect(calls).toHaveLength(3); // flash-lite 1 (budgeted) + flash 2
   });
 
-  it('a LATER model (flash) ignores a long retryDelay and does its quick 2-attempt fallthrough', async () => {
+  it('a LATER model (flash) ignores a long retryDelay and still does its quick 2-attempt fallthrough', async () => {
     const { fetchImpl, calls } = streamCalls({
       'gemini-2.5-flash-lite': () => makeRes(503), // bail to flash
-      // flash gets a 429 with a 30s hint that MUST be ignored: 2 quick attempts, then 2.0.
+      // flash gets a 429 with a 30s hint that MUST be ignored: 2 quick attempts, no 30s wait.
       'gemini-2.5-flash': () => makeRes(429, { error: { details: [{ retryDelay: '30s' }] } }),
-      'gemini-2.0-flash': () => sseRes('hi'),
     });
     const out = await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), {}, KEY, streamDeps(fetchImpl));
-    expect(out.kind).toBe('ok');
+    expect(out.kind).toBe('overloaded'); // flash is the last model now → chain exhausted
     expect(calls.filter((m) => m === 'gemini-2.5-flash')).toHaveLength(2); // quick retry, not a 30s wait
-    expect(calls).toContain('gemini-2.0-flash');
   });
 
   it('fails fast on a real error (400) from flash-lite without fallthrough', async () => {
@@ -398,7 +391,14 @@ describe('streamGeminiWithFallback', () => {
     }) as unknown as typeof fetch;
 
     const reqBody = { contents: [], generationConfig: { maxOutputTokens: 700 } };
-    await streamGeminiWithFallback(buildModelChain('gemini-2.5-flash-lite'), reqBody, KEY, streamDeps(fetchImpl));
+    // Explicit chain incl. gemini-2.0-flash (no longer in the DEFAULT chain) to pin the
+    // PER-MODEL thinking guard: the 2.5-flash family gets thinkingBudget:0, 2.0 does not.
+    await streamGeminiWithFallback(
+      ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+      reqBody,
+      KEY,
+      streamDeps(fetchImpl),
+    );
 
     const gen = (m: string) => bodies[m]?.generationConfig as Record<string, unknown> | undefined;
     // 2.5 family: thinking disabled, and the original generationConfig is preserved.
