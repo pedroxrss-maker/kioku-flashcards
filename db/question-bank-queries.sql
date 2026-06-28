@@ -71,4 +71,32 @@ $$;
 
 grant execute on function public.qb_topicos(text, text) to authenticated, service_role;
 
+
+-- ----------------------------------------------------------------------------
+-- 4) qb_questions(vestibular, disciplina, topico): as questoes COMPLETAS de um
+--    topico, para alimentar a geracao de flashcards por IA. Exclui ANULADAS
+--    (sem resposta correta -> inuteis p/ extrair conhecimento). Mais novas
+--    primeiro (ano desc), depois por id para um desempate estavel.
+-- ----------------------------------------------------------------------------
+create or replace function public.qb_questions(
+  p_vestibular text,
+  p_disciplina text,
+  p_topico text
+)
+returns table(enunciado text, alternativas jsonb, gabarito text, fonte text, ano integer)
+language sql
+stable
+security invoker
+as $$
+  select q.enunciado, q.alternativas, q.gabarito, q.fonte, q.ano
+  from public.questions q
+  where q.vestibular = p_vestibular
+    and q.disciplina = p_disciplina
+    and q.topico = p_topico
+    and q.anulada = false
+  order by q.ano desc, q.id;
+$$;
+
+grant execute on function public.qb_questions(text, text, text) to authenticated, service_role;
+
 -- Fim das consultas do banco de questoes.
