@@ -67,7 +67,7 @@ export const PLANS_DATA: PlanCard[] = [
     key: 'advanced',
     tagline: 'Para quem não aceita esquecer nada',
     monthly: 'R$ 19,90',
-    annual: 'R$ 12,90', // por mês, cobrado uma vez/ano (R$ 154,80) no Kiwify
+    annual: 'R$ 9,90', // por mês, cobrado uma vez/ano (R$ 118,80) no Kiwify
     cta: 'Assinar Avançado',
     features: [
       { ok: true, label: 'Decks de IA ilimitados' },

@@ -18,7 +18,7 @@ const CHECKOUT_LINKS: Record<PaidPlan, Record<BillingCycle, string>> = {
   },
   advanced: {
     monthly: 'https://pay.kiwify.com.br/J6vBJA2',
-    annual: 'https://pay.kiwify.com.br/XGiB4zr',
+    annual: 'https://pay.kiwify.com.br/B7NBtnQ',
   },
 };
 
