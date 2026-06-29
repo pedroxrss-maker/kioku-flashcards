@@ -58,14 +58,14 @@ function WaveBars({ on, reduce, color = 'var(--accent)' }: DemoProps & { color?:
 
 /* ------------------------------------------------------------- 9 demos ----- */
 function DemoAI({ on, reduce }: DemoProps) {
-  // O card revela a resposta sozinho 2,5s DEPOIS que a seção entra em tela (uma
+  // O card revela a resposta sozinho 3,5s DEPOIS que a seção entra em tela (uma
   // vez), e fica revelado — independente de hover.
   const ref = useRef<HTMLDivElement>(null);
   const reached = useInView(ref, { amount: 0.5, once: true });
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (!reached || reduce) return;
-    const t = setTimeout(() => setRevealed(true), 2500);
+    const t = setTimeout(() => setRevealed(true), 3500);
     return () => clearTimeout(t);
   }, [reached, reduce]);
 
@@ -83,7 +83,7 @@ function DemoAI({ on, reduce }: DemoProps) {
           |
         </motion.span>
       </div>
-      {/* card gerado: aparece e, 1,5s após a seção entrar em tela, flipa sozinho
+      {/* card gerado: aparece e, 3,5s após a seção entrar em tela, flipa sozinho
           (frente -> verso) e PERMANECE revelado. */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -406,16 +406,34 @@ function FeatureCard({ icon: Icon, title, desc, Demo, autoOpen = false }: Featur
   // tela escondida atrás, que demonstra o recurso. A demo só roda enquanto o
   // bloco está visível (ou em hover). Sem dobra de página.
   const visible = useInView(ref, { amount: 0.05 });
-  // O primeiro card (`autoOpen`) abre sozinho ao chegar na seção — mobile E
-  // desktop —, levantando a capa devagar para revelar a demo por trás. Dispara
-  // uma vez, quando metade do card fica visível.
+  // O primeiro card (`autoOpen`) dá uma "espiada" sozinho ao chegar na seção —
+  // mobile E desktop: a capa sobe ATÉ A METADE devagar, segura 2s e fecha
+  // suavemente, sugerindo que todo card anima quando o usuário passa o mouse.
+  // Dispara uma vez, quando metade do card fica visível. O hover real sempre
+  // vence (abre 100%).
   const reached = useInView(ref, { amount: 0.5, once: true });
-  const autoLifted = autoOpen && reached;
-  const open = hover || autoLifted;
+  const [peek, setPeek] = useState(false); // capa erguida pela metade (espiada)?
+  const [teasing, setTeasing] = useState(false); // espiada em curso → transição lenta/suave
+  useEffect(() => {
+    if (!autoOpen || !reached || reduce) return;
+    setTeasing(true);
+    const openT = setTimeout(() => setPeek(true), 450); // respiro antes de abrir
+    const closeT = setTimeout(() => setPeek(false), 450 + 900 + 2000); // abre (~0,9s), segura 2s, fecha
+    const doneT = setTimeout(() => setTeasing(false), 450 + 900 + 2000 + 900); // fim da animação de fechar
+    return () => {
+      clearTimeout(openT);
+      clearTimeout(closeT);
+      clearTimeout(doneT);
+    };
+  }, [autoOpen, reached, reduce]);
+
+  const open = hover || peek;
   const demoOn = open || (visible && !reduce);
-  // A abertura automática (sem hover) é mais lenta e com um respiro antes, para
-  // ler como "abrindo"; o hover continua rápido.
-  const autoReveal = autoLifted && !hover;
+  // A capa: o hover abre 100% (rápido); a espiada automática vai só até -50%,
+  // devagar. `slow` mantém a transição suave durante toda a espiada (abrir E
+  // fechar), sem atrasar o hover.
+  const coverY = hover ? '-100%' : peek ? '-50%' : '0%';
+  const slow = teasing && !hover;
 
   return (
     <div
@@ -435,11 +453,10 @@ function FeatureCard({ icon: Icon, title, desc, Demo, autoOpen = false }: Featur
         className="absolute inset-0 p-4 md:p-6"
         style={{ background: '#e8e6e1', border: '1px solid #d6d4ce', borderRadius: 'var(--r-lg)', color: '#17171b' }}
         initial={false}
-        animate={reduce ? { opacity: open ? 0 : 1 } : { y: open ? '-100%' : '0%' }}
+        animate={reduce ? { opacity: open ? 0 : 1 } : { y: coverY }}
         transition={{
-          duration: reduce ? 0.15 : autoReveal ? 1.1 : 0.55,
+          duration: reduce ? 0.15 : slow ? 0.9 : 0.55,
           ease: [0.22, 1, 0.36, 1],
-          delay: !reduce && autoReveal ? 0.45 : 0,
         }}
       >
         <span
