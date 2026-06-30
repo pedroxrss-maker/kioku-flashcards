@@ -7,7 +7,7 @@
   // path, so react-router deep links and refreshes work. This replaces the
   // Pages-style public/_redirects rule, which the Workers assets runtime
   // rejects as an infinite redirect loop.
-  "name": "kioku",
+  "name": "kioku-flashcards",
   "compatibility_date": "2025-06-01",
   "assets": {
     "directory": "./dist",
