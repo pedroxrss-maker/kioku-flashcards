@@ -10,8 +10,8 @@
  */
 import { supabase } from '../../lib/supabase';
 import { useQuery } from '../../db/store';
-import { useAuth } from '../auth/AuthContext';
-import { isUnlimited, quotaRule, remaining as remainingOf } from './limits';
+import { useAuthOptional } from '../auth/AuthContext';
+import { DEFAULT_PLAN, isUnlimited, quotaRule, remaining as remainingOf } from './limits';
 
 interface UsageRow {
   metric: string;
@@ -38,7 +38,11 @@ export interface ImageQuota {
 }
 
 export function useImageQuota(): ImageQuota {
-  const { user, plan } = useAuth();
+  // Optional auth: outside a provider (only in tests) the quota degrades to the
+  // default plan rather than throwing.
+  const auth = useAuthOptional();
+  const user = auth?.user ?? null;
+  const plan = auth?.plan ?? DEFAULT_PLAN;
   // Same key + RPC as PlanUsageBadge → shared cache, always consistent.
   const usage = useQuery<UsageRow[]>(`usage:${user?.id ?? 'none'}`, fetchUsage, []);
   const rule = quotaRule(plan, 'image');

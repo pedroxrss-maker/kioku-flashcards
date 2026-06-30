@@ -298,3 +298,12 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error('useAuth deve ser usado dentro de <AuthProvider>');
   return ctx;
 }
+
+/**
+ * Like useAuth, but returns null instead of throwing when no <AuthProvider> is
+ * mounted. For components that may render in contexts without auth (e.g. the
+ * card editor inside test harnesses) and can degrade gracefully.
+ */
+export function useAuthOptional(): AuthContextValue | null {
+  return useContext(AuthContext);
+}

@@ -27,6 +27,7 @@ import { firstAudioUrl } from '../media/media';
 import { getSignedUrl } from '../media/storage';
 import { generatedFacePath } from '../tts/cardAudio';
 import { repo } from '../../db/repositories';
+import { refetchKeys } from '../../db/store';
 import { newFsrsFields, newSm2Fields } from '../../db/factories';
 import { uuid } from '../../lib/uuid';
 import { useSettings } from '../../db/hooks';
@@ -364,6 +365,8 @@ export function CardEditorModal({
       await recordImageGeneration();
       // feat_image, event-driven (counter in settings) → unlocks instantly, no card scan.
       void recordFeatureUse('image');
+      // Atualiza a cota real (mesma chave do popover) p/ "Restam N" cair na hora.
+      refetchKeys((k) => k.startsWith('usage:'));
       pushToast('success', 'Imagem gerada e anexada ao card.');
     } catch (e) {
       // Free user without image quota → upsell modal instead of an error toast.
