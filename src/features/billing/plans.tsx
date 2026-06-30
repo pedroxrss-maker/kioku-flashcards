@@ -56,7 +56,7 @@ export const PLANS_DATA: PlanCard[] = [
     highlighted: true,
     badge: 'Mais popular',
     features: [
-      { ok: true, label: '5 decks de IA por dia' },
+      { ok: true, label: '10 decks de IA por dia' },
       { ok: true, label: '150 usos de IA por dia' },
       { ok: true, label: '500 áudios por mês' },
       { ok: true, label: 'Geração de 100 imagens por mês' },
