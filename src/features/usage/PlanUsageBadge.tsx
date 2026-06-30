@@ -63,6 +63,23 @@ const PLAN_STYLE: Record<Plan, { color: string; bg: string; border: string }> = 
   },
 };
 
+/** Próxima data em que a cota reseta: 'day' à meia-noite UTC do dia seguinte;
+ *  'month' no 1º dia do mês seguinte (UTC) — alinhado ao current_bucket do SQL. */
+function quotaResetDate(period: string): Date {
+  const now = new Date();
+  return period === 'month'
+    ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+}
+function fmtResetDate(d: Date): string {
+  return d.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** The 4 quotas shown, in order, with compact labels. */
 const METRICS: Array<{ metric: UsageMetric; label: string }> = [
   { metric: 'deckGen', label: 'Decks de IA' },
@@ -107,6 +124,17 @@ export function PlanUsageBadge() {
 
   return (
     <div className="relative shrink-0">
+      {/* Gradiente "IA" (rosa→magenta→violeta) usado para pintar o ícone de
+          Sparkles do badge em TODOS os planos. */}
+      <svg width="0" height="0" aria-hidden style={{ position: 'absolute' }}>
+        <defs>
+          <linearGradient id="kioku-ai-spark" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ff8ec7" />
+            <stop offset="50%" stopColor="#ff3d77" />
+            <stop offset="100%" stopColor="#a855f7" />
+          </linearGradient>
+        </defs>
+      </svg>
       <button
         type="button"
         onClick={toggle}
@@ -115,9 +143,17 @@ export function PlanUsageBadge() {
         aria-label={`Plano ${BADGE_LABEL[plan]} — ver uso`}
         title="Seu plano e uso"
         className="inline-flex items-center gap-1 rounded-full pl-2.5 pr-2 py-1.5 text-xs font-semibold transition-colors"
-        style={{ color: style.color, background: style.bg, border: `1px solid ${style.border}` }}
+        style={
+          plan === 'free'
+            ? {
+                color: '#fff',
+                background: 'linear-gradient(135deg, #4a2a87 0%, #271650 100%)',
+                border: '1px solid color-mix(in srgb, #8b5cf6 50%, transparent)',
+              }
+            : { color: style.color, background: style.bg, border: `1px solid ${style.border}` }
+        }
       >
-        <Sparkles size={13} />
+        <Sparkles size={13} color="url(#kioku-ai-spark)" />
         {BADGE_LABEL[plan]}
         <ChevronDown size={13} style={{ opacity: 0.7 }} />
       </button>
@@ -179,19 +215,28 @@ export function PlanUsageBadge() {
                   if (usage.loaded && used >= rule.limit) valueColor = 'var(--accent)';
                 }
 
+                // Cota atingida (free/básico, limite finito): mostra quando renova.
+                const limitHit = finite && usage.loaded && used >= rule.limit;
                 return (
-                  <div key={metric} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-muted truncate">{label}</span>
-                    <span className="flex items-baseline gap-1 shrink-0">
-                      <span className="tabular-nums font-semibold" style={{ color: valueColor }}>
-                        {valueText}
-                      </span>
-                      {finite && (
-                        <span className="text-[10px] text-muted">
-                          {rule.period === 'day' ? 'hoje' : 'mês'}
+                  <div key={metric} className="flex flex-col gap-0.5 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted truncate">{label}</span>
+                      <span className="flex items-baseline gap-1 shrink-0">
+                        <span className="tabular-nums font-semibold" style={{ color: valueColor }}>
+                          {valueText}
                         </span>
-                      )}
-                    </span>
+                        {finite && (
+                          <span className="text-[10px] text-muted">
+                            {rule.period === 'day' ? 'hoje' : 'mês'}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {limitHit && (
+                      <span className="text-[10px] self-end" style={{ color: 'var(--muted)' }}>
+                        Renova em {fmtResetDate(quotaResetDate(rule.period))}
+                      </span>
+                    )}
                   </div>
                 );
               })}

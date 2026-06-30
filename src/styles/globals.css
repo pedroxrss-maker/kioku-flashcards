@@ -238,8 +238,10 @@
 /* Active sidebar item — variables reproduce the dark look exactly (fg text on
    accent-soft) and flip to accent-on-#f5e5da in light. */
 .nav-active {
-  color: var(--nav-active-fg);
-  background: var(--nav-active-bg);
+  /* Seção ativa: fundo neutro (surface-2), sem o tom vermelho — o destaque de
+     cor fica por conta do bloco de ícone colorido de cada item. */
+  color: var(--fg);
+  background: var(--surface-2);
 }
 
 /* Brand wordmark SVG fills (sidebar neuro/fluency lockup). Driven by vars so
@@ -678,7 +680,7 @@ button.pill.pill-active:hover {
 /* Compact modals + shorter rich-text editors on phones, so tall forms (e.g. the
    card editor) fit the screen with little or no scrolling. */
 .rte-area {
-  min-height: 110px;
+  min-height: 80px;
 }
 @media (max-width: 640px) {
   .modal-box {
@@ -853,6 +855,10 @@ button.pill.pill-active:hover {
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-pop);
   animation: kioku-pop 0.18s ease-out;
+  /* Nunca passar da tela: limita à viewport e rola por dentro. */
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
 .modal-close {
   position: absolute;
@@ -1119,11 +1125,13 @@ button.pill.pill-active:hover {
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1;
-  color: var(--muted);
+  /* Balão sempre visível (não só no hover): no mobile evita o "primeiro toque =
+     hover, segundo = ação" — agora basta UM clique/toque. */
+  color: var(--fg);
   padding: 6px 11px 6px 9px;
   border-radius: var(--r-full);
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
   cursor: pointer;
   transition:
     color 0.18s ease,
@@ -1431,6 +1439,38 @@ button.pill.pill-active:hover {
 @keyframes trace-spin {
   to {
     --trace-angle: 360deg;
+  }
+}
+
+/* Destaque contínuo do card "Gerar deck com IA": um ponto suave de luz percorre
+   a borda sem parar (reaproveita --trace-angle/trace-spin do tech-border). É um
+   ÚNICO ponto com ramp suave — não dois segmentos. `--hero-beam-color` dá a cor.
+   Aplicado pela prop `outline` do HeroCard (classe .hero-beam). */
+.hero-beam::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--trace-angle),
+    transparent 0deg,
+    transparent 296deg,
+    color-mix(in srgb, var(--hero-beam-color, #8b5cf6) 92%, #fff) 338deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: trace-spin 4.5s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-beam::before {
+    animation: none;
   }
 }
 

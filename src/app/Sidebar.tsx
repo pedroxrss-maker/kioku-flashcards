@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NotificationBell } from '../features/notifications/NotificationBell';
-import { useRecentLogs, useDecks, useSettings } from '../db/hooks';
+import { useRecentLogs, useSettings } from '../db/hooks';
 import { studiedToday } from '../features/stats/compute';
 import { cn } from '../lib/cn';
 import { APP_VERSION, NAV_ITEMS } from './nav';
@@ -101,9 +101,6 @@ function DailyGoalMini() {
 
 /** Persistent desktop sidebar (~210px). */
 export function Sidebar() {
-  const decks = useDecks();
-  const recent = [...decks].slice(-6).reverse();
-
   return (
     <aside
       className="hidden md:flex md:flex-col shrink-0 border-r sticky top-0 h-screen"
@@ -113,39 +110,21 @@ export function Sidebar() {
         <Wordmark />
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2">
+      <nav className="flex flex-col gap-1 px-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink key={item.to} to={item.to} end={item.end} className={navItemClass}>
-              <Icon size={18} strokeWidth={2} />
+              {/* Ícone colorido por item, sem o bloco quadrado (só o ícone). */}
+              <Icon size={18} strokeWidth={2} className="shrink-0" style={{ color: item.color }} />
               <span>{item.label}</span>
             </NavLink>
           );
         })}
       </nav>
 
-      {recent.length > 0 && (
-        <div className="mt-7 px-4 flex-1 overflow-y-auto">
-          <p className="mono text-[10px] text-muted mb-3">Recentes</p>
-          <ul className="flex flex-col gap-1.5">
-            {recent.map((d) => (
-              <li key={d.id}>
-                <NavLink
-                  to={`/decks/${d.id}`}
-                  className="recent-deck flex items-center gap-2.5 text-[13px] text-muted hover:text-fg py-1"
-                >
-                  <span
-                    className="shrink-0 rounded-full"
-                    style={{ width: 9, height: 9, background: d.color }}
-                  />
-                  <span className="truncate">{d.name}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Espaçador: empurra a meta diária + rodapé para a base da sidebar. */}
+      <div className="flex-1" aria-hidden />
 
       <DailyGoalMini />
 

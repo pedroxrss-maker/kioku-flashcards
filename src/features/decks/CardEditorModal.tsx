@@ -649,7 +649,7 @@ export function CardEditorModal({
           it to the card (back for basic/cloze, front for type-in). Hidden when the
           image proxy isn't configured. */}
       {isImageGenConfigured() && (
-        <div className="mt-3 pt-3 sm:mt-5 sm:pt-4 border-t" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 pt-3 sm:mt-3 sm:pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
@@ -681,7 +681,7 @@ export function CardEditorModal({
       )}
 
       <label
-        className="flex items-center gap-2.5 mt-3 pt-3 sm:mt-5 sm:pt-4 border-t cursor-pointer select-none"
+        className="flex items-center gap-2.5 mt-3 pt-3 sm:mt-3 sm:pt-3 border-t cursor-pointer select-none"
         style={{ borderColor: 'var(--line)' }}
       >
         <Volume2 size={16} className="text-muted shrink-0" />
@@ -696,7 +696,7 @@ export function CardEditorModal({
 
       {isTtsConfigured() && (
         <div
-          className="mt-3 p-3 sm:mt-5 sm:p-3.5 rounded-[var(--r-md)]"
+          className="mt-3 p-3 sm:mt-3 sm:p-3 rounded-[var(--r-md)]"
           style={{
             border: '1px solid var(--accent)',
             background: 'color-mix(in srgb, var(--accent) 8%, transparent)',

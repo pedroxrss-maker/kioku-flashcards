@@ -10,8 +10,10 @@ import { CardRow } from '../features/decks/CardRow';
 import { CardEditorModal } from '../features/decks/CardEditorModal';
 import { DeckSettingsModal } from '../features/decks/DeckSettingsModal';
 import { AlgoBadge } from '../features/decks/AlgoBadge';
-import { DeckAvatar } from '../features/decks/deckIcons';
+import { DeckAvatar, DECK_ICONS } from '../features/decks/deckIcons';
 import { ExportButton } from '../features/importer/ExportButton';
+import { Modal } from '../components/Modal';
+import { repo } from '../db/repositories';
 import { countCards } from '../lib/deckStats';
 import { stripHtml } from '../lib/text';
 import {
@@ -43,6 +45,9 @@ export function DeckDetail() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Menu da foto do deck (ver / alterar / remover) ao clicar no avatar.
+  const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
+  const [viewPhotoOpen, setViewPhotoOpen] = useState(false);
   const [audioDialogOpen, setAudioDialogOpen] = useState(false);
   const [cardQuery, setCardQuery] = useState('');
 
@@ -173,7 +178,68 @@ export function DeckDetail() {
                 Biblioteca
               </BackLink>
               <div className="flex items-center gap-3">
-                <DeckAvatar deck={deck} size={52} />
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoMenuOpen((o) => !o)}
+                    aria-haspopup="menu"
+                    aria-expanded={photoMenuOpen}
+                    title="Foto do deck"
+                    className="block rounded-[var(--r-sm)]"
+                  >
+                    <DeckAvatar deck={deck} size={52} />
+                  </button>
+                  {photoMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setPhotoMenuOpen(false)} />
+                      <div
+                        className="absolute left-0 top-full mt-1 z-50 w-40 py-1"
+                        style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--line-strong)',
+                          borderRadius: 'var(--r-md)',
+                          boxShadow: 'var(--shadow-pop)',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="flex w-full items-center px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                          onClick={() => {
+                            setPhotoMenuOpen(false);
+                            setViewPhotoOpen(true);
+                          }}
+                        >
+                          Ver foto
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                          onClick={() => {
+                            setPhotoMenuOpen(false);
+                            setSettingsOpen(true);
+                          }}
+                        >
+                          Alterar foto
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center px-3 py-2 text-sm hover:bg-[color:var(--surface-2)] transition-colors"
+                          onClick={() => {
+                            setPhotoMenuOpen(false);
+                            // Remover foto: atribui um ícone aleatório como nova foto do deck.
+                            const keys = Object.keys(DECK_ICONS);
+                            const rand = keys[Math.floor(Math.random() * keys.length)];
+                            void repo.saveSettings({
+                              deckIcons: { ...(settings?.deckIcons ?? {}), [deck.id]: rand },
+                            });
+                          }}
+                        >
+                          Remover foto
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <div className="min-w-0">
                   {deck.category && (
                     <p className="mono text-[11px] mb-1" style={{ color: deck.color }}>
@@ -249,7 +315,6 @@ export function DeckDetail() {
             <Button variant="default" icon={<Plus size={16} />} onClick={addCard}>
               Adicionar card
             </Button>
-            <ExportButton deckId={deck.id} size="md" />
             {isTtsConfigured() && (
               <Button
                 variant="default"
@@ -259,6 +324,10 @@ export function DeckDetail() {
                 Gerar áudio
               </Button>
             )}
+            {/* Exportar sempre no canto inferior direito do bloco. */}
+            <div className="ml-auto">
+              <ExportButton deckId={deck.id} size="md" />
+            </div>
           </div>
         </div>
       </section>
@@ -400,6 +469,12 @@ export function DeckDetail() {
         deckId={deck.id}
         deckName={deck.name}
       />
+      {/* Ver foto: mostra o avatar do deck em tamanho grande. */}
+      <Modal open={viewPhotoOpen} onClose={() => setViewPhotoOpen(false)} title="Foto do deck" width={360}>
+        <div className="flex justify-center py-4">
+          <DeckAvatar deck={deck} size={180} />
+        </div>
+      </Modal>
     </div>
   );
 }

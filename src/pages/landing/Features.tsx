@@ -58,14 +58,15 @@ function WaveBars({ on, reduce, color = 'var(--accent)' }: DemoProps & { color?:
 
 /* ------------------------------------------------------------- 9 demos ----- */
 function DemoAI({ on, reduce }: DemoProps) {
-  // O card revela a resposta sozinho 3,5s DEPOIS que a seção entra em tela (uma
-  // vez), e fica revelado — independente de hover.
+  // O card revela a resposta sozinho 1,5s DEPOIS que a seção entra em tela (uma
+  // vez), e fica revelado — independente de hover. (Acompanha a capa, que abre
+  // sozinha em 1s: a capa abre e ~0,5s depois o card flipa.)
   const ref = useRef<HTMLDivElement>(null);
   const reached = useInView(ref, { amount: 0.5, once: true });
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (!reached || reduce) return;
-    const t = setTimeout(() => setRevealed(true), 3500);
+    const t = setTimeout(() => setRevealed(true), 1500);
     return () => clearTimeout(t);
   }, [reached, reduce]);
 
@@ -398,24 +399,35 @@ function DemoScreen({ children }: { children: ReactNode }) {
   );
 }
 
-function FeatureCard({ icon: Icon, title, desc, Demo, autoOpen = false }: Feature & { autoOpen?: boolean }) {
+function FeatureCard({
+  icon: Icon,
+  title,
+  desc,
+  Demo,
+  peekOnView = false,
+  autoOpenAfter,
+}: Feature & { peekOnView?: boolean; autoOpenAfter?: number }) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState(false);
+  // Assim que o usuário passa o mouse, as animações automáticas (espiada /
+  // auto-open) são desligadas e o card obedece SÓ ao hover, como os demais —
+  // abrindo no hover e fechando ao sair.
+  const [tookOver, setTookOver] = useState(false);
   // Ao passar o mouse, a capa off-white sobe (de baixo para cima) e revela a
   // tela escondida atrás, que demonstra o recurso. A demo só roda enquanto o
   // bloco está visível (ou em hover). Sem dobra de página.
   const visible = useInView(ref, { amount: 0.05 });
-  // O primeiro card (`autoOpen`) dá uma "espiada" sozinho ao chegar na seção —
-  // mobile E desktop: a capa sobe ATÉ A METADE devagar, segura 2s e fecha
-  // suavemente, sugerindo que todo card anima quando o usuário passa o mouse.
-  // Dispara uma vez, quando metade do card fica visível. O hover real sempre
-  // vence (abre 100%).
+  // Dispara uma vez, quando metade do card fica visível na seção.
   const reached = useInView(ref, { amount: 0.5, once: true });
+
+  // ESPIADA (peek) — card "Importar do YouTube": a capa sobe ATÉ A METADE
+  // devagar, segura 2s e fecha suavemente, sugerindo que o card anima no hover.
+  // O hover real sempre vence (abre 100%).
   const [peek, setPeek] = useState(false); // capa erguida pela metade (espiada)?
   const [teasing, setTeasing] = useState(false); // espiada em curso → transição lenta/suave
   useEffect(() => {
-    if (!autoOpen || !reached || reduce) return;
+    if (!peekOnView || !reached || reduce) return;
     setTeasing(true);
     const openT = setTimeout(() => setPeek(true), 450); // respiro antes de abrir
     const closeT = setTimeout(() => setPeek(false), 450 + 900 + 2000); // abre (~0,9s), segura 2s, fecha
@@ -425,22 +437,37 @@ function FeatureCard({ icon: Icon, title, desc, Demo, autoOpen = false }: Featur
       clearTimeout(closeT);
       clearTimeout(doneT);
     };
-  }, [autoOpen, reached, reduce]);
+  }, [peekOnView, reached, reduce]);
 
-  const open = hover || peek;
+  // ABERTURA AUTOMÁTICA COMPLETA — card "Geração de cards por IA": a capa sobe
+  // 100% (devagar) `autoOpenAfter` ms depois de chegar na seção e PERMANECE
+  // aberta, deixando a demo rodar. Hover continua funcionando normalmente.
+  const [autoFull, setAutoFull] = useState(false);
+  useEffect(() => {
+    if (autoOpenAfter == null || !reached || reduce) return;
+    const t = setTimeout(() => setAutoFull(true), autoOpenAfter);
+    return () => clearTimeout(t);
+  }, [autoOpenAfter, reached, reduce]);
+
+  // Antes da 1ª interação valem as animações automáticas; depois (`tookOver`),
+  // só o hover controla — fechado em repouso, aberto no hover.
+  const auto = !tookOver;
+  const open = hover || (auto && (peek || autoFull));
   const demoOn = open || (visible && !reduce);
-  // A capa: o hover abre 100% (rápido); a espiada automática vai só até -50%,
-  // devagar. `slow` mantém a transição suave durante toda a espiada (abrir E
-  // fechar), sem atrasar o hover.
-  const coverY = hover ? '-100%' : peek ? '-50%' : '0%';
-  const slow = teasing && !hover;
+  // A capa: hover e auto-open sobem 100%; a espiada vai só até -50%. `slow`
+  // mantém a transição suave nas animações automáticas, sem atrasar o hover.
+  const coverY = hover || (auto && autoFull) ? '-100%' : auto && peek ? '-50%' : '0%';
+  const slow = !hover && auto && (teasing || autoFull);
 
   return (
     <div
       ref={ref}
       className="relative overflow-hidden h-full min-h-[170px] sm:min-h-[210px]"
       style={{ borderRadius: 'var(--r-lg)' }}
-      onMouseEnter={() => setHover(true)}
+      onMouseEnter={() => {
+        setHover(true);
+        setTookOver(true);
+      }}
       onMouseLeave={() => setHover(false)}
     >
       {/* a tela escondida (atrás da capa), com a animação do recurso */}
@@ -502,7 +529,10 @@ export function Features() {
       <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-7 md:gap-x-11 gap-y-5 md:gap-y-6 mt-10">
         {FEATURES.map((f, i) => (
           <StaggerCard key={f.title} className="h-full">
-            <FeatureCard {...f} autoOpen={i === 0} />
+            {/* "Importar do YouTube" (i===1) dá a espiada pela metade ao rolar a
+                seção; "Geração de cards por IA" (i===0) abre 100% sozinho 3s
+                depois de chegar na seção e mostra a demo. */}
+            <FeatureCard {...f} peekOnView={i === 1} autoOpenAfter={i === 0 ? 1000 : undefined} />
           </StaggerCard>
         ))}
       </StaggerGroup>

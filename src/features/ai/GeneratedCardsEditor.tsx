@@ -24,6 +24,10 @@ interface GeneratedCardsEditorProps {
   /** The plan grants unlimited images — show "ilimitadas" instead of a number. */
   imagesUnlimited?: boolean;
   atImageCap?: boolean;
+  /** Plano não cobre imagens (limite 0, ex.: gratuito) — mostra CTA de upgrade. */
+  imagesNotCovered?: boolean;
+  /** Abre o popup de planos (fade-in) ao clicar em "ATUALIZAR PLANO". */
+  onUpgrade?: () => void;
   /** Bump to clear the image selection (e.g. after the cards are regenerated). */
   resetKey?: number;
   /** Seed the per-card image selection once on mount (for draft restore). */
@@ -48,6 +52,8 @@ export function GeneratedCardsEditor({
   imagesRemaining = 0,
   imagesUnlimited = false,
   atImageCap = false,
+  imagesNotCovered = false,
+  onUpgrade,
   resetKey = 0,
   initialImageSelection,
   onImageSelectionChange,
@@ -121,7 +127,7 @@ export function GeneratedCardsEditor({
   const willGenerate = imagesUnlimited ? selCount : Math.min(selCount, imagesRemaining);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:flex-1 lg:min-h-0">
       <div className="flex items-center justify-between">
         <p className="mono text-sm text-muted">
           {cards.length} {cards.length === 1 ? 'card' : 'cards'}
@@ -154,7 +160,19 @@ export function GeneratedCardsEditor({
             </button>
           </div>
           <p className="text-[11px] text-muted" style={{ lineHeight: 1.45 }}>
-            {atImageCap ? (
+            {imagesNotCovered ? (
+              <span style={{ color: 'var(--accent)' }}>
+                seu plano não cobre imagens.{' '}
+                <button
+                  type="button"
+                  onClick={onUpgrade}
+                  className="font-bold hover:underline"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  ATUALIZAR PLANO
+                </button>
+              </span>
+            ) : atImageCap ? (
               <span style={{ color: 'var(--accent)' }}>
                 Limite de imagens do seu plano atingido.
               </span>
@@ -186,7 +204,7 @@ export function GeneratedCardsEditor({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-2 overflow-y-auto pr-1 max-h-[55vh] lg:max-h-none lg:flex-1 lg:min-h-0">
         <AnimatePresence mode="popLayout" initial={false}>
         {cards.map((c, i) => (
           <motion.div
@@ -229,7 +247,8 @@ export function GeneratedCardsEditor({
             <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-2">
               <textarea
                 className="field"
-                rows={2}
+                rows={3}
+                style={{ fontSize: 11, lineHeight: 1.4 }}
                 value={c.front}
                 placeholder="Frente"
                 aria-label={`Frente do card ${i + 1}`}
@@ -237,7 +256,8 @@ export function GeneratedCardsEditor({
               />
               <textarea
                 className="field"
-                rows={2}
+                rows={3}
+                style={{ fontSize: 11, lineHeight: 1.4 }}
                 value={c.back}
                 placeholder="Verso"
                 aria-label={`Verso do card ${i + 1}`}
@@ -257,9 +277,10 @@ export function GeneratedCardsEditor({
         </AnimatePresence>
       </div>
 
-      <div className="flex justify-end">
+      <div>
         <Button
           variant="accent"
+          className="w-full justify-center"
           onClick={() => onConfirm(imagesEnabled ? [...imageSel].sort((a, b) => a - b) : [])}
           disabled={busy || cards.length === 0}
         >

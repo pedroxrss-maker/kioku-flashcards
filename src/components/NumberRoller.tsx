@@ -110,9 +110,20 @@ export function NumberRoller({
   const hasNext = next <= max;
 
   return (
-    <div
-      ref={rootRef}
-      role="spinbutton"
+    <div className="flex items-stretch gap-2">
+      <button
+        type="button"
+        onClick={() => set(value - step)}
+        disabled={value - step < min}
+        aria-label="Diminuir"
+        className="shrink-0 grid place-items-center rounded-[var(--r-md)] disabled:opacity-40"
+        style={{ width: 48, fontSize: 22, background: 'var(--surface-2)', border: '1px solid var(--line)', color: 'var(--fg)' }}
+      >
+        −
+      </button>
+      <div
+        ref={rootRef}
+        role="spinbutton"
       aria-label={ariaLabel}
       aria-valuenow={value}
       aria-valuemin={min}
@@ -132,7 +143,7 @@ export function NumberRoller({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onPointerLeave={endDrag}
-      className="relative select-none overflow-hidden outline-none"
+      className="relative select-none overflow-hidden outline-none flex-1"
       style={{
         height: ROW_H * 3,
         background: 'var(--surface-2)',
@@ -228,6 +239,17 @@ export function NumberRoller({
           </AnimatePresence>
         </div>
       )}
+      </div>
+      <button
+        type="button"
+        onClick={() => set(value + step)}
+        disabled={value + step > max}
+        aria-label="Aumentar"
+        className="shrink-0 grid place-items-center rounded-[var(--r-md)] disabled:opacity-40"
+        style={{ width: 48, fontSize: 22, background: 'var(--surface-2)', border: '1px solid var(--line)', color: 'var(--fg)' }}
+      >
+        +
+      </button>
     </div>
   );
 }

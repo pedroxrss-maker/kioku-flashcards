@@ -66,64 +66,75 @@ export function DeckBrowser() {
     setCategory(c);
   }
 
+  // Carrossel de filtros de categoria (Todos / Geral / …). Renderizado ABAIXO da
+  // busca (ver mais adiante). Swipe nele rola as pills e NÃO dispara o swipe entre
+  // abas do app-shell, então paramos a propagação do toque no mobile.
+  const categoryFilters = (
+    <div
+      className="flex flex-nowrap gap-2 overflow-x-auto hide-scrollbar mb-5"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
+      {[null, ...categories].map((c) => {
+        const active = category === c;
+        return (
+          <button
+            key={c ?? '__all'}
+            type="button"
+            onClick={() => selectCategory(c)}
+            className="pill shrink-0"
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              color: active ? '#fff' : undefined,
+              borderColor: active ? 'transparent' : undefined,
+            }}
+          >
+            {active && (
+              <motion.span
+                layoutId="cat-pill"
+                transition={{ type: 'spring', stiffness: 460, damping: 38 }}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'var(--accent)',
+                  borderRadius: 'var(--r-full)',
+                  zIndex: 0,
+                }}
+              />
+            )}
+            <span
+              className="inline-flex items-center gap-1.5"
+              style={{ position: 'relative', zIndex: 1 }}
+            >
+              {(() => {
+                const { Icon, color } = categoryIcon(c);
+                return <Icon size={14} style={{ color: active ? '#fff' : color }} />;
+              })()}
+              {c ?? 'Todos'}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div>
-      {/* Category filters: a horizontal scrollable carousel (no wrap). Swiping it
-          must scroll the pills, NOT trigger the app-shell's swipe-between-tabs nav
-          (AppLayout listens for touch swipes on an ancestor) — so we stop the
-          touch from bubbling out of this carousel on mobile. */}
-      <div
-        className="flex flex-nowrap gap-2 overflow-x-auto hide-scrollbar mb-5"
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
-      >
-          {[null, ...categories].map((c) => {
-            const active = category === c;
-            return (
-              <button
-                key={c ?? '__all'}
-                type="button"
-                onClick={() => selectCategory(c)}
-                className="pill shrink-0"
-                style={{
-                  position: 'relative',
-                  overflow: 'hidden',
-                  color: active ? '#fff' : undefined,
-                  borderColor: active ? 'transparent' : undefined,
-                }}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="cat-pill"
-                    transition={{ type: 'spring', stiffness: 460, damping: 38 }}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background: 'var(--accent)',
-                      borderRadius: 'var(--r-full)',
-                      zIndex: 0,
-                    }}
-                  />
-                )}
-                <span
-                  className="inline-flex items-center gap-1.5"
-                  style={{ position: 'relative', zIndex: 1 }}
-                >
-                  {(() => {
-                    const { Icon, color } = categoryIcon(c);
-                    return <Icon size={14} style={{ color: active ? '#fff' : color }} />;
-                  })()}
-                  {c ?? 'Todos'}
-                </span>
-              </button>
-            );
-          })}
-      </div>
-
+      {/* Gradiente "IA" (rosa→magenta→violeta) para pintar o ícone do card de IA. */}
+      <svg width="0" height="0" aria-hidden style={{ position: 'absolute' }}>
+        <defs>
+          <linearGradient id="kioku-ai-spark" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ff8ec7" />
+            <stop offset="50%" stopColor="#ff3d77" />
+            <stop offset="100%" stopColor="#a855f7" />
+          </linearGradient>
+        </defs>
+      </svg>
       {/* Create / generate — two prominent cards (lado a lado também no mobile). */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-5">
         <HeroCard
-          color="var(--accent)"
+          color="var(--accent-blue)"
           onClick={() => setCreateOpen(true)}
           icon={<Plus size={26} />}
           iconShape="circle"
@@ -133,10 +144,11 @@ export function DeckBrowser() {
         <HeroCard
           color={AI_PURPLE}
           to="/generate"
-          icon={<Sparkles size={24} />}
+          icon={<Sparkles size={24} color="url(#kioku-ai-spark)" />}
           iconShape="tile"
           title="Gerar deck com IA"
           subtitle="Descreva o que você quer estudar"
+          outline
         />
       </div>
 
@@ -154,6 +166,9 @@ export function DeckBrowser() {
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
+
+      {/* Filtros de categoria (Todos / Geral / …): logo ABAIXO da busca. */}
+      {categoryFilters}
 
       {/* Mobile: a 2-column grid of color deck cards. Tapping a card opens the
           deck overview (no "Estudar" button); decks with subdecks expand. */}
@@ -290,6 +305,7 @@ function HeroCard({
   iconShape,
   title,
   subtitle,
+  outline = false,
 }: {
   color: string;
   to?: string;
@@ -298,6 +314,8 @@ function HeroCard({
   iconShape: 'circle' | 'tile';
   title: string;
   subtitle: string;
+  /** Contorno contínuo bem visível (em vez da borda sutil padrão). */
+  outline?: boolean;
 }) {
   const inner = (
     <>
@@ -305,7 +323,7 @@ function HeroCard({
         aria-hidden
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, ${color} 22%, transparent), transparent 60%)`,
+          background: `radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, ${color} 33%, transparent), transparent 60%)`,
         }}
       />
       {/* Ink-drop fill that floods the surface on hover (see .hero-ink in globals.css). */}
@@ -319,13 +337,13 @@ function HeroCard({
           style={{
             borderRadius: iconShape === 'circle' ? '50%' : 'var(--r-md)',
             background:
-              iconShape === 'circle' ? color : `color-mix(in srgb, ${color} 22%, var(--surface-2))`,
+              iconShape === 'circle' ? color : `color-mix(in srgb, ${color} 33%, var(--surface-2))`,
             color: iconShape === 'circle' ? '#fff' : color,
             border:
               iconShape === 'tile'
-                ? `1px solid color-mix(in srgb, ${color} 45%, transparent)`
+                ? `1px solid color-mix(in srgb, ${color} 68%, transparent)`
                 : undefined,
-            boxShadow: `0 10px 26px color-mix(in srgb, ${color} 40%, transparent)`,
+            boxShadow: `0 10px 26px color-mix(in srgb, ${color} 60%, transparent)`,
           }}
         >
           {icon}
@@ -346,12 +364,18 @@ function HeroCard({
     position: 'relative' as const,
     overflow: 'hidden' as const,
     borderRadius: 'var(--r-md)',
-    border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
-    background: `linear-gradient(160deg, color-mix(in srgb, ${color} 12%, var(--surface)) 0%, var(--surface) 70%)`,
-  };
+    // Base sutil sempre; com `outline` o destaque vem do ponto que circunda
+    // (classe .hero-beam), então a borda fica discreta para o ponto se sobressair.
+    border: `1px solid color-mix(in srgb, ${color} ${outline ? 68 : 52}%, transparent)`,
+    background: `linear-gradient(160deg, color-mix(in srgb, ${color} 18%, var(--surface)) 0%, var(--surface) 80%)`,
+    // Cor do ponto de luz que percorre a borda (ver .hero-beam em globals.css).
+    ...(outline ? { '--hero-beam-color': color } : {}),
+  } as CSSProperties;
   // ~25% shorter on mobile (compact padding + lower min-height); full card on sm+.
+  // `hero-beam`: ponto suave de luz que circunda a borda continuamente (só no card de IA).
   const className =
-    'hero-card hover-lift flex items-center justify-center px-3 py-3 sm:px-6 sm:py-[24px] min-h-[84px] sm:min-h-[128px]';
+    'hero-card hover-lift flex items-center justify-center px-3 py-3 sm:px-6 sm:py-[24px] min-h-[84px] sm:min-h-[128px]' +
+    (outline ? ' hero-beam' : '');
 
   return to ? (
     <Link to={to} className={className} style={style}>

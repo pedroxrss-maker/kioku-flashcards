@@ -5,7 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Flame,
-  Layers,
+  Gauge,
   LogOut,
   MoreVertical,
   Pencil,
@@ -13,8 +13,8 @@ import {
   Plus,
   Search,
   Settings2,
-  Target,
   Trash2,
+  TrendingUp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useDeckCounts, useDecks, useRecentLogs, useReviewCount, useSettings, useStreak } from '../db/hooks';
@@ -65,6 +65,8 @@ function StatCard({
   sub,
   color = 'var(--accent)',
   iconClassName,
+  compact = false,
+  className = '',
 }: {
   icon: LucideIcon;
   label: string;
@@ -72,21 +74,40 @@ function StatCard({
   sub: string;
   color?: string;
   iconClassName?: string;
+  /** No mobile: vira uma barra fina (sem ícone, label+valor numa linha, sem sub),
+   *  ~metade da altura. A partir de sm volta ao card normal. */
+  compact?: boolean;
+  className?: string;
 }) {
   return (
-    <Panel className="p-3 md:p-4 flex items-center gap-3">
+    <Panel
+      className={`flex items-center gap-2.5 ${compact ? 'justify-center sm:justify-start px-2 py-1 sm:p-2.5 md:p-3' : 'p-2.5 md:p-3'} ${className}`}
+      style={{ border: `1px solid color-mix(in srgb, ${color} 30%, transparent)` }}
+    >
+      {/* Tile do ícone (sem glow). Escondido no modo compacto do mobile. */}
       <span
-        className="icon-tile shrink-0"
-        style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}
+        className={`shrink-0 place-items-center rounded-[var(--r-md)] ${compact ? 'hidden sm:grid' : 'grid'}`}
+        style={{
+          width: 38,
+          height: 38,
+          background: `color-mix(in srgb, ${color} 16%, var(--surface-2))`,
+          border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+          color,
+        }}
       >
         <Icon size={18} className={iconClassName} />
       </span>
-      <div className="min-w-0">
-        <p className="text-xs text-muted truncate">{label}</p>
-        <p className="display" style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
+      <div className={`min-w-0 ${compact ? 'flex items-baseline gap-2 sm:block' : ''}`}>
+        <p className="text-[11px] text-muted truncate">{label}</p>
+        <p className={`display font-bold leading-[1.1] ${compact ? 'text-[15px] sm:text-[20px]' : 'text-[20px]'}`}>
           {value}
         </p>
-        <p className="text-[11px] mt-0.5 truncate" style={{ color }}>{sub}</p>
+        <p
+          className={`text-[10px] mt-0.5 items-center gap-1 ${compact ? 'hidden sm:inline-flex' : 'inline-flex'}`}
+          style={{ color }}
+        >
+          <TrendingUp size={10} className="shrink-0" /> {sub}
+        </p>
       </div>
     </Panel>
   );
@@ -357,9 +378,14 @@ export function Home() {
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Ícones à direita: deslizam para fora (side-slide) e somem enquanto a busca mobile está aberta. */}
+          {/* Ícones à direita (sino/amigos/plano/perfil). No MOBILE o grupo ocupa a
+              largura entre a lupa e o Sair e distribui os ícones por igual
+              (flex-1 + justify-evenly), proporcional à tela — nada de buracos. No
+              DESKTOP volta a ser compacto e fixo (sm:flex-none): a busca é quem
+              cede espaço e o perfil nunca encosta no Sair. Some (side-slide)
+              enquanto a busca mobile está aberta. */}
           <motion.div
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 flex-1 justify-evenly sm:flex-none sm:justify-start"
             animate={isMobile && searchOpen ? { opacity: 0, x: 28 } : { opacity: 1, x: 0 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{ pointerEvents: isMobile && searchOpen ? 'none' : undefined }}
@@ -435,13 +461,14 @@ export function Home() {
             </AnimatePresence>
           </div>
           </motion.div>
-          {/* Sair sempre na extremidade direita (ml-auto), em qualquer tela. */}
+          {/* Sair na extremidade direita: no desktop o espaçador empurra; no mobile
+              o grupo de ícones (flex-1) ocupa o meio e deixa o Sair na borda. */}
           <button
             type="button"
             onClick={() => void signOut()}
             aria-label="Sair"
             title="Sair"
-            className="ml-auto inline-flex shrink-0 items-center justify-center rounded-[var(--r-sm)] p-2.5 text-white transition-opacity hover:opacity-90"
+            className="inline-flex shrink-0 items-center justify-center rounded-[var(--r-sm)] p-2.5 text-white transition-opacity hover:opacity-90"
             style={{ background: 'var(--accent)' }}
           >
             <LogOut size={18} />
@@ -487,12 +514,14 @@ export function Home() {
         </div>
       </Panel>
 
-      {/* Stat cards */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <StatCard icon={Layers} label="Decks criados" value={stats.totalDecks} sub={`+${stats.decksMonth} este mês`} color="var(--stat-blue)" />
-        <StatCard icon={CheckCircle2} label="Cards estudados" value={stats.totalReviews} sub={`+${stats.reviews7d} esta semana`} color="var(--stat-green)" />
+      {/* Stat cards: apenas 3 blocos — sequência atual, cards na semana e a média
+          de cards/segundo hoje. Telas estreitas (< sm): "sequência atual" e "cards
+          na semana" lado a lado; "cards por segundo" numa barra abaixo, ocupando a
+          largura das duas e com ~metade da altura. A partir de sm: as três em linha. */}
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
         <StatCard icon={Flame} label="Sequência atual" value={`${stats.streak} ${stats.streak === 1 ? 'dia' : 'dias'}`} sub={`Melhor: ${stats.best} dias`} color="var(--stat-orange)" iconClassName="flame-anim" />
-        <StatCard icon={Target} label="Taxa de acertos" value={`${stats.accuracy7d}%`} sub="Últimos 7 dias" color="var(--stat-purple)" />
+        <StatCard icon={CheckCircle2} label="Cards na semana" value={stats.reviews7d} sub="Últimos 7 dias" color="var(--stat-green)" />
+        <StatCard icon={Gauge} label="Cards por segundo" value={(stats.todayAvgSec > 0 ? 1 / stats.todayAvgSec : 0).toFixed(2)} sub="Média de hoje" color="var(--stat-purple)" compact className="col-span-2 sm:col-span-1" />
       </section>
 
       {/* Continue studying — full width */}

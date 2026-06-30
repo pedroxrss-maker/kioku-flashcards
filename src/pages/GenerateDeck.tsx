@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, ClipboardList, FileText, Globe, Loader2, Sparkles, Trash2, Type, Volume2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ClipboardList, FileText, Globe, Loader2, Sparkles, Trash2, Type, Volume2, Wand2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/Button';
@@ -121,6 +121,8 @@ export function GenerateDeck() {
   const [mode, setMode] = useState<Mode>('topic');
   // Generation mode (preset): Q&A by default, or literal sentence transcription.
   const [genMode, setGenMode] = useState<GenerationMode>('qa');
+  // Quais blocos de "modo de geração" estão com a descrição aberta (envelope).
+  const [genDescOpen, setGenDescOpen] = useState<Record<string, boolean>>({});
   const [sourceDir, setSourceDir] = useState(0);
   const [notes, setNotes] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
@@ -530,13 +532,19 @@ export function GenerateDeck() {
         // column (sliding to the left via Framer `layout`) and the preview emerges
         // from it on the right. DOM order (form first) gives form-left / preview-
         // right on desktop and form-top / preview-below on mobile.
-        <div className="flex flex-col lg:flex-row gap-6 items-start justify-center">
+        <div className="flex flex-col lg:flex-row gap-6 items-stretch justify-center">
           <motion.div
             layout
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className={`w-full ${cards ? 'lg:flex-1 lg:min-w-0' : 'lg:max-w-2xl'}`}
           >
-          <Panel className="p-5 flex flex-col gap-4">
+          {/* Fundo azul marinho; dentro do bloco, todo cinza (--surface-2: abas,
+              modos, tipos de card, quantidade, campos) vira PRETO via override do
+              token, que cascata para os descendentes. */}
+          <Panel
+            className="p-5 flex flex-col gap-4"
+            style={{ background: '#080d16', '--surface-2': '#000000' } as CSSProperties}
+          >
             {/* Source mode */}
             <div>
               <span className="field-label">Fonte</span>
@@ -616,9 +624,18 @@ export function GenerateDeck() {
                     <label
                       className="flex items-center gap-3 cursor-pointer surface p-3 transition-colors"
                       style={{
-                        borderStyle: 'dashed',
-                        borderColor: pdfDragOver ? 'var(--accent)' : undefined,
-                        background: pdfDragOver ? 'var(--accent-soft)' : undefined,
+                        // Anexado: bloco AZUL indicando que o PDF já está ali.
+                        borderStyle: pdf ? 'solid' : 'dashed',
+                        borderColor: pdfDragOver
+                          ? 'var(--accent)'
+                          : pdf
+                            ? 'var(--accent-blue)'
+                            : undefined,
+                        background: pdfDragOver
+                          ? 'var(--accent-soft)'
+                          : pdf
+                            ? 'color-mix(in srgb, var(--accent-blue) 16%, transparent)'
+                            : undefined,
                       }}
                       onDragOver={(e) => {
                         e.preventDefault();
@@ -636,7 +653,11 @@ export function GenerateDeck() {
                         if (f) acceptPdf(f);
                       }}
                     >
-                      <FileText size={18} className="text-muted shrink-0" />
+                      <FileText
+                        size={18}
+                        className="shrink-0"
+                        style={{ color: pdf ? 'var(--accent-blue)' : 'var(--muted)' }}
+                      />
                       <span className="text-sm flex-1 min-w-0 truncate">
                         {pdfDragOver
                           ? 'Solte o PDF aqui'
@@ -687,19 +708,32 @@ export function GenerateDeck() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {GEN_MODES.map((gm) => {
                   const active = genMode === gm.id;
+                  const descOpen = !!genDescOpen[gm.id];
                   return (
-                    <button
+                    <div
                       key={gm.id}
-                      type="button"
-                      onClick={() => setGenMode(gm.id)}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setGenMode(gm.id);
+                        setGenDescOpen((s) => ({ ...s, [gm.id]: !s[gm.id] }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setGenMode(gm.id);
+                          setGenDescOpen((s) => ({ ...s, [gm.id]: !s[gm.id] }));
+                        }
+                      }}
                       aria-pressed={active}
-                      className="text-left px-3.5 py-3 rounded-[var(--r-sm)] transition-colors"
+                      className="text-left px-3.5 py-3 rounded-[var(--r-sm)] transition-colors cursor-pointer"
                       style={{
                         background: 'var(--surface-2)',
                         border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`,
                       }}
                     >
-                      <span className="flex items-center gap-2 mb-1">
+                      {/* Só o título por padrão; o envelope abre a descrição (slide-down). */}
+                      <span className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{gm.label}</span>
                         {gm.isDefault && (
                           <span
@@ -709,14 +743,43 @@ export function GenerateDeck() {
                             Padrão
                           </span>
                         )}
-                        {active && (
-                          <Check size={15} className="ml-auto shrink-0" style={{ color: 'var(--accent)' }} />
+                        {active && <Check size={15} className="shrink-0" style={{ color: 'var(--accent)' }} />}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setGenDescOpen((s) => ({ ...s, [gm.id]: !s[gm.id] }));
+                          }}
+                          aria-label={descOpen ? 'Ocultar descrição' : 'Ver descrição'}
+                          aria-expanded={descOpen}
+                          className="ml-auto shrink-0 p-1 -m-1 rounded text-muted hover:text-fg transition-colors"
+                        >
+                          <ChevronDown
+                            size={15}
+                            style={{
+                              transform: descOpen ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.18s ease',
+                            }}
+                          />
+                        </button>
+                      </span>
+                      <AnimatePresence initial={false}>
+                        {descOpen && (
+                          <motion.div
+                            key="desc"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <span className="block text-xs text-muted mt-1.5" style={{ lineHeight: 1.45 }}>
+                              {gm.subtitle}
+                            </span>
+                          </motion.div>
                         )}
-                      </span>
-                      <span className="block text-xs text-muted" style={{ lineHeight: 1.45 }}>
-                        {gm.subtitle}
-                      </span>
-                    </button>
+                      </AnimatePresence>
+                    </div>
                   );
                 })}
               </div>
@@ -790,11 +853,22 @@ export function GenerateDeck() {
                     );
                   })}
                 </div>
-                {typesLocked && (
-                  <p className="text-[11px] text-muted mt-1.5" style={{ lineHeight: 1.4 }}>
-                    A transcrição cria apenas cards básicos (frente e verso).
-                  </p>
-                )}
+                <AnimatePresence initial={false}>
+                  {typesLocked && (
+                    <motion.div
+                      key="typeslocked-hint"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <p className="text-[11px] text-muted pt-1.5" style={{ lineHeight: 1.4 }}>
+                        A transcrição cria apenas cards básicos (frente e verso).
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
               <div>
                 <span className="field-label">Quantidade</span>
@@ -808,7 +882,15 @@ export function GenerateDeck() {
                 />
                 {plan === 'free' && (
                   <p className="text-[11px] text-muted mt-1.5" style={{ lineHeight: 1.4 }}>
-                    Plano gratuito: até {maxCards} cartas por deck gerado.
+                    limite de {maxCards} cartões.{' '}
+                    <button
+                      type="button"
+                      onClick={() => openUpgrade('deckGen')}
+                      className="font-bold hover:underline"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      ATUALIZAR PLANO
+                    </button>
                   </p>
                 )}
               </div>
@@ -838,9 +920,10 @@ export function GenerateDeck() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-2">
               <Button
                 variant="accent"
+                className="w-full justify-center"
                 icon={busy && !cards ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
                 onClick={generate}
                 disabled={busy}
@@ -905,9 +988,12 @@ export function GenerateDeck() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -40, scale: 0.96 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full lg:flex-1 lg:min-w-0"
+              className="w-full lg:flex-1 lg:min-w-0 lg:relative"
             >
-            <Panel className="p-5">
+            {/* lg: a coluna estica à altura da esquerda (items-stretch) e o Panel a
+                preenche por absoluto — então a altura é EXATAMENTE a do bloco da
+                esquerda e a lista de cards rola por dentro, sem crescer o bloco. */}
+            <Panel className="p-5 lg:absolute lg:inset-0 lg:flex lg:flex-col lg:min-h-0 lg:overflow-hidden">
               <div className="flex items-center gap-2 mb-4">
                 <Sparkles size={16} className="text-accent" />
                 <h2 className="mono text-sm text-muted">Revise antes de criar</h2>
@@ -916,9 +1002,9 @@ export function GenerateDeck() {
                   type="button"
                   onClick={discardDraft}
                   disabled={busy}
-                  className="ml-auto inline-flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors disabled:opacity-40"
+                  className="ml-auto inline-flex items-center gap-1 text-[9px] text-muted hover:text-accent transition-colors duration-200 disabled:opacity-40"
                 >
-                  <Trash2 size={13} /> Descartar
+                  <Trash2 size={9} /> Descartar
                 </button>
               </div>
 
@@ -1027,6 +1113,8 @@ export function GenerateDeck() {
                 imagesRemaining={imageQuota.remaining}
                 imagesUnlimited={imageQuota.unlimited}
                 atImageCap={imageQuota.atCap}
+                imagesNotCovered={imageQuota.limit === 0}
+                onUpgrade={() => openUpgrade('image')}
                 resetKey={genNonce}
                 initialImageSelection={restoredImageSelRef.current}
                 onImageSelectionChange={setImageSelection}

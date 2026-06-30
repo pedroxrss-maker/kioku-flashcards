@@ -89,7 +89,7 @@ export function Stats() {
           <CalendarDays size={16} className="text-muted" />
           <h2 className="mono text-sm text-muted">Mapa de revisões</h2>
         </div>
-        <Heatmap logs={logs} monthOnMobile />
+        <Heatmap logs={logs} fill monthOnMobile />
       </Panel>
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">

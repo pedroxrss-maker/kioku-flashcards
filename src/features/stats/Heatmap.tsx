@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Flame } from 'lucide-react';
+import { Flame, LineChart } from 'lucide-react';
 import { buildYearMonths } from './compute';
 import { useIsMobile } from '../../lib/useIsMobile';
 import { computeStreak } from '../../lib/greeting';
@@ -8,16 +8,18 @@ import { dayKey } from '../../lib/date';
 import { Modal } from '../../components/Modal';
 import type { ReviewLog } from '../../db/types';
 
-const TIER_PCT = [0, 25, 45, 70, 100];
 const DOW_MON = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']; // Monday-first weekday labels
 // Compact defaults (Home/Stats). `fill` grows the cells to span the container.
 const CELL = 9;
 const GAP = 2; // between cells
 const MONTH_GAP = 6; // between month blocks
 
+// Paleta "fogo": vazio (escuro neutro) -> vermelho profundo -> vermelho -> laranja
+// -> âmbar. É o visual aprovado do mapa de revisões.
+const FIRE_TIERS = ['#9b2226', '#e0392b', '#f56a1f', '#ffab2e']; // tiers 1..4
 function tierBg(tier: number): string {
-  if (tier === 0) return 'var(--line)';
-  return `color-mix(in srgb, var(--accent) ${TIER_PCT[tier]}%, transparent)`;
+  if (tier <= 0) return 'color-mix(in srgb, var(--fg) 8%, transparent)';
+  return FIRE_TIERS[Math.min(tier, 4) - 1];
 }
 
 const fmtFull = new Intl.DateTimeFormat('pt-BR', {
@@ -143,7 +145,7 @@ export function Heatmap({ logs, fill = false, monthOnMobile = false }: HeatmapPr
                           style={{
                             width: cell,
                             height: cell,
-                            borderRadius: 2,
+                            borderRadius: Math.max(3, Math.round(cell * 0.3)),
                             background: c.future ? 'transparent' : tierBg(c.tier),
                             border: '1px solid var(--bg)',
                             opacity: c.future ? 0.3 : 1,
@@ -188,7 +190,7 @@ export function Heatmap({ logs, fill = false, monthOnMobile = false }: HeatmapPr
     <div ref={wrapRef} className="min-w-0">
       <div className="min-w-0">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="mono text-sm font-semibold">
+          <span className="display text-xl font-bold">
             {monthMode ? `${cap(months[currentMonthIdx].label)} ${year}` : year}
           </span>
           {monthMode && (
@@ -213,12 +215,16 @@ export function Heatmap({ logs, fill = false, monthOnMobile = false }: HeatmapPr
           <div className="flex items-center gap-1.5 mono text-[10px] text-muted">
             <span>Menos</span>
             {[0, 1, 2, 3, 4].map((t) => (
-              <span key={t} style={{ width: 11, height: 11, borderRadius: 2, background: tierBg(t) }} />
+              <span key={t} style={{ width: 13, height: 13, borderRadius: 3, background: tierBg(t) }} />
             ))}
             <span>Mais</span>
           </div>
-          <span className="mono text-[11px] text-muted">
-            Média: <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{avg.toFixed(1)}</span> cards/dia
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] text-muted"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}
+          >
+            <LineChart size={13} style={{ color: '#a855f7' }} />
+            Média: <span style={{ color: '#a855f7', fontWeight: 700 }}>{avg.toFixed(1)}</span> cards/dia
           </span>
         </div>
       </div>

@@ -456,6 +456,7 @@ function DeckTreeRow({
   const studyBtn = studiable ? (
     <Link
       to={`/review/${encodeURIComponent(reviewTarget(node))}`}
+      onClick={(e) => e.stopPropagation()}
       className="btn btn-accent btn-sm shrink-0"
       aria-label={`Estudar ${node.name}`}
     >
@@ -467,17 +468,29 @@ function DeckTreeRow({
     <div className="relative shrink-0">
       <button
         type="button"
-        onClick={onMenu}
+        onClick={(e) => {
+          e.stopPropagation();
+          onMenu();
+        }}
         aria-label="Mais opções"
         className="p-2 rounded-[var(--r-sm)] text-muted hover:text-fg hover:bg-[color:var(--surface-2)] transition-colors"
       >
         <MoreVertical size={18} />
       </button>
-      {menuOpen && <div className="fixed inset-0 z-40" onClick={onCloseMenu} />}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCloseMenu();
+          }}
+        />
+      )}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
             key="treemenu"
+            onClick={(e) => e.stopPropagation()}
             className="absolute right-0 z-50 mt-1 w-44 py-1"
             initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -556,6 +569,14 @@ function DeckTreeRow({
               onOpenMenu();
             }
       }
+      // Clicar em QUALQUER superfície da linha abre o overview do deck (ou
+      // expande/recolhe um grupo). Os controles (chevron, Estudar, ⋮, menu) dão
+      // stopPropagation para manter suas próprias ações.
+      onClick={
+        reordering || dragging
+          ? undefined
+          : () => (node.deck ? nav(`/decks/${node.deck.id}`) : onToggle())
+      }
       className={cn(
         // Sidebar-style hover "jump" (rightward nudge). Locked while this row's
         // menu is open so the dropdown stays put. Tight left spacing on mobile so
@@ -574,7 +595,7 @@ function DeckTreeRow({
         outlineOffset: isTarget ? -2 : undefined,
         background: isTarget ? 'var(--surface-2)' : undefined,
         borderRadius: isTarget && !table ? 'var(--r-sm)' : undefined,
-        cursor: dragging ? 'grabbing' : undefined,
+        cursor: dragging ? 'grabbing' : reordering ? undefined : 'pointer',
         touchAction: node.deck ? 'pan-y' : undefined,
         WebkitTouchCallout: node.deck ? 'none' : undefined,
         WebkitUserSelect: node.deck ? 'none' : undefined,
@@ -588,7 +609,10 @@ function DeckTreeRow({
       {hasChildren ? (
         <button
           type="button"
-          onClick={onToggle}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
           aria-label={expanded ? 'Recolher' : 'Expandir'}
           aria-expanded={expanded}
           className="p-1 -ml-1 rounded text-muted hover:text-fg shrink-0"
@@ -616,7 +640,11 @@ function DeckTreeRow({
 
       <button
         type="button"
-        onClick={() => (node.deck ? nav(`/decks/${node.deck.id}`) : onToggle())}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (node.deck) nav(`/decks/${node.deck.id}`);
+          else onToggle();
+        }}
         className="min-w-0 flex-1 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { cn } from '../../lib/cn';
@@ -11,8 +12,8 @@ import { repo } from '../../db/repositories';
 import { useSettings } from '../../db/hooks';
 import { useIsMobile } from '../../lib/useIsMobile';
 import { DECK_COLORS } from '../../db/factories';
-import { DeckIconPicker } from './deckIcons';
-import type { Algorithm } from '../../db/types';
+import { DeckAvatar, DeckIconPicker } from './deckIcons';
+import type { Algorithm, Deck } from '../../db/types';
 
 interface CreateDeckModalProps {
   open: boolean;
@@ -32,6 +33,9 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
   const [retention, setRetention] = useState(0.9);
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+  // Cor e Logo começam "envelopadas" (só um exemplo); o usuário abre p/ ver tudo.
+  const [showColors, setShowColors] = useState(false);
+  const [showLogos, setShowLogos] = useState(false);
 
   // Reset to defaults on OPEN only — never on a later `settings` change, which
   // would clobber a draft the useDraft hook is about to restore (and could make
@@ -166,33 +170,103 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
 
         <div>
           <span className="field-label">Cor</span>
-          <div className="flex flex-wrap gap-2">
-            {DECK_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-label={`Cor ${c}`}
-                onClick={() => setColor(c)}
-                className={cn(
-                  'h-8 w-8 rounded-[var(--r-sm)] transition-transform',
-                  color === c ? 'scale-110' : 'opacity-70 hover:opacity-100',
-                )}
-                style={{
-                  background: c,
-                  outline: color === c ? '2px solid var(--fg)' : 'none',
-                  outlineOffset: 2,
-                }}
+          {/* Envelopado: mostra só a cor escolhida + botão para abrir as demais. */}
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden
+              className="h-8 w-8 rounded-[var(--r-sm)] shrink-0"
+              style={{ background: color, outline: '2px solid var(--fg)', outlineOffset: 2 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowColors((v) => !v)}
+              aria-expanded={showColors}
+              className="text-xs text-accent inline-flex items-center gap-1 hover:underline"
+            >
+              {showColors ? 'Menos cores' : 'Ver mais cores'}
+              <ChevronDown
+                size={14}
+                style={{ transform: showColors ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }}
               />
-            ))}
+            </button>
           </div>
+          <AnimatePresence initial={false}>
+            {showColors && (
+              <motion.div
+                key="colors"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                style={{ overflow: 'hidden' }}
+              >
+                {/* px/pb: dão folga para o swatch selecionado (scale + outline) não
+                    ser cortado pelo overflow-hidden do contêiner animado. */}
+                <div className="flex flex-wrap gap-2 px-1 pt-2.5 pb-2">
+                  {DECK_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={`Cor ${c}`}
+                      onClick={() => {
+                        setColor(c);
+                        setShowColors(false);
+                      }}
+                      className={cn(
+                        'h-8 w-8 rounded-[var(--r-sm)] transition-transform',
+                        color === c ? 'scale-110' : 'opacity-70 hover:opacity-100',
+                      )}
+                      style={{
+                        background: c,
+                        outline: color === c ? '2px solid var(--fg)' : 'none',
+                        outlineOffset: 2,
+                      }}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div>
           <span className="field-label">Logo</span>
-          <DeckIconPicker color={color} value={icon} onChange={setIcon} />
-          <p className="text-[11px] text-muted mt-2">
-            Escolha um ícone ou anexe uma imagem do seu computador (fica sempre com cantos arredondados).
-          </p>
+          {/* Envelopado: mostra só o logo atual + botão para abrir as opções. */}
+          <div className="flex items-center gap-2.5">
+            <DeckAvatar deck={{ id: 'new-deck', color } as Deck} icon={icon} size={32} />
+            <button
+              type="button"
+              onClick={() => setShowLogos((v) => !v)}
+              aria-expanded={showLogos}
+              className="text-xs text-accent inline-flex items-center gap-1 hover:underline"
+            >
+              {showLogos ? 'Menos logos' : 'Ver mais logos'}
+              <ChevronDown
+                size={14}
+                style={{ transform: showLogos ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }}
+              />
+            </button>
+          </div>
+          <AnimatePresence initial={false}>
+            {showLogos && (
+              <motion.div
+                key="logos"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                style={{ overflow: 'hidden' }}
+              >
+                <div className="px-1 pt-2.5 pb-2">
+                  <DeckIconPicker color={color} value={icon} onChange={setIcon} />
+                  <p className="text-[11px] text-muted mt-2">
+                    Escolha um ícone ou anexe uma imagem do seu computador (fica sempre com cantos
+                    arredondados).
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div>
@@ -234,9 +308,18 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
               : 'SM-2 é o algoritmo clássico do Anki: a cada acerto multiplica o intervalo por um fator de facilidade. Simples, previsível e testado por décadas.'}
           </p>
 
+          <AnimatePresence initial={false}>
           {algorithm === 'fsrs' && (
+            <motion.div
+              key="fsrs-config"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
             <div
-              className="mt-3 rise"
+              className="mt-3"
               style={{ border: '1px solid var(--line-strong)', borderRadius: 'var(--r-md)', background: 'var(--surface-2)', padding: '14px' }}
             >
               <p className="field-label" style={{ marginBottom: 12 }}>
@@ -264,7 +347,9 @@ export function CreateDeckModal({ open, onClose }: CreateDeckModalProps) {
                 Maior retenção significa mais revisões; menor reduz a carga.
               </p>
             </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
 
         {(name.trim() || category.trim() || icon) && (
