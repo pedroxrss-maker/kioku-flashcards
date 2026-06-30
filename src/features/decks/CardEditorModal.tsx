@@ -14,14 +14,12 @@ import { isTtsConfigured } from '../tts/googleProvider';
 import { isAiConfigured, QuotaError } from '../ai/client';
 import { useUpgradeModal } from '../billing/UpgradeModalProvider';
 import {
-  IMAGE_GEN_CAP,
-  atImageCap,
   generateCardImage,
   imageSideForType,
-  imagesRemaining,
   isImageGenConfigured,
   recordImageGeneration,
 } from '../ai/image';
+import { useImageQuota } from '../usage/useImageQuota';
 import { FlipCard } from '../review/FlipCard';
 import { ClozeCard } from '../review/ClozeCard';
 import { TypeInCard } from '../review/TypeInCard';
@@ -69,6 +67,9 @@ export function CardEditorModal({
   const editing = !!card;
   const reduce = useReducedMotion();
   const settings = useSettings();
+  // Cota REAL baseada no plano (mesma fonte do popover de uso), não o cap
+  // provisório de cliente em features/ai/image.ts.
+  const imageQuota = useImageQuota();
   const nav = useNavigate();
   const { openUpgrade } = useUpgradeModal();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -351,7 +352,7 @@ export function CardEditorModal({
    *  field (back for basic/cloze, front for type-in). Persisted when the card is
    *  saved; the feat_image badge fires instantly here (event-driven counter). */
   async function genImage() {
-    if (imgBusy || atImageCap(settings)) return;
+    if (imgBusy || imageQuota.atCap) return;
     setImgBusy(true);
     // Hold the busy guard so a mobile/PWA service-worker update can't reload the
     // app mid-generation (image gen takes several seconds). Released in finally.
@@ -656,7 +657,7 @@ export function CardEditorModal({
               onClick={genImage}
               disabled={
                 imgBusy ||
-                atImageCap(settings) ||
+                imageQuota.atCap ||
                 !isAiConfigured() ||
                 (isEmptyHtml(front) && isEmptyHtml(back))
               }
@@ -667,11 +668,17 @@ export function CardEditorModal({
             </button>
             <span
               className="mono text-[11px]"
-              style={{ color: atImageCap(settings) ? 'var(--accent)' : 'var(--muted)' }}
+              style={{ color: imageQuota.atCap ? 'var(--accent)' : 'var(--muted)' }}
             >
-              {atImageCap(settings)
-                ? `Limite de imagens atingido (${IMAGE_GEN_CAP}).`
-                : `Restam ${imagesRemaining(settings)} imagens.`}
+              {!imageQuota.loaded
+                ? ' '
+                : imageQuota.unlimited
+                  ? 'Imagens ilimitadas.'
+                  : imageQuota.limit === 0
+                    ? 'Seu plano não cobre imagens.'
+                    : imageQuota.atCap
+                      ? 'Limite de imagens atingido.'
+                      : `Restam ${imageQuota.remaining} imagens.`}
             </span>
           </div>
           <p className="text-[11px] text-muted mt-1.5" style={{ lineHeight: 1.45 }}>

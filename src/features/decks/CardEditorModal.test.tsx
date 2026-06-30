@@ -11,6 +11,7 @@ describe('CardEditorModal preview', () => {
     const card = makeCard({ deckId: 'd1', front: '<b>FrontText</b>', back: 'BackText' });
 
     // The editor uses useNavigate ("Ver no painel"), so it needs Router context.
+    // (useImageQuota degrades gracefully without an AuthProvider.)
     render(
       <MemoryRouter>
         <CardEditorModal open onClose={() => {}} deckId="d1" card={card} />
